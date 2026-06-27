@@ -34,6 +34,12 @@ if (isset($_SERVER['VERCEL_URL'])) {
             mkdir($dir, 0755, true);
         }
     }
+
+    $destDb = '/tmp/database.sqlite';
+    $srcDb = __DIR__.'/../database/database.sqlite';
+    if (file_exists($srcDb) && !file_exists($destDb)) {
+        copy($srcDb, $destDb);
+    }
 }
 
 $app->handleRequest(Request::capture());

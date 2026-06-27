@@ -38,6 +38,9 @@
         "APP_DEBUG": "false",
         "LOG_CHANNEL": "stderr",
         "SESSION_DRIVER": "cookie",
-        "CACHE_DRIVER": "array"
+        "CACHE_STORE": "array",
+        "CACHE_DRIVER": "array",
+        "DB_CONNECTION": "sqlite",
+        "DB_DATABASE": "/tmp/database.sqlite"
     }
 }
