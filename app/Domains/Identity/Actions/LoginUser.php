@@ -13,7 +13,7 @@ class LoginUser
      * Handle the login logic.
      *
      * @param LoginRequest $request
-     * @return \App\Models\User
+     * @return \App\Domains\Identity\Models\User
      * @throws ValidationException
      */
     public function execute(LoginRequest $request)
