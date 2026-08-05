@@ -77,7 +77,7 @@ export default function Welcome({
                                     <p className="text-slate-400 text-sm font-semibold">Lihat demo Frontend FintechLedger dengan visualisasi Mode PPN / Non-PPN interaktif.</p>
                                 </div>
                                 <Link
-                                    href="/demo/overview"
+                                    href="/overview"
                                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-blue-600/25 transition-all text-sm shrink-0"
                                 >
                                     Masuk ke Demo Dashboard &rarr;

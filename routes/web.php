@@ -5,14 +5,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
-});
+Route::redirect('/', '/overview');
 
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
@@ -24,54 +17,52 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::prefix('demo')->group(function () {
-    Route::get('/overview', function () {
-        return Inertia::render('Demo/Overview');
-    })->name('demo.overview');
+Route::get('/overview', function () {
+    return Inertia::render('Overview'); 
+})->name('overview');
 
-    Route::get('/vendors', function () {
-        return Inertia::render('Demo/Vendors');
-    })->name('demo.vendors');
+Route::get('/vendors', function () {
+    return Inertia::render('Vendors');
+})->name('vendors');
 
-    Route::get('/clients', function () {
-        return Inertia::render('Demo/Clients');
-    })->name('demo.clients');
+Route::get('/clients', function () {
+    return Inertia::render('Clients');
+})->name('clients');
 
-    Route::get('/sales', function () {
-        return Inertia::render('Demo/Sales');
-    })->name('demo.sales');
+Route::get('/sales', function () {
+    return Inertia::render('Sales');
+})->name('sales');
 
-    Route::get('/projects', function () {
-        return Inertia::render('Demo/Projects');
-    })->name('demo.projects');
+Route::get('/projects', function () {
+    return Inertia::render('Projects');
+})->name('projects');
 
-    Route::get('/debt-receivable', function () {
-        return Inertia::render('Demo/DebtReceivable');
-    })->name('demo.debt-receivable');
+Route::get('/debt-receivable', function () {
+    return Inertia::render('DebtReceivable');
+})->name('debt-receivable');
 
-    Route::get('/invoice-po', function () {
-        return Inertia::render('Demo/InvoicePoList');
-    })->name('demo.invoice-po');
+Route::get('/invoice-po', function () {
+    return Inertia::render('InvoicePoList');
+})->name('invoice-po');
 
-    Route::get('/purchases', function () {
-        return Inertia::render('Demo/Purchases');
-    })->name('demo.purchases');
+Route::get('/purchases', function () {
+    return Inertia::render('Purchases');
+})->name('purchases');
 
-    Route::get('/sales-transactions', function () {
-        return Inertia::render('Demo/SalesTransactions');
-    })->name('demo.sales-transactions');
+Route::get('/sales-transactions', function () {
+    return Inertia::render('SalesTransactions');
+})->name('sales-transactions');
 
-    Route::get('/journal', function () {
-        return Inertia::render('Demo/JournalReport');
-    })->name('demo.journal');
+Route::get('/journal', function () {
+    return Inertia::render('JournalReport');
+})->name('journal');
 
-    Route::get('/ppn', function () {
-        return Inertia::render('Demo/PpnReport');
-    })->name('demo.ppn');
+Route::get('/ppn', function () {
+    return Inertia::render('PpnReport');
+})->name('ppn');
 
-    Route::get('/cashflow', function () {
-        return Inertia::render('Demo/CashflowReport');
-    })->name('demo.cashflow');
-});
+Route::get('/cashflow', function () {
+    return Inertia::render('CashflowReport');
+})->name('cashflow');
 
 require __DIR__.'/auth.php';

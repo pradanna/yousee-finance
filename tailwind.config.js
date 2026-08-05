@@ -13,7 +13,22 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['"Plus Jakarta Sans"', ...defaultTheme.fontFamily.sans],
+            },
+            colors: {
+                primary: {
+                    DEFAULT: '#2563eb',
+                    50: '#eff6ff',
+                    100: '#dbeafe',
+                    500: '#3b82f6',
+                    600: '#2563eb',
+                    700: '#1d4ed8',
+                    800: '#1e40af',
+                },
+            },
+            boxShadow: {
+                'neon-primary': '0 4px 14px -2px rgba(37, 99, 235, 0.25)',
+                'neon-primary-lg': '0 6px 20px -2px rgba(37, 99, 235, 0.35)',
             },
         },
     },
