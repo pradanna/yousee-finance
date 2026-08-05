@@ -8,12 +8,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-use App\Domains\Identity\Enums\UserRole;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Spatie\Permission\Traits\HasRoles;
+use App\Domains\Identity\Enums\UserStatus;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasUuids, HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -24,8 +26,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
-        'active',
+        'status',
+        'last_login_at',
+        'last_login_ip',
     ];
 
     /**
@@ -48,41 +51,13 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'role' => UserRole::class,
-            'active' => 'boolean',
+            'status' => UserStatus::class,
+            'last_login_at' => 'datetime',
         ];
-    }
-
-    public static function boot(): void
-    {
-        parent::boot();
-
-        static::updating(function (User $user) {
-            // Admin tidak bisa self-elevate jadi Pimpinan
-            if ($user->isDirty('role') && $user->getOriginal('role') === UserRole::ADMIN && $user->role === UserRole::PIMPINAN) {
-                if (auth()->check()) {
-                    $currentUser = auth()->user();
-                    $currentUserRole = $currentUser->getOriginal('role') ?? $currentUser->role;
-                    if ($currentUserRole !== UserRole::PIMPINAN) {
-                        throw new \DomainException("Admin tidak bisa self-elevate menjadi Pimpinan.");
-                    }
-                }
-            }
-        });
-    }
-
-    public function isAdmin(): bool
-    {
-        return $this->role === UserRole::ADMIN;
-    }
-
-    public function isPimpinan(): bool
-    {
-        return $this->role === UserRole::PIMPINAN;
     }
 
     public function isActive(): bool
     {
-        return (bool) $this->active;
+        return $this->status === UserStatus::ACTIVE;
     }
 }

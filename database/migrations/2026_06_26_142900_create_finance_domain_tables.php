@@ -11,11 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Modifikasi tabel users
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('role')->default('admin');
-            $table->boolean('active')->default(true);
-        });
+        // 1. Modifikasi tabel users (Sudah dipindah ke 0001_create_users_table)
 
         // 2. Vendor
         Schema::create('vendors', function (Blueprint $table) {
@@ -164,7 +160,7 @@ return new class extends Migration
         // 16. Audit Log
         Schema::create('audit_logs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignUuid('user_id')->constrained();
             $table->string('action');
             $table->text('details');
             $table->timestamps();
@@ -192,8 +188,8 @@ return new class extends Migration
         Schema::dropIfExists('clients');
         Schema::dropIfExists('vendors');
 
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['role', 'active']);
-        });
+        // Schema::table('users', function (Blueprint $table) {
+        //     $table->dropColumn(['role', 'active']);
+        // });
     }
 };
