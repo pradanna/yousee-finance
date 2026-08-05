@@ -31,8 +31,14 @@
 > - [Frontend Routing (Inertia + Ziggy)](rules/frontend/routing.md)
 > - [Design System & UI Rules](rules/frontend/design-system.md)
 
+## Team Collaboration & API Contracts
+> **CRITICAL**: Untuk kolaborasi FE dan BE, sistem menggunakan pola Consumer-Driven Contracts. **WAJIB** membaca file berikut:
+> - [Collaboration & CDC Rules](rules/collaboration.md)
+
 ## Testing & Visual Verification
-- **STRICT RULE**: AI Agents are FORBIDDEN from using `browser_subagent` or visual browser tools to test the UI. All visual verifications must be done MANUALLY by the USER. AI must rely purely on Pest/PHPUnit tests for backend verification.
+- **STRICT RULE**: AI Agents are FORBIDDEN from using `browser_subagent` or visual browser tools to test the UI. All visual verifications must be done MANUALLY by the USER. 
+- AI must rely purely on automated tests for backend verification.
+- **Testing Standard**: The default testing framework for this project is **PHPUnit**. Do not use Pest syntax unless Pest is explicitly installed and requested by the user.
 
 ## Git & Workflow
 - Make atomic, descriptive commits.

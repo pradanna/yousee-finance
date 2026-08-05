@@ -28,6 +28,7 @@ This project uses a "Lite DDD" (Action-Based) architecture to maintain a clean, 
 - **Core Rule**: Never trust client-side input.
 - **Responsibility**: 
   - Use `Form Requests` (`app/Http/Requests`) to validate input *before* it reaches the Controller/Action.
+  - **CRITICAL CONSTRAINT**: Form Requests MUST ONLY contain validation (`rules()`) and authorization (`authorize()`). STRICTLY NO business logic (e.g., `Auth::attempt()`, creating models, hitting RateLimiters directly for business flows) is allowed inside Form Requests. All execution logic must be deferred to the Action class.
   - Use PHP *Enums* for data types with fixed states (e.g., `TransactionType::INCOME`, `TransactionType::EXPENSE`).
   - (Optional but recommended) Use *Data Transfer Objects* (DTOs) to encapsulate data arrays sent to Actions to ensure type safety.
 
