@@ -5,7 +5,10 @@ In this financial application (YouSee Finance), you MUST understand and strictly
 ## 1. Known Domains (Lite DDD)
 The backend is structured into these specific domains within `app/Domains/`:
 - `Identity`: Auth, Users, Roles (e.g., `PIMPINAN`).
-- `Master`: Vendor, Client, Sales, Project.
+- `Vendor`: Vendor.
+- `Client`: Client.
+- `Sales`: Sales.
+- `Project`: Project.
 - `Procurement`: PurchaseOrder, PurchaseOrderItem, Attachment.
 - `Billing`: Invoice, InvoiceItem, Kwitansi.
 - `Accounting`: JournalEntry, JournalEntryItem, PPhAdjustment, ClosingPeriod, AuditLog.

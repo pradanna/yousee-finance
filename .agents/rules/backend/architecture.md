@@ -24,6 +24,23 @@ This project uses a "Lite DDD" (Action-Based) architecture to maintain a clean, 
 - **Constraints**: DO NOT use the Repository Pattern. Utilize Query Scopes within the Model to encapsulate long or complex queries.
 - **Financial Rules (CRITICAL)**: To store monetary values/balances, ALWAYS use `decimal` or `integer` data types (storing in cents/smallest unit) in the database. Never use `float` or `double` to avoid precision calculation issues.
 
+<CRITICAL_RULES>
+- **Model Placement**: ALL Models MUST be placed inside their respective domain folders: `app/Domains/<DomainName>/Models/<ModelName>.php`. DO NOT use the default `app/Models/` directory.
+- **Factory Placement**: Factories MUST remain in the default `database/factories/` directory (e.g., `database/factories/VendorFactory.php`).
+- **Factory Resolution**: Because Models are moved out of the default directory, Laravel's auto-discovery for factories will fail. Therefore, EVERY Model MUST explicitly define the `newFactory()` method to return its corresponding factory instance.
+  Example:
+  ```php
+  protected static function newFactory()
+  {
+      return \Database\Factories\VendorFactory::new();
+  }
+  ```
+  Additionally, the Factory class MUST define the `$model` property pointing to the correct Domain Model path:
+  ```php
+  protected $model = \App\Domains\Vendor\Models\Vendor::class;
+  ```
+</CRITICAL_RULES>
+
 ## 4. Validation, DTOs, & Enums
 - **Core Rule**: Never trust client-side input.
 - **Responsibility**: 
