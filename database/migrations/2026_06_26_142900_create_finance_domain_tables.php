@@ -14,16 +14,6 @@ return new class extends Migration
         // 1. Modifikasi tabel users (Sudah dipindah ke 0001_create_users_table)
 
 
-        // 3. Client
-        Schema::create('clients', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('npwp')->nullable();
-            $table->boolean('is_archived')->default(false);
-            $table->timestamps();
-            $table->softDeletes();
-        });
-
         // 4. Sales
         Schema::create('sales', function (Blueprint $table) {
             $table->id();
@@ -176,7 +166,7 @@ return new class extends Migration
         Schema::dropIfExists('purchase_orders');
         Schema::dropIfExists('projects');
         Schema::dropIfExists('sales');
-        Schema::dropIfExists('clients');
+
 
         // Schema::table('users', function (Blueprint $table) {
         //     $table->dropColumn(['role', 'active']);
