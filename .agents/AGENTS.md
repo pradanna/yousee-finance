@@ -14,17 +14,17 @@
   - All conversational responses and direct communication with the USER MUST be in **Indonesian**.
 
 ## Business Domain & Ubiquitous Language
-> **CRITICAL**: Untuk memahami konteks bisnis dan kamus istilah (Ubiquitous Language) dalam sistem YouSee Finance, kamu **WAJIB** membaca file berikut sebelum menamai variabel, fungsi, atau model:
+> **CONDITIONAL TRIGGER - DOMAIN**: Jika ada tugas yang berkaitan dengan logika bisnis, penamaan entitas, atau struktur data, SEBELUM menulis kode apa pun, KAMU WAJIB MUTLAK menggunakan tool `view_file` untuk membaca file berikut:
 > - [Domain Dictionary](rules/domain-dictionary.md)
 
 ## Backend (Laravel) Rules
-> **CRITICAL**: Untuk semua tugas terkait Backend (Laravel), kamu **WAJIB** membaca dan mengikuti file panduan berikut:
+> **CONDITIONAL TRIGGER - BACKEND**: JIKA user meminta pembuatan atau modifikasi fitur Backend (Model, Controller, Action, Migration, dll), **STOP!** Sebelum kamu menulis kode atau merancang plan apa pun, kamu **WAJIB MUTLAK menggunakan tool `view_file`** pada file-file berikut. Dilarang keras menggunakan asumsi arsitektur default Laravel:
 > - [Backend Architecture Rules](rules/backend/architecture.md)
 > - [Backend Naming Conventions](rules/backend/naming-conventions.md)
 > - [Backend Best Practices](rules/backend/best-practices.md)
 
 ## Frontend (React + TypeScript + Inertia) Rules
-> **CRITICAL**: Untuk semua tugas terkait Frontend, kamu **WAJIB** membaca dan mengikuti file panduan berikut:
+> **CONDITIONAL TRIGGER - FRONTEND**: JIKA user meminta pembuatan atau modifikasi antarmuka Frontend (React + TypeScript + Inertia), **STOP!** Sebelum menulis kode atau merancang plan apa pun, kamu **WAJIB MUTLAK menggunakan tool `view_file`** pada file-file berikut:
 > - [Frontend Architecture Rules](rules/frontend/architecture.md)
 > - [Frontend State Management](rules/frontend/state-management.md)
 > - [Frontend Naming Conventions](rules/frontend/naming-conventions.md)
@@ -32,7 +32,7 @@
 > - [Design System & UI Rules](rules/frontend/design-system.md)
 
 ## Team Collaboration & API Contracts
-> **CRITICAL**: Untuk kolaborasi FE dan BE, sistem menggunakan pola Consumer-Driven Contracts. **WAJIB** membaca file berikut:
+> **CONDITIONAL TRIGGER - COLLABORATION**: JIKA tugas melibatkan penyambungan data antara FE dan BE (API Response/Props), SEBELUM menulis kode apa pun, KAMU WAJIB MUTLAK menggunakan tool `view_file` untuk membaca:
 > - [Collaboration & CDC Rules](rules/collaboration.md)
 
 ## Testing & Visual Verification

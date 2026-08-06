@@ -27,6 +27,11 @@ Route::middleware('auth')->group(function () {
     Route::resource('vendors', \App\Http\Controllers\Vendor\VendorController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('vendors/{vendor}/archive', [\App\Http\Controllers\Vendor\VendorController::class, 'archive'])->name('vendors.archive');
     Route::post('vendors/{vendor}/unarchive', [\App\Http\Controllers\Vendor\VendorController::class, 'unarchive'])->name('vendors.unarchive');
+
+    // Client Domain
+    Route::resource('clients', \App\Http\Controllers\Client\ClientController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::post('clients/{client}/archive', [\App\Http\Controllers\Client\ClientController::class, 'archive'])->name('clients.archive');
+    Route::post('clients/{client}/unarchive', [\App\Http\Controllers\Client\ClientController::class, 'unarchive'])->name('clients.unarchive');
 });
 
 Route::prefix('demo')->group(function () {
