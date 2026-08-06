@@ -22,31 +22,32 @@ export default function MetricCard({
     cardBgClass = 'bg-white border-slate-200/80'
 }: MetricCardProps) {
     return (
-        <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col justify-between gap-3 transition-all hover:shadow-md ${cardBgClass}`}>
+        <div className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col justify-between gap-2.5 transition-all hover:shadow-sm ${cardBgClass}`}>
             {/* Top Row: Icon on left, Badge on right */}
             <div className="flex justify-between items-center">
                 {icon && (
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${iconColorClass}`}>
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center border text-xs ${iconColorClass}`}>
                         {icon}
                     </div>
                 )}
                 {!icon && <div />}
                 {badgeText && (
-                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border uppercase tracking-wider ${badgeColorClass}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold border uppercase tracking-wider ${badgeColorClass}`}>
                         {badgeText}
                     </span>
                 )}
             </div>
 
             {/* Label and Value */}
-            <div className="space-y-0.5 mt-1">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+            <div className="space-y-0.5 mt-0.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                     {title}
                 </span>
-                <span className={`text-xl font-bold tracking-tight font-mono block ${valueColorClass}`}>
+                <span className={`text-base sm:text-lg font-bold tracking-tight font-mono block ${valueColorClass}`}>
                     {value}
                 </span>
             </div>
         </div>
     );
 }
+

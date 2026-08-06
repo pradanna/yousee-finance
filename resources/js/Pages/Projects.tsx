@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Dialog, DialogPanel, Transition, TransitionChild } from "@headlessui/react";
 import AppLayout, { useFiscalMode } from "@/Layouts/AppLayout";
 import SlideOver from "@/Components/UI/SlideOver";
+import Modal from "@/Components/UI/Modal";
 import PrimaryButton from "@/Components/Button/PrimaryButton";
 import TextInput from "@/Components/Form/TextInput";
 import SelectInput from "@/Components/Form/SelectInput";
@@ -9,449 +10,162 @@ import MetricCard from "@/Components/Card/MetricCard";
 import Pagination from "@/Components/Table/Pagination";
 import EmptyState from "@/Components/Table/EmptyState";
 import ActionDropdown from "@/Components/UI/ActionDropdown";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-interface VendorPaymentTerm {
-    type: "full" | "dp" | "termin";
-    notes?: string;
-    
-    // For Full Payment
-    fullDueDays?: number;
-    fullDueDate?: string;
-
-    // For DP + Pelunasan
-    dpPercent?: number;
-    dpAmount?: number;
-    dpDueDays?: number;
-    dpDueDate?: string;
-    pelunasanDueDays?: number;
-    pelunasanDueDate?: string;
-
-    // For Termin
-    installments?: Array<{
-        percent: number;
-        amount: number;
-        note: string;
-        dueDays?: number;
-        dueDate?: string;
-    }>;
-}
-
-interface VendorPO {
-    poNumber: string;
-    vendorId: number;
-    vendorName: string;
-    paymentTerms: VendorPaymentTerm;
-    issuedAt: string;
-    totalAmount: number;
-}
-
-interface BillboardLocation {
-    id: number;
-    code: string;
-    area: string;
-    description: string;
-    type: "Billboard" | "Videotron" | "Baliho" | "Neonbox";
-    size: string;
-    vendorId: number | null;
-    vendorName: string;
-    qty?: number;
-    vendorCost: number; // always DPP
-    poIssued: boolean;
-    poNumber: string;
-}
-
-interface Project {
-    id: number;
-    code: string;
-    name: string;
-    clientId: number;
-    clientName: string;
-    salesPIC: string;
-    period: string;
-    contractValue: number; // DPP
-    status: "Draft" | "Active" | "Completed" | "Cancelled";
-    locations: BillboardLocation[];
-    invoiceIssued: boolean;
-    invoiceNumber: string;
-    targetQty: number;
-    paymentTerms?: VendorPaymentTerm;
-}
-
-type ActiveTab = "info" | "locations" | "vendors" | "invoice";
-type FiscalMode = "ppn" | "non-ppn";
-type ViewMode = "grid" | "kanban" | "table";
-
-const PPN_RATE = 0.11;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock Data
-// ─────────────────────────────────────────────────────────────────────────────
-const mockVendors = [
-    { id: 1, name: "PT. Megah Billboard Jaya" },
-    { id: 2, name: "CV. Media Ad Perkasa" },
-    { id: 3, name: "PT. Promosi Outdoor Kreasindo" },
-    { id: 4, name: "UD. Spanduk & Baliho Makmur" },
-];
-
-const initialProjectsPPN: Project[] = [
-    {
-        id: 1,
-        targetQty: 5,
-        code: "PRJ-2026-PPN01",
-        name: "Kampanye Iklan Film Toystory 5 - Jawa Tengah",
-        clientId: 1,
-        clientName: "PT. Walt Disney Pictures Indonesia",
-        salesPIC: "Budi Santoso",
-        period: "Jul - Sep 2026",
-        contractValue: 280000000,
-        status: "Active",
-        invoiceIssued: false,
-        invoiceNumber: "",
-        locations: [
-            { id: 1, code: "LOC-001", area: "Semarang", description: "Billboard Jl. Pandanaran KM 3 (Megah)", type: "Billboard", size: "4x8m", vendorId: 1, vendorName: "PT. Megah Billboard Jaya", vendorCost: 8500000, poIssued: true, poNumber: "PO-2026-0041" },
-            { id: 2, code: "LOC-002", area: "Semarang", description: "Billboard Simpang Lima (Depan BCA)", type: "Billboard", size: "6x12m", vendorId: 1, vendorName: "PT. Megah Billboard Jaya", vendorCost: 14000000, poIssued: true, poNumber: "PO-2026-0041" },
-            { id: 3, code: "LOC-003", area: "Solo", description: "Videotron Jl. Slamet Riyadi Pusat", type: "Videotron", size: "3x5m", vendorId: 2, vendorName: "CV. Media Ad Perkasa", vendorCost: 22000000, poIssued: true, poNumber: "PO-2026-0042" },
-            { id: 4, code: "LOC-004", area: "Yogyakarta", description: "Baliho Jl. Malioboro (Dekat Kraton)", type: "Baliho", size: "3x6m", vendorId: 3, vendorName: "PT. Promosi Outdoor Kreasindo", vendorCost: 7500000, poIssued: false, poNumber: "" },
-            { id: 5, code: "LOC-005", area: "Yogyakarta", description: "Billboard Ring Road Utara Monjali", type: "Billboard", size: "4x8m", vendorId: 3, vendorName: "PT. Promosi Outdoor Kreasindo", vendorCost: 9000000, poIssued: false, poNumber: "" },
-        ]
-    },
-    {
-        id: 2,
-        targetQty: 2,
-        code: "PRJ-2026-PPN02",
-        name: "Brand Awareness Shopee 12.12 - Jakarta",
-        clientId: 2,
-        clientName: "Shopee Indonesia",
-        salesPIC: "Rina Widayanti",
-        period: "Nov - Des 2026",
-        contractValue: 450000000,
-        status: "Draft",
-        invoiceIssued: false,
-        invoiceNumber: "",
-        locations: [
-            { id: 6, code: "LOC-006", area: "Semarang", description: "Billboard Jl. Pemuda (Dekat Paragon Mall)", type: "Billboard", size: "4x8m", vendorId: 1, vendorName: "PT. Megah Billboard Jaya", vendorCost: 9500000, poIssued: false, poNumber: "" },
-            { id: 7, code: "LOC-007", area: "Solo", description: "Videotron Solo Grand Mall", type: "Videotron", size: "3x5m", vendorId: 1, vendorName: "PT. Megah Billboard Jaya", vendorCost: 15000000, poIssued: false, poNumber: "" },
-        ]
-    },
-    {
-        id: 3,
-        targetQty: 2,
-        code: "PRJ-2026-PPN03",
-        name: "Samsung Galaxy S27 Launching - Jabodetabek",
-        clientId: 5,
-        clientName: "Samsung Electronics Indonesia",
-        salesPIC: "Budi Santoso",
-        period: "Okt - Des 2026",
-        contractValue: 720000000,
-        status: "Active",
-        invoiceIssued: false,
-        invoiceNumber: "",
-        locations: [
-            { id: 12, code: "LOC-012", area: "Solo", description: "Videotron Jl. Slamet Riyadi Pusat", type: "Videotron", size: "3x5m", vendorId: 2, vendorName: "CV. Media Ad Perkasa", vendorCost: 22000000, poIssued: true, poNumber: "PO-2026-0091" },
-            { id: 13, code: "LOC-013", area: "Semarang", description: "Videotron Jl. Pahlawan", type: "Videotron", size: "4x8m", vendorId: 2, vendorName: "CV. Media Ad Perkasa", vendorCost: 19000000, poIssued: true, poNumber: "PO-2026-0091" },
-        ]
-    }
-];
-
-const initialProjectsNonPPN: Project[] = [
-    {
-        id: 101,
-        targetQty: 3,
-        code: "PRJ-2026-NON01",
-        name: "Promosi Gojek UMKM - Jawa Timur",
-        clientId: 3,
-        clientName: "PT. Gojek Tokopedia",
-        salesPIC: "Andi Prasetyo",
-        period: "Agu - Okt 2026",
-        contractValue: 180000000,
-        status: "Active",
-        invoiceIssued: false,
-        invoiceNumber: "",
-        locations: [
-            { id: 8, code: "LOC-008", area: "Surabaya", description: "Baliho Jl. Darmo (Depan Taman Bungkul)", type: "Baliho", size: "3x6m", vendorId: 3, vendorName: "PT. Promosi Outdoor Kreasindo", vendorCost: 5500000, poIssued: true, poNumber: "PO-2026-0055" },
-            { id: 9, code: "LOC-009", area: "Malang", description: "Billboard Jl. Kahuripan (Alun-alun Kota)", type: "Billboard", size: "4x8m", vendorId: 4, vendorName: "UD. Spanduk & Baliho Makmur", vendorCost: 4200000, poIssued: true, poNumber: "PO-2026-0056" },
-            { id: 10, code: "LOC-010", area: "Banyuwangi", description: "Neonbox Terminal Blambangan", type: "Neonbox", size: "1.5x2m", vendorId: 4, vendorName: "UD. Spanduk & Baliho Makmur", vendorCost: 2800000, poIssued: false, poNumber: "" },
-        ]
-    },
-    {
-        id: 102,
-        targetQty: 1,
-        code: "PRJ-2026-NON02",
-        name: "Baliho Kuliner Lokal Soto Bangkong - Solo",
-        clientId: 4,
-        clientName: "CV. Soto Bangkong Lestari",
-        salesPIC: "Eko Prasetyo",
-        period: "Sep - Nov 2026",
-        contractValue: 45000000,
-        status: "Active",
-        invoiceIssued: false,
-        invoiceNumber: "",
-        locations: [
-            { id: 11, code: "LOC-011", area: "Solo", description: "Baliho Jl. Adi Sucipto KM 5", type: "Baliho", size: "3x6m", vendorId: 4, vendorName: "UD. Spanduk & Baliho Makmur", vendorCost: 3500000, poIssued: true, poNumber: "PO-2026-0060" },
-        ]
-    },
-    {
-        id: 103,
-        targetQty: 1,
-        code: "PRJ-2026-NON03",
-        name: "Papan Nama Neonbox Laundry Express - Yogya",
-        clientId: 6,
-        clientName: "Sari Laundry Express",
-        salesPIC: "Andi Prasetyo",
-        period: "Mei 2026",
-        contractValue: 12500000,
-        status: "Completed",
-        invoiceIssued: true,
-        invoiceNumber: "INV-2026-N001",
-        paymentTerms: {
-            type: "full",
-            fullDueDays: 30,
-            notes: "Pembayaran 100% dalam 30 hari setelah invoice diterima"
-        },
-        locations: [
-            { id: 14, code: "LOC-014", area: "Yogyakarta", description: "Neonbox Perempatan Tugu Yogyakarta", type: "Neonbox", size: "2x3m", vendorId: 2, vendorName: "CV. Media Ad Perkasa", vendorCost: 4500000, poIssued: true, poNumber: "PO-2026-0099" },
-        ]
-    }
-];
+import ProjectDetailSlide, { StatusBadge } from "./Projects/ProjectDetailSlide";
+import {
+    BillboardLocation,
+    Project,
+    FiscalMode,
+    ViewMode,
+    PPN_RATE,
+    mockVendors,
+    mockClients,
+    mockSalesPICs,
+    fmt,
+    calcFinancials,
+} from "./Projects/projectTypes";
+import { initialProjectsPPN, initialProjectsNonPPN } from "./Projects/projectData";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`;
+function formatPeriod(startStr: string, endStr: string): { label: string; duration: string } {
+    if (!startStr || !endStr) return { label: "", duration: "" };
+    
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+        return { label: "", duration: "" };
+    }
 
-function calcFinancials(project: Project, locations: BillboardLocation[], fiscalMode: FiscalMode) {
-    const isPPN = fiscalMode === "ppn";
-    const dpp = project.contractValue;
-    const ppnKeluaran = isPPN ? dpp * PPN_RATE : 0;
-    const totalInvoice = dpp + ppnKeluaran;
+    const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    
+    const startDay = String(start.getDate()).padStart(2, "0");
+    const startMonth = monthNamesShort[start.getMonth()];
+    const startYear = start.getFullYear();
 
-    const totalDppVendor = locations.reduce((s, l) => s + (l.vendorCost * (l.qty || 1)), 0);
-    const ppnMasukan = isPPN ? totalDppVendor * PPN_RATE : 0;
-    const totalPO = totalDppVendor + ppnMasukan;
+    const endDay = String(end.getDate()).padStart(2, "0");
+    const endMonth = monthNamesShort[end.getMonth()];
+    const endYear = end.getFullYear();
 
-    const netProfit = dpp - totalDppVendor;
-    const ppnNet = ppnKeluaran - ppnMasukan;
-    const margin = dpp > 0 ? (netProfit / dpp) * 100 : 0;
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    
+    const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
 
-    return { dpp, ppnKeluaran, totalInvoice, totalDppVendor, ppnMasukan, totalPO, netProfit, ppnNet, margin };
+    let label = "";
+    if (startYear === endYear && start.getMonth() === end.getMonth()) {
+        label = `${startDay} - ${endDay} ${startMonth} ${startYear}`;
+    } else if (startYear === endYear) {
+        label = `${startMonth} - ${endMonth} ${startYear}`;
+    } else {
+        label = `${startMonth} ${startYear} - ${endMonth} ${endYear}`;
+    }
+
+    const duration = months > 1 
+        ? `${months} Bulan (${diffDays} Hari)` 
+        : `${diffDays} Hari`;
+
+    return { label, duration };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-Components
-// ─────────────────────────────────────────────────────────────────────────────
-const StatusBadge = ({ status }: { status: Project["status"] }) => {
-    const map: Record<Project["status"], { bg: string; dot: string; text: string }> = {
-        Draft:     { bg: "bg-amber-50 text-amber-700 border-amber-100", dot: "bg-amber-400", text: "Draft" },
-        Active:    { bg: "bg-emerald-50 text-emerald-700 border-emerald-100", dot: "bg-emerald-500", text: "Aktif" },
-        Completed: { bg: "bg-blue-50 text-blue-700 border-blue-100", dot: "bg-blue-500", text: "Selesai" },
-        Cancelled: { bg: "bg-red-50 text-red-700 border-red-100", dot: "bg-red-500", text: "Dibatalkan" },
-    };
-    const s = map[status] || map.Draft;
-    return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${s.bg}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} /> {s.text}
-        </span>
-    );
+const MONTH_MAP: Record<string, number> = {
+    Jan: 0, Feb: 1, Mar: 2, Apr: 3, Mei: 4, Jun: 5,
+    Jul: 6, Agu: 7, Sep: 8, Okt: 9, Nov: 10, Des: 11,
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Project Detail Modal Component
-// ─────────────────────────────────────────────────────────────────────────────
-function ProjectDetailModal({ project, isOpen, onClose, fiscalMode, onUpdateProject }: { project: Project | null; isOpen: boolean; onClose: () => void; fiscalMode: FiscalMode; onUpdateProject: (updated: Project) => void }) {
-    const [render, setRender] = useState(false);
-    const [active, setActive] = useState(false);
-    const [activeTab, setActiveTab] = useState<ActiveTab>("info");
-    const [displayedProject, setDisplayedProject] = useState<Project | null>(project);
-    const [locations, setLocations] = useState<BillboardLocation[]>(project ? project.locations : []);
-
-    React.useEffect(() => {
-        if (isOpen && project) {
-            setDisplayedProject(project);
-            setLocations(project.locations);
-            setActiveTab("info");
-            setRender(true);
-            const timer = setTimeout(() => setActive(true), 20);
-            return () => clearTimeout(timer);
-        } else {
-            setActive(false);
-            const timer = setTimeout(() => setRender(false), 350);
-            return () => clearTimeout(timer);
-        }
-    }, [isOpen, project]);
-
-    if (!render || !displayedProject) return null;
-    const prj = displayedProject;
-
-    const isPPN = fiscalMode === "ppn";
-    const fin = calcFinancials(prj, locations, fiscalMode);
-
-    const tabs = [
-        { id: "info" as ActiveTab, label: "Info Proyek" },
-        { id: "locations" as ActiveTab, label: `Titik Lokasi (${locations.length})` },
-        { id: "vendors" as ActiveTab, label: "Vendor & PO" },
-        { id: "invoice" as ActiveTab, label: "Invoice Client" },
-    ];
-
-    const poCount = locations.filter(l => l.poIssued).length;
-
-    return (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-            {/* Backdrop Fade */}
-            <div
-                onClick={onClose}
-                className={`fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-300 ease-out ${
-                    active ? "opacity-100" : "opacity-0"
-                }`}
-            />
-
-            {/* Slide Panel from Right */}
-            <div className="fixed inset-y-0 right-0 flex max-w-full pl-10 pointer-events-none">
-                <div
-                    className={`pointer-events-auto relative w-[1050px] max-w-[95vw] h-screen bg-white shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out ${
-                        active ? "translate-x-0" : "translate-x-full"
-                    }`}
-                >
-                                    {/* HEADER */}
-                                    <div className="bg-slate-900 px-6 py-5 flex-shrink-0">
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-2 mb-1.5">
-                                                    <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded tracking-wider uppercase border border-blue-500/20">{prj.code}</span>
-                                                    <StatusBadge status={prj.status} />
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${isPPN ? "bg-violet-500/20 text-violet-300 border-violet-500/30" : "bg-slate-800 text-slate-300 border-slate-700"}`}>
-                                                        {isPPN ? "Mode PPN" : "Mode Non-PPN"}
-                                                    </span>
-                                                </div>
-                                                <h2 className="text-lg font-bold text-white tracking-tight">{prj.name}</h2>
-                                                <p className="text-xs text-slate-400 mt-0.5">{prj.clientName} &middot; {prj.period}</p>
-                                            </div>
-                                            <button onClick={onClose} className="flex-shrink-0 w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all cursor-pointer">
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                                            </button>
-                                        </div>
-
-                                        {/* Quick Stats Grid */}
-                                        <div className="grid grid-cols-4 gap-3 mt-4">
-                                            <div className="bg-slate-800/80 rounded-xl p-3 border border-slate-700/60">
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Nilai DPP Kontrak</div>
-                                                <div className="text-xs font-bold font-mono text-emerald-400">{fmt(fin.dpp)}</div>
-                                            </div>
-                                            <div className="bg-slate-800/80 rounded-xl p-3 border border-slate-700/60">
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Tagihan</div>
-                                                <div className="text-xs font-bold font-mono text-white">{fmt(fin.totalInvoice)}</div>
-                                            </div>
-                                            <div className="bg-slate-800/80 rounded-xl p-3 border border-slate-700/60">
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Estimasi Laba Bersih</div>
-                                                <div className={`text-xs font-bold font-mono ${fin.netProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{fmt(fin.netProfit)}</div>
-                                            </div>
-                                            <div className="bg-slate-800/80 rounded-xl p-3 border border-slate-700/60">
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Margin Keuntungan</div>
-                                                <div className={`text-xs font-bold font-mono ${fin.margin >= 30 ? "text-emerald-400" : "text-amber-400"}`}>{fin.margin.toFixed(1)}%</div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* TABS */}
-                                    <div className="flex border-b border-slate-200 bg-slate-50 flex-shrink-0">
-                                        {tabs.map(tab => (
-                                            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                                                className={`relative px-5 py-3 text-xs font-bold transition-all cursor-pointer ${
-                                                    activeTab === tab.id
-                                                        ? "text-primary bg-white"
-                                                        : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
-                                                }`}>
-                                                {tab.label}
-                                                {activeTab === tab.id && (
-                                                    <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-primary rounded-full" />
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {/* CONTENT */}
-                                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                                        {/* INFO TAB */}
-                                        {activeTab === "info" && (
-                                            <div className="space-y-5">
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    {[
-                                                        { label: "Kode Proyek", value: prj.code },
-                                                        { label: "Status", value: <StatusBadge status={prj.status} /> },
-                                                        { label: "Client / Pengiklan", value: prj.clientName },
-                                                        { label: "Sales PIC", value: prj.salesPIC },
-                                                        { label: "Periode Kampanye", value: prj.period },
-                                                        { label: "Total Titik Lokasi", value: `${locations.length} titik` },
-                                                        { label: "DPP Kontrak", value: <span className="font-mono font-bold text-emerald-600">{fmt(prj.contractValue)}</span> },
-                                                        { label: isPPN ? "Total Invoice (DPP + PPN)" : "Total Invoice", value: <span className="font-mono font-bold text-slate-900">{fmt(fin.totalInvoice)}</span> },
-                                                    ].map((row, i) => (
-                                                        <div key={i} className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80">
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{row.label}</div>
-                                                            <div className="text-xs font-bold text-slate-800">{row.value}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <div className="bg-white rounded-2xl p-4 border border-slate-200/80 space-y-2">
-                                                    <div className="flex justify-between items-center text-xs font-bold">
-                                                        <span className="text-slate-600">Progress PO Terbit</span>
-                                                        <span className="text-slate-800">{poCount} / {locations.length} titik</span>
-                                                    </div>
-                                                    <div className="bg-slate-100 rounded-full h-2 overflow-hidden">
-                                                        <div className="bg-primary h-full rounded-full transition-all duration-500" style={{ width: locations.length > 0 ? `${(poCount / locations.length) * 100}%` : "0%" }} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* LOCATIONS TAB */}
-                                        {activeTab === "locations" && (
-                                            <div className="space-y-4">
-                                                <div className="flex justify-between items-center">
-                                                    <div>
-                                                        <h3 className="text-sm font-bold text-slate-800">Titik Lokasi Billboard</h3>
-                                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">{locations.length} titik lokasi terdaftar dalam kampanye ini</p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-3">
-                                                    {locations.map((loc, idx) => (
-                                                        <div key={loc.id} className="bg-white border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between gap-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
-                                                                    {idx + 1}
-                                                                </div>
-                                                                <div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="text-xs font-bold text-slate-800">{loc.description}</span>
-                                                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">{loc.type}</span>
-                                                                    </div>
-                                                                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">
-                                                                        Vendor: {loc.vendorName} &middot; Ukuran: {loc.size} &middot; Area: {loc.area}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* VENDORS & INVOICE TABS */}
-                                        {(activeTab === "vendors" || activeTab === "invoice") && (
-                                            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 text-center space-y-2">
-                                                <h4 className="text-xs font-bold text-slate-800">Dokumen PO & Invoice Client</h4>
-                                                <p className="text-[11px] text-slate-500">Seluruh penerbitan Purchase Order dan Invoice Client dikelola secara otomatis sesuai skema pajak yang aktif.</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+/**
+ * Parse period string like "01 Jun - 31 Agu 2026" or "01 Mar - 31 Mei 2026"
+ * into { start: Date, end: Date }
+ */
+function parsePeriod(periodStr: string): { start: Date; end: Date } | null {
+    // Format: "DD MMM - DD MMM YYYY" or "DD MMM YYYY - DD MMM YYYY"
+    const match = periodStr.match(
+        /^(\d{2})\s+(\w+)(?:\s+(\d{4}))?\s*-\s*(\d{2})\s+(\w+)\s+(\d{4})$/
     );
+    if (!match) return null;
+
+    const [, startDay, startMonStr, startYearStr, endDay, endMonStr, endYear] = match;
+    const startMon = MONTH_MAP[startMonStr];
+    const endMon = MONTH_MAP[endMonStr];
+    if (startMon === undefined || endMon === undefined) return null;
+
+    const year = parseInt(endYear, 10);
+    const startYear = startYearStr ? parseInt(startYearStr, 10) : year;
+
+    const start = new Date(startYear, startMon, parseInt(startDay, 10));
+    const end   = new Date(year, endMon, parseInt(endDay, 10));
+    return { start, end };
 }
+
+function calcPeriodProgress(periodStr: string, status: string): { 
+    percent: number; 
+    label: string; 
+    barClass: string;
+    textClass: string;
+} {
+    // Completed project always shows 100%
+    if (status === "Completed") {
+        return { 
+            percent: 100, 
+            label: "Masa Tayang Selesai", 
+            barClass: "bg-rose-500", 
+            textClass: "text-rose-600 font-bold" 
+        };
+    }
+
+    const parsed = parsePeriod(periodStr);
+
+    // Fallback if period can't be parsed
+    if (!parsed) {
+        return { 
+            percent: 0, 
+            label: "Belum Tayang", 
+            barClass: "bg-slate-300", 
+            textClass: "text-slate-400 font-medium" 
+        };
+    }
+
+    const { start, end } = parsed;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    // Belum mulai
+    if (today < start) {
+        return { 
+            percent: 0, 
+            label: "Belum Tayang", 
+            barClass: "bg-slate-300", 
+            textClass: "text-slate-400 font-medium" 
+        };
+    }
+
+    // Sudah selesai
+    if (today > end) {
+        return { 
+            percent: 100, 
+            label: "Masa Tayang Selesai", 
+            barClass: "bg-rose-500", 
+            textClass: "text-rose-600 font-bold" 
+        };
+    }
+
+    // Sedang berjalan
+    const daysPassed = Math.ceil((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const daysLeft   = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const percent    = Math.min(100, Math.round((daysPassed / totalDays) * 100));
+
+    return { 
+        percent, 
+        label: `Berjalan ${daysPassed}/${totalDays} Hari (Sisa ${daysLeft} Hari)`, 
+        barClass: "bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500", 
+        textClass: "text-blue-600 font-mono" 
+    };
+}
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Projects Page Component
@@ -475,17 +189,48 @@ export default function Projects() {
         name: "",
         clientName: "",
         salesPIC: "",
-        period: "",
+        startDate: "",
+        endDate: "",
         totalLocations: "1",
         contractValue: "",
+        taxMode: "dpp" as "dpp" | "inc", // "dpp" = Belum PPN, "inc" = Sudah PPN
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const periodInfo = useMemo(() => {
+        return formatPeriod(form.startDate, form.endDate);
+    }, [form.startDate, form.endDate]);
+
+    // Live calculations for Create Project modal
+    const parsedRawValue = parseInt(form.contractValue.replace(/[^0-9]/g, "")) || 0;
+    const computedFinancials = useMemo(() => {
+        if (!parsedRawValue) return { dpp: 0, ppn: 0, total: 0 };
+        if (!isPPN) {
+            return { dpp: parsedRawValue, ppn: 0, total: parsedRawValue };
+        }
+        if (form.taxMode === "inc") {
+            // User inputs Grand Total (Inc PPN) -> Convert back to DPP: DPP = Total / 1.11
+            const dpp = Math.round(parsedRawValue / 1.11);
+            const ppn = parsedRawValue - dpp;
+            return { dpp, ppn, total: parsedRawValue };
+        } else {
+            // User inputs DPP (Excl PPN) -> PPN = DPP * 11%
+            const ppn = Math.round(parsedRawValue * PPN_RATE);
+            const total = parsedRawValue + ppn;
+            return { dpp: parsedRawValue, ppn, total };
+        }
+    }, [parsedRawValue, form.taxMode, isPPN]);
 
     const handleCreate = (e: React.FormEvent) => {
         e.preventDefault();
         const errs: Record<string, string> = {};
         if (!form.name.trim()) errs.name = "Nama proyek wajib diisi.";
         if (!form.clientName) errs.clientName = "Client wajib dipilih.";
+        if (!form.startDate || !form.endDate) {
+            errs.period = "Tanggal mulai dan selesai kampanye wajib diisi.";
+        } else if (new Date(form.startDate) > new Date(form.endDate)) {
+            errs.period = "Tanggal selesai tidak boleh lebih awal dari tanggal mulai.";
+        }
         if (!form.contractValue) errs.contractValue = "Nilai kontrak wajib diisi.";
 
         if (Object.keys(errs).length > 0) {
@@ -500,8 +245,8 @@ export default function Projects() {
             clientId: 99,
             clientName: form.clientName,
             salesPIC: form.salesPIC || "Sales Admin",
-            period: form.period || "Bulan Ini",
-            contractValue: parseInt(form.contractValue.replace(/[^0-9]/g, "")) || 0,
+            period: periodInfo.label || "Bulan Ini",
+            contractValue: computedFinancials.dpp, // Always save pure DPP in database
             status: "Draft",
             invoiceIssued: false,
             invoiceNumber: "",
@@ -511,7 +256,7 @@ export default function Projects() {
 
         setProjects([newPrj, ...projects]);
         setIsCreateOpen(false);
-        setForm({ name: "", clientName: "", salesPIC: "", period: "", totalLocations: "1", contractValue: "" });
+        setForm({ name: "", clientName: "", salesPIC: "", startDate: "", endDate: "", totalLocations: "1", contractValue: "", taxMode: "dpp" });
         setErrors({});
     };
 
@@ -538,9 +283,9 @@ export default function Projects() {
         }, 0);
     }, [projects, fiscalMode]);
 
-    // Filtering
+    // Filtering + sort by tanggal mulai tayang (ascending)
     const filteredProjects = useMemo(() => {
-        return projects.filter(p => {
+        const filtered = projects.filter(p => {
             const matchesSearch =
                 p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -556,6 +301,48 @@ export default function Projects() {
                 (statusFilter === "no_invoice" && !p.invoiceIssued);
 
             return matchesSearch && matchesStatus;
+        });
+
+        // Sort priority:
+        //   1. Akan datang (belum tayang) — startDate ascending (yang paling dekat muncul duluan)
+        //   2. Sedang berjalan (on-air)   — endDate ascending (yang mau habis duluan)
+        //   3. Selesai / expired          — startDate descending (paling baru dulu)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const getTayangGroup = (p: Project): number => {
+            if (p.status === "Completed" || p.status === "Cancelled") return 3;
+            const parsed = parsePeriod(p.period);
+            if (!parsed) return 2; // fallback ke on-air group
+            if (today < parsed.start) return 1; // belum mulai
+            if (today > parsed.end) return 3;   // sudah lewat
+            return 2;                            // sedang berjalan
+        };
+
+        return filtered.sort((a, b) => {
+            const groupA = getTayangGroup(a);
+            const groupB = getTayangGroup(b);
+            if (groupA !== groupB) return groupA - groupB;
+
+            const parsedA = parsePeriod(a.period);
+            const parsedB = parsePeriod(b.period);
+
+            if (groupA === 1) {
+                // Akan datang: startDate ascending
+                const tA = parsedA ? parsedA.start.getTime() : Infinity;
+                const tB = parsedB ? parsedB.start.getTime() : Infinity;
+                return tA - tB;
+            }
+            if (groupA === 2) {
+                // Sedang tayang: endDate ascending (yang mau habis duluan)
+                const tA = parsedA ? parsedA.end.getTime() : Infinity;
+                const tB = parsedB ? parsedB.end.getTime() : Infinity;
+                return tA - tB;
+            }
+            // Selesai: startDate descending (paling baru dulu)
+            const tA = parsedA ? parsedA.start.getTime() : 0;
+            const tB = parsedB ? parsedB.start.getTime() : 0;
+            return tB - tA;
         });
     }, [projects, searchQuery, statusFilter]);
 
@@ -599,7 +386,7 @@ export default function Projects() {
                 </div>
 
                 {/* Metric Summary Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <MetricCard
                         title="Proyek Aktif"
                         value={`${totalActiveProjects} Proyek`}
@@ -615,7 +402,7 @@ export default function Projects() {
                         valueColorClass="text-blue-950"
                     />
                     <MetricCard
-                        title="Total Nilai Kontrak (DPP)"
+                        title={isPPN ? "Total Nilai Kontrak (DPP)" : "Total Nilai Kontrak"}
                         value={fmt(totalContractValue)}
                         badgeText={isPPN ? "Mode PPN 11%" : "Mode Non-PPN"}
                         cardBgClass="bg-emerald-50/60 border-emerald-200/60 shadow-xs"
@@ -763,61 +550,66 @@ export default function Projects() {
                                     const locCount = project.locations.length;
                                     const poProgress = locCount > 0 ? poCount / locCount : 0;
 
-                                    return (
-                                        <div
-                                            key={project.id}
-                                            onClick={() => setSelectedProject(project)}
-                                            className="bg-white border border-slate-200/80 hover:border-blue-300 rounded-3xl p-5 shadow-xs hover:shadow-lg transition-all duration-200 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
-                                        >
-                                            {/* Top Accent Line */}
-                                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    const periodProg = calcPeriodProgress(project.period, project.status);
 
-                                            <div className="space-y-4">
-                                                {/* Card Header Badges */}
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-mono text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md">
-                                                            {project.code}
-                                                        </span>
-                                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${
-                                                            isPPN ? "bg-violet-50 text-violet-700 border-violet-100" : "bg-slate-100 text-slate-600 border-slate-200"
-                                                        }`}>
-                                                            {isPPN ? "PPN 11%" : "Non-PPN"}
-                                                        </span>
-                                                    </div>
-                                                    <StatusBadge status={project.status} />
-                                                </div>
-
-                                                {/* Project Title & Client info */}
-                                                <div>
-                                                    <h3 className="font-bold text-slate-900 text-base group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
-                                                        {project.name}
-                                                    </h3>
-                                                    <div className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1.5">
-                                                        <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                                        </svg>
-                                                        <span className="truncate">{project.clientName}</span>
-                                                    </div>
-                                                    <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
-                                                        PIC: {project.salesPIC} &middot; Periode: {project.period}
-                                                    </div>
-                                                </div>
-
-                                                {/* Milestone Stage Tracker Mini Bar */}
-                                                <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                                                    <div className="flex justify-between items-center text-[10px] font-bold">
-                                                        <span className="text-slate-500">Progress PO Vendor</span>
-                                                        <span className="text-slate-800 font-mono">{poCount} / {locCount} PO Terbit</span>
-                                                    </div>
-                                                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                                    return (
                                                         <div
-                                                            className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full rounded-full transition-all duration-500"
-                                                            style={{ width: `${Math.round(poProgress * 100)}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                            key={project.id}
+                                                            onClick={() => setSelectedProject(project)}
+                                                            className="bg-white border border-slate-200/80 hover:border-blue-300 rounded-3xl p-5 shadow-xs hover:shadow-lg transition-all duration-200 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
+                                                        >
+                                                            {/* Top Accent Line */}
+                                                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                                                            <div className="space-y-4">
+                                                                {/* Card Header Badges */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-mono text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md">
+                                                                            {project.code}
+                                                                        </span>
+                                                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${
+                                                                            isPPN ? "bg-violet-50 text-violet-700 border-violet-100" : "bg-slate-100 text-slate-600 border-slate-200"
+                                                                        }`}>
+                                                                            {isPPN ? "PPN 11%" : "Non-PPN"}
+                                                                        </span>
+                                                                    </div>
+                                                                    <StatusBadge status={project.status} />
+                                                                </div>
+
+                                                                {/* Project Title & Client info */}
+                                                                <div>
+                                                                    <h3 className="font-bold text-slate-900 text-base group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
+                                                                        {project.name}
+                                                                    </h3>
+                                                                    <div className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1.5">
+                                                                        <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                                                        </svg>
+                                                                        <span className="truncate">{project.clientName}</span>
+                                                                    </div>
+                                                                    <div className="text-[11px] text-slate-500 font-semibold mt-1 flex items-center justify-between border-t border-slate-100 pt-2">
+                                                                        <span>PIC: {project.salesPIC} &middot; {project.period}</span>
+                                                                        <span className="font-mono text-slate-700 font-bold text-[10px] bg-slate-100 px-2 py-0.5 rounded-md">
+                                                                            {poCount}/{locCount} PO Terbit
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Milestone Stage Tracker Mini Bar - Progress Masa Tayang */}
+                                                                <div className="space-y-1.5">
+                                                                    <div className="flex justify-between items-center text-[10px] font-bold">
+                                                                        <span className="text-slate-500">Progress Masa Tayang</span>
+                                                                        <span className={`text-[10px] ${periodProg.textClass}`}>{periodProg.label}</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                                                        <div
+                                                                            className={`${periodProg.barClass} h-full rounded-full transition-all duration-500`}
+                                                                            style={{ width: `${periodProg.percent}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
 
                                             {/* Financial Footer Box */}
                                             <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3 items-end">
@@ -927,16 +719,21 @@ export default function Projects() {
                                             <h4 className="font-bold text-slate-800 text-xs leading-snug">{project.name}</h4>
                                             <div className="text-[10px] text-slate-500 font-semibold">{project.clientName}</div>
 
-                                            {/* Progress PO */}
-                                            <div className="space-y-1">
-                                                <div className="flex justify-between text-[9px] font-bold text-slate-400">
-                                                    <span>PO Terbit</span>
-                                                    <span>{poCount}/{locCount} Titik</span>
-                                                </div>
-                                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.round(poProgress * 100)}%` }} />
-                                                </div>
-                                            </div>
+                                            {/* Progress Masa Tayang */}
+                                            {(() => {
+                                                const prog = calcPeriodProgress(project.period, project.status);
+                                                return (
+                                                    <div className="space-y-1">
+                                                        <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                                                            <span>Masa Tayang</span>
+                                                            <span className="font-mono text-slate-700">{poCount}/{locCount} PO Terbit</span>
+                                                        </div>
+                                                        <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                                            <div className={`${prog.barClass} h-full rounded-full`} style={{ width: `${prog.percent}%` }} />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
 
                                             <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs font-bold">
                                                 <span className="text-slate-400">Laba Bersih:</span>
@@ -1085,102 +882,210 @@ export default function Projects() {
                     </div>
                 )}
 
-                {/* Create Project Drawer */}
-                <SlideOver isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Buat Proyek Kampanye Baru">
-                    <form onSubmit={handleCreate} className="space-y-5">
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Nama Proyek / Kampanye <span className="text-rose-500">*</span></label>
-                            <input
-                                type="text"
-                                value={form.name}
-                                onChange={e => setForm({ ...form, name: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                                placeholder="Kampanye Iklan Film Toystory 5..."
-                            />
-                            {errors.name && <span className="text-[10px] text-rose-500 font-bold uppercase block mt-1">{errors.name}</span>}
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Client / Pengiklan <span className="text-rose-500">*</span></label>
-                            <SelectInput
-                                value={form.clientName}
-                                onChange={e => setForm({ ...form, clientName: e.target.value })}
+                {/* Create Project Modal */}
+                <Modal show={isCreateOpen} onClose={() => setIsCreateOpen(false)} maxWidth="lg">
+                    <div className="p-6 space-y-5">
+                        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                            <h3 className="text-base font-bold text-slate-900">Buat Proyek Kampanye Baru</h3>
+                            <button
+                                type="button"
+                                onClick={() => setIsCreateOpen(false)}
+                                className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-100"
                             >
-                                <option value="">-- Pilih Client --</option>
-                                <option value="PT. Walt Disney Pictures Indonesia">PT. Walt Disney Pictures Indonesia</option>
-                                <option value="Shopee Indonesia">Shopee Indonesia</option>
-                                <option value="PT. Gojek Tokopedia">PT. Gojek Tokopedia</option>
-                                <option value="CV. Soto Bangkong Lestari">CV. Soto Bangkong Lestari</option>
-                                <option value="Samsung Electronics Indonesia">Samsung Electronics Indonesia</option>
-                                <option value="Sari Laundry Express">Sari Laundry Express</option>
-                            </SelectInput>
-                            {errors.clientName && <span className="text-[10px] text-rose-500 font-bold uppercase block mt-1">{errors.clientName}</span>}
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Sales PIC</label>
-                            <SelectInput
-                                value={form.salesPIC}
-                                onChange={e => setForm({ ...form, salesPIC: e.target.value })}
-                            >
-                                <option value="">-- Pilih Sales PIC --</option>
-                                <option value="Budi Santoso">Budi Santoso</option>
-                                <option value="Rina Widayanti">Rina Widayanti</option>
-                                <option value="Andi Prasetyo">Andi Prasetyo</option>
-                                <option value="Eko Prasetyo">Eko Prasetyo</option>
-                                <option value="Rian Hidayat">Rian Hidayat</option>
-                                <option value="Siti Aminah">Siti Aminah</option>
-                            </SelectInput>
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Periode Kampanye</label>
-                            <input
-                                type="text"
-                                value={form.period}
-                                onChange={e => setForm({ ...form, period: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                                placeholder="Jul - Sep 2026"
-                            />
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Jumlah Titik Lokasi <span className="text-rose-500">*</span></label>
-                            <input
-                                type="number"
-                                min="1"
-                                max="20"
-                                value={form.totalLocations}
-                                onChange={e => setForm({ ...form, totalLocations: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                            />
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Nilai Kontrak / DPP (IDR) <span className="text-rose-500">*</span></label>
-                            <input
-                                type="text"
-                                value={form.contractValue}
-                                onChange={e => setForm({ ...form, contractValue: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                                placeholder="Masukkan nilai DPP (sebelum PPN)..."
-                            />
-                            {errors.contractValue && <span className="text-[10px] text-rose-500 font-bold uppercase block mt-1">{errors.contractValue}</span>}
-                        </div>
-
-                        <div className="pt-4 border-t border-slate-100 flex gap-3">
-                            <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-200">
-                                Batal
-                            </button>
-                            <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all">
-                                Simpan Draft Proyek
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                             </button>
                         </div>
-                    </form>
-                </SlideOver>
 
-                {/* Project Detail Modal Drawer — always rendered for smooth exit animation */}
-                <ProjectDetailModal
+                        <form onSubmit={handleCreate} className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Nama Proyek / Kampanye <span className="text-rose-500">*</span></label>
+                                <input
+                                    type="text"
+                                    value={form.name}
+                                    onChange={e => setForm({ ...form, name: e.target.value })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
+                                    placeholder="Kampanye Iklan Film Toystory 5..."
+                                />
+                                {errors.name && <span className="text-[10px] text-rose-500 font-bold uppercase block mt-1">{errors.name}</span>}
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Client / Pengiklan <span className="text-rose-500">*</span></label>
+                                <SelectInput
+                                    value={form.clientName}
+                                    onChange={e => setForm({ ...form, clientName: e.target.value })}
+                                >
+                                    <option value="">-- Pilih Client --</option>
+                                    {mockClients.map(c => (
+                                        <option key={c.id} value={c.name}>{c.name}</option>
+                                    ))}
+                                </SelectInput>
+                                {errors.clientName && <span className="text-[10px] text-rose-500 font-bold uppercase block mt-1">{errors.clientName}</span>}
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Sales PIC</label>
+                                <SelectInput
+                                    value={form.salesPIC}
+                                    onChange={e => setForm({ ...form, salesPIC: e.target.value })}
+                                >
+                                    <option value="">-- Pilih Sales PIC --</option>
+                                    {mockSalesPICs.map(pic => (
+                                        <option key={pic} value={pic}>{pic}</option>
+                                    ))}
+                                </SelectInput>
+                            </div>
+
+                            {/* Periode Kampanye (Date Range) */}
+                            <div className="space-y-2 bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200/80">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
+                                        <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        Periode Kampanye <span className="text-rose-500">*</span>
+                                    </label>
+                                    {periodInfo.duration && (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-100/80 px-2.5 py-0.5 rounded-full border border-blue-200">
+                                            <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            {periodInfo.duration}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tanggal Mulai</span>
+                                        <input
+                                            type="date"
+                                            value={form.startDate}
+                                            onChange={e => setForm({ ...form, startDate: e.target.value })}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tanggal Selesai</span>
+                                        <input
+                                            type="date"
+                                            value={form.endDate}
+                                            onChange={e => setForm({ ...form, endDate: e.target.value })}
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-semibold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                {errors.period && (
+                                    <span className="text-[10px] text-rose-500 font-bold uppercase block mt-1">{errors.period}</span>
+                                )}
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">Jumlah Titik Lokasi <span className="text-rose-500">*</span></label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="20"
+                                    value={form.totalLocations}
+                                    onChange={e => setForm({ ...form, totalLocations: e.target.value })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-semibold focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
+                                />
+                            </div>
+
+                             {/* Switch Tax Mode & Input Nilai Kontrak */}
+                             <div className="space-y-3 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80">
+                                 <div className="flex items-center justify-between flex-wrap gap-2">
+                                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                                         <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                         </svg>
+                                         Nilai Kontrak <span className="text-rose-500">*</span>
+                                     </label>
+
+                                     {/* Mode Switch Pills (Hanya jika PPN aktif) */}
+                                     {isPPN && (
+                                         <div className="inline-flex p-0.5 bg-slate-200/80 rounded-xl">
+                                             <button
+                                                 type="button"
+                                                 onClick={() => setForm({ ...form, taxMode: "dpp" })}
+                                                 className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all ${
+                                                     form.taxMode === "dpp"
+                                                         ? "bg-white text-blue-700 shadow-2xs font-black"
+                                                         : "text-slate-500 hover:text-slate-800"
+                                                 }`}
+                                             >
+                                                 Belum PPN (DPP)
+                                             </button>
+                                             <button
+                                                 type="button"
+                                                 onClick={() => setForm({ ...form, taxMode: "inc" })}
+                                                 className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all ${
+                                                     form.taxMode === "inc"
+                                                         ? "bg-blue-600 text-white shadow-2xs font-black"
+                                                         : "text-slate-500 hover:text-slate-800"
+                                                 }`}
+                                             >
+                                                 Sudah Inc. PPN (11%)
+                                             </button>
+                                         </div>
+                                     )}
+                                 </div>
+
+                                 <input
+                                     type="text"
+                                     value={form.contractValue}
+                                     onChange={e => {
+                                         const raw = e.target.value.replace(/[^0-9]/g, "");
+                                         const formatted = raw ? parseInt(raw, 10).toLocaleString("id-ID") : "";
+                                         setForm({ ...form, contractValue: formatted });
+                                     }}
+                                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-2xs font-mono"
+                                     placeholder={
+                                         isPPN
+                                             ? form.taxMode === "inc"
+                                                 ? "Masukkan Nilai Total (Sudah Inc PPN 11%)..."
+                                                 : "Masukkan Nilai DPP (Sebelum PPN)..."
+                                             : "Masukkan Nilai Total Kontrak..."
+                                     }
+                                 />
+                                 {errors.contractValue && <span className="text-[10px] text-rose-500 font-bold uppercase block mt-1">{errors.contractValue}</span>}
+
+                                 {/* Live Calculations Breakdown Card */}
+                                 {isPPN && parsedRawValue > 0 && (
+                                     <div className="bg-blue-50/80 p-3 rounded-xl border border-blue-100/90 space-y-1.5 text-xs">
+                                         <div className="flex justify-between items-center text-slate-600">
+                                             <span className="font-medium text-[11px]">Nilai DPP (Dasar Pajak)</span>
+                                             <span className="font-mono font-bold text-slate-900">{fmt(computedFinancials.dpp)}</span>
+                                         </div>
+                                         <div className="flex justify-between items-center text-violet-700">
+                                             <span className="font-medium text-[11px]">PPN Keluaran (11%)</span>
+                                             <span className="font-mono font-bold">{fmt(computedFinancials.ppn)}</span>
+                                         </div>
+                                         <div className="flex justify-between items-center pt-1 border-t border-blue-200/60 text-slate-900 font-bold">
+                                             <span className="text-[11px]">Total Tagihan Client</span>
+                                             <span className="font-mono text-blue-700 font-black text-xs">{fmt(computedFinancials.total)}</span>
+                                         </div>
+                                     </div>
+                                 )}
+                             </div>
+
+                            <div className="pt-4 border-t border-slate-100 flex gap-3">
+                                <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 bg-white hover:bg-slate-50 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-200">
+                                    Batal
+                                </button>
+                                <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all">
+                                    Simpan Draft Proyek
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </Modal>
+
+                {/* Project Detail Slide Over Panel — always rendered for smooth exit animation */}
+                <ProjectDetailSlide
                     project={selectedProject}
                     isOpen={!!selectedProject}
                     onClose={() => setSelectedProject(null)}
