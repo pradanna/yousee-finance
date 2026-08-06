@@ -59,3 +59,12 @@ This project uses a "Lite DDD" (Action-Based) architecture to maintain a clean, 
   - To paginate, simply return `ResourceName::collection($model->paginate(10))`. 
   - Do NOT manually build pagination metadata. Laravel's Resource Collection automatically encapsulates the result into `data` and `meta` (which contains pagination links) objects, which Inertia consumes natively.
 - **Formatting**: Use Resources to format data for the UI (e.g., formatting monetary integers into currency strings) and to prevent data leaks (explicitly pick safe fields).
+
+## 6. Complex Queries & Calculations
+- **Core Rule**: Do NOT place complex queries, cross-domain logic, or heavy mathematical calculations inside Controllers or Models.
+- **Responsibility**: 
+  - For standard complex queries (e.g., filtering, aggregations on a single domain), use **Eloquent Query Scopes** inside the Model.
+  - For extremely complex operations (e.g., cross-domain calculations, financial ledger generation, projections), create a dedicated Read/Query **Action Class** (or Domain Service) in the `Actions` folder (e.g., `GenerateMonthlyCashflow`).
+- **Constraints**: 
+  - Models must not contain logic that touches other domains (e.g., `Invoice` model should not query `ClosingPeriod` directly).
+  - Actions must remain strictly Single Responsibility. If an Action needs another calculation, use Dependency Injection to call another Action.
