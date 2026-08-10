@@ -65,8 +65,8 @@ Route::get('/cashflow', function () {
     return Inertia::render('CashflowReport');
 })->name('cashflow');
 
-Route::post('/po-pdf', [\App\Http\Controllers\PurchaseOrderPdfController::class, 'generatePdf'])->name('po.pdf');
-Route::post('/client-invoice-pdf', [\App\Http\Controllers\ClientInvoicePdfController::class, 'generatePdf'])->name('client-invoice.pdf');
+Route::match(['get', 'post'], '/po-pdf', [\App\Http\Controllers\PurchaseOrderPdfController::class, 'generatePdf'])->name('po.pdf');
+Route::match(['get', 'post'], '/client-invoice-pdf', [\App\Http\Controllers\ClientInvoicePdfController::class, 'generatePdf'])->name('client-invoice.pdf');
 Route::get('/projects/{projectId}/payment', function ($projectId) {
     return Inertia::render('Projects/ProjectPayment', ['projectId' => (int) $projectId]);
 })->name('project.payment');

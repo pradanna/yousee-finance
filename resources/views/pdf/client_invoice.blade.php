@@ -271,6 +271,11 @@
             </td>
             <td style="width: 45%; vertical-align: top; text-align: right;">
                 <div class="invoice-header-title">INVOICE</div>
+                @if(!empty($termLabel))
+                    <div style="font-size: 8.5px; font-weight: bold; color: #0284c7; margin-top: 2px; text-transform: uppercase;">
+                        {{ $termLabel }}
+                    </div>
+                @endif
                 <table class="meta-table">
                     <tr>
                         <td class="meta-label">DATE :</td>

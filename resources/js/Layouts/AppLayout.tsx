@@ -53,6 +53,12 @@ export default function AppLayout({ children, activePage, title, breadcrumbs }: 
         }
     }, []);
 
+    useEffect(() => {
+        if (typeof document !== 'undefined') {
+            document.documentElement.setAttribute('data-fiscal-mode', fiscalMode);
+        }
+    }, [fiscalMode]);
+
     const handleFiscalModeToggle = (mode: 'ppn' | 'non-ppn') => {
         setFiscalMode(mode);
         localStorage.setItem('app_fiscal_mode', mode);

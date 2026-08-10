@@ -15,7 +15,10 @@ export interface PaymentTerm {
     percent: number;         // Persentase dari total (0–100)
     dueDate: string;         // ISO date string
     status: PaymentTermStatus;
+    paidAmount?: number;     // Realisasi nominal yang dibayar (bisa partial / full)
     paidAt?: string;         // Tanggal realisasi bayar (ISO date)
+    paymentMethod?: string;  // e.g. "Transfer Bank BCA"
+    paymentRef?: string;     // No. Ref / Catatan Bukti Pembayaran
     notes?: string;
 }
 
@@ -36,10 +39,10 @@ export function calcPaymentSummary(plan: ClientPaymentPlan): {
     totalCount: number;
     nextDue: PaymentTerm | null;
 } {
+    const totalPaid = plan.terms.reduce((s, t) => s + (t.paidAmount || (t.status === "paid" ? t.amount : 0)), 0);
     const paidTerms = plan.terms.filter(t => t.status === "paid");
-    const totalPaid = paidTerms.reduce((s, t) => s + t.amount, 0);
-    const totalRemaining = plan.totalAmount - totalPaid;
-    const progressPercent = plan.totalAmount > 0 ? Math.round((totalPaid / plan.totalAmount) * 100) : 0;
+    const totalRemaining = Math.max(0, plan.totalAmount - totalPaid);
+    const progressPercent = plan.totalAmount > 0 ? Math.min(100, Math.round((totalPaid / plan.totalAmount) * 100)) : 0;
 
     const unpaidTerms = plan.terms
         .filter(t => t.status !== "paid")
@@ -108,6 +111,20 @@ export interface BillboardLocation {
     orientation?: "V" | "H";
     lighting?: "Berlampu" | "Tidak Berlampu";
     topNotes?: string;
+    vendorTermScheme?: PaymentScheme;
+    vendorTermPercents?: number[];
+    vendorTermDates?: string[];
+}
+
+export interface VendorPaymentRecord {
+    id: string;
+    poNumber: string;
+    vendorName: string;
+    amount: number;          // Nominal pembayaran keluar ke vendor
+    paidAt: string;          // Tanggal bayar (ISO date)
+    paymentMethod: string;   // e.g. "Transfer Bank BCA"
+    paymentRef?: string;     // Bukti transfer / No. Ref
+    notes?: string;
 }
 
 export interface Project {
@@ -126,9 +143,10 @@ export interface Project {
     targetQty: number;
     paymentTerms?: VendorPaymentTerm;
     clientPaymentPlan?: ClientPaymentPlan;
+    vendorPayments?: VendorPaymentRecord[];
 }
 
-export type ActiveTab = "info" | "locations" | "vendors" | "invoice" | "payment";
+export type ActiveTab = "info" | "locations" | "vendors" | "invoice";
 export type FiscalMode = "ppn" | "non-ppn";
 export type ViewMode = "grid" | "kanban" | "table";
 
@@ -137,6 +155,13 @@ export const PPN_RATE = 0.11;
 export { mockVendors, mockClients, mockSalesPICs } from "./projectData";
 
 export const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`;
+
+export function formatIndoDate(dateStr?: string): string {
+    if (!dateStr) return "-";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+}
 
 export function calcFinancials(project: Project, locations: BillboardLocation[], fiscalMode: FiscalMode) {
     const isPPN = fiscalMode === "ppn";

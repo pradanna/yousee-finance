@@ -64,12 +64,12 @@ export default function Header({ title, breadcrumbs, fiscalMode, isCollapsed = f
                     <h1 className="text-lg font-bold text-slate-800 tracking-tight leading-none flex items-center gap-2">
                         {title}
                         {fiscalMode && (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                                 fiscalMode === 'ppn'
-                                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-200/80'
+                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
                             }`}>
-                                {fiscalMode} mode
+                                {fiscalMode === 'ppn' ? 'PPN Mode' : 'Non-PPN Mode'}
                             </span>
                         )}
                     </h1>

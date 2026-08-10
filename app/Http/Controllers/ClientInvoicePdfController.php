@@ -10,11 +10,25 @@ class ClientInvoicePdfController extends Controller
     public function generatePdf(Request $request)
     {
         $project = $request->input('project', []);
-        $clientName = $request->input('clientName', 'Bapak Sugiyamto, S.Pd., M.Pd.');
-        $clientSubName = $request->input('clientSubName', 'Kepala SMK Binawiyata Karangmalang Sragen');
+        $clientName = $request->input('clientName', 'PT. Pakuwon Jati Tbk');
+        $clientSubName = $request->input('clientSubName', 'Attn: Finance & Procurement');
         $invoiceNumber = $request->input('invoiceNumber', 'INV-06/2026/001');
         $invoiceDate = $request->input('invoiceDate', date('d/m/Y'));
         $locations = $request->input('locations', []);
+        if (empty($locations)) {
+            $locations = [
+                [
+                    'type' => 'Sewa Media Iklan',
+                    'size' => '4x6m',
+                    'orientation' => 'V',
+                    'description' => 'Kampanye Iklan - Grand Opening Pakuwon Mall Yogyakarta',
+                    'area' => 'Yogyakarta',
+                    'qty' => 1,
+                    'clientPrice' => 390000000,
+                    'vendorCost' => 390000000,
+                ]
+            ];
+        }
         $isPPN = filter_var($request->input('isPPN', false), FILTER_VALIDATE_BOOLEAN);
         $dpAmount = (float) $request->input('dpAmount', 0);
         $bankAccountName = $request->input('bankAccountName', 'Yosua Eka Setiawan');
@@ -29,6 +43,10 @@ class ClientInvoicePdfController extends Controller
         ]);
         $directorName = $request->input('directorName', 'Yosua Eka S');
         $directorTitle = $request->input('directorTitle', 'Direktur');
+
+        $termLabel = $request->input('termLabel', '');
+        $contractTotalDpp = (float) $request->input('contractTotalDpp', 0);
+        $contractTotalInvoice = (float) $request->input('contractTotalInvoice', 0);
 
         $subtotal = 0;
         foreach ($locations as $item) {
@@ -45,6 +63,9 @@ class ClientInvoicePdfController extends Controller
             'clientSubName' => $clientSubName,
             'invoiceNumber' => $invoiceNumber,
             'invoiceDate' => $invoiceDate,
+            'termLabel' => $termLabel,
+            'contractTotalDpp' => $contractTotalDpp,
+            'contractTotalInvoice' => $contractTotalInvoice,
             'locations' => $locations,
             'isPPN' => $isPPN,
             'subtotal' => $subtotal,

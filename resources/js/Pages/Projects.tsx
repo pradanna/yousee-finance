@@ -1024,7 +1024,7 @@ export default function Projects() {
                                                  onClick={() => setForm({ ...form, taxMode: "inc" })}
                                                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all ${
                                                      form.taxMode === "inc"
-                                                         ? "bg-blue-600 text-white shadow-2xs font-black"
+                                                         ? "bg-primary text-white shadow-2xs font-black"
                                                          : "text-slate-500 hover:text-slate-800"
                                                  }`}
                                              >
@@ -1076,7 +1076,7 @@ export default function Projects() {
                                 <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 bg-white hover:bg-slate-50 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-200">
                                     Batal
                                 </button>
-                                <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all">
+                                <button type="submit" className="flex-1 bg-primary hover:bg-primary-700 text-white py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all">
                                     Simpan Draft Proyek
                                 </button>
                             </div>
