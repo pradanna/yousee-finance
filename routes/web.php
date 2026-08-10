@@ -32,6 +32,9 @@ Route::middleware('auth')->group(function () {
     Route::resource('clients', \App\Http\Controllers\Client\ClientController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('clients/{client}/archive', [\App\Http\Controllers\Client\ClientController::class, 'archive'])->name('clients.archive');
     Route::post('clients/{client}/unarchive', [\App\Http\Controllers\Client\ClientController::class, 'unarchive'])->name('clients.unarchive');
+
+    // Sales Domain
+    Route::resource('sales', \App\Http\Controllers\Sales\SalesController::class)->only(['index', 'store', 'update', 'destroy']);
 });
 
 Route::prefix('demo')->group(function () {

@@ -1,18 +1,26 @@
 <?php
 
-namespace App\Domains\Master\Models;
+namespace App\Domains\Sales\Models;
 
 use App\Domains\Billing\Models\Invoice;
 use App\Domains\Shared\Enums\FiscalMode;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Sales extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'name',
         'email',
     ];
+
+    protected static function newFactory()
+    {
+        return \Database\Factories\SalesFactory::new();
+    }
 
     public function invoices(): HasMany
     {
