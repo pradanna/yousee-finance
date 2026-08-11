@@ -605,6 +605,11 @@ function InvoicePaymentTermsModal({
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Page Component
 // ─────────────────────────────────────────────────────────────────────────────
+import { RecordInvoicePaymentModal } from "@/Components/Modal/RecordInvoicePaymentModal";
+import type { RecordInvoicePaymentModalSubmitData } from "@/Components/Modal/RecordInvoicePaymentModal";
+import type { InvoiceData, InvoicePaymentRecord, Kwitansi } from "@/Pages/Invoices/invoiceTypes";
+import { getInvoicePaymentSummary } from "@/Pages/Invoices/invoiceTypes";
+
 export default function SalesTransactions() {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
@@ -614,6 +619,34 @@ export default function SalesTransactions() {
     const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+
+    // State for Client Payment Recording & Kwitansi
+    const [paymentsByInvoice, setPaymentsByInvoice] = useState<Record<string, InvoicePaymentRecord[]>>({
+        "INV-2026-N001": [
+            {
+                id: "PAY-INV-001",
+                invoiceNumber: "INV-2026-N001",
+                termLabel: "Pelunasan Full",
+                amount: 13875000,
+                date: "2026-05-18",
+                method: "Transfer Bank BCA",
+                referenceNo: "BKM-2026-0518",
+                notes: "Pelunasan 100% Invoice Sari Laundry"
+            }
+        ]
+    });
+    const [kwitansiByInvoice, setKwitansiByInvoice] = useState<Record<string, Kwitansi>>({
+        "INV-2026-N001": {
+            receiptNumber: "KW-2026-0518-01",
+            amount: 13875000,
+            paidAt: "2026-05-18",
+            receivedFrom: "Sari Laundry Express",
+            forPaymentOf: "Pelunasan Sewa Neonbox Perempatan Tugu Yogyakarta"
+        }
+    });
+
+    const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+    const [successMessage, setSuccessMessage] = useState("");
 
     const projects = isPPN ? projectsPPN : projectsNonPPN;
 
@@ -654,6 +687,8 @@ export default function SalesTransactions() {
         };
         handleUpdateProject(updated);
         setShowInvoiceForm(false);
+        setSuccessMessage(`Berhasil menerbitkan Invoice ${nextInvNum} untuk ${activeProject.clientName}!`);
+        setTimeout(() => setSuccessMessage(""), 4000);
     };
 
     const handleCancelInvoice = () => {
@@ -669,19 +704,112 @@ export default function SalesTransactions() {
         }
     };
 
+    // Client Payment Handlers
+    const handleSaveInvoicePayment = (data: RecordInvoicePaymentModalSubmitData) => {
+        if (!activeProject || !activeProject.invoiceNumber) return;
+
+        const invNum = activeProject.invoiceNumber;
+        const totalInvoiceVal = activeProject.contractValue + (isPPN ? activeProject.contractValue * PPN_RATE : 0);
+
+        const newPaymentRecord: InvoicePaymentRecord = {
+            id: `PAY-INV-${Math.floor(1000 + Math.random() * 9000)}`,
+            invoiceNumber: invNum,
+            termLabel: data.termLabel,
+            amount: data.amount,
+            date: data.date,
+            method: data.method,
+            referenceNo: data.referenceNo,
+            notes: data.notes
+        };
+
+        const currentPayments = paymentsByInvoice[invNum] || [];
+        const updatedPayments = [...currentPayments, newPaymentRecord];
+
+        setPaymentsByInvoice(prev => ({
+            ...prev,
+            [invNum]: updatedPayments
+        }));
+
+        const newTotalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+
+        // Auto-generate Kwitansi if fully paid (Invariant Backend)
+        if (newTotalPaid >= totalInvoiceVal && !kwitansiByInvoice[invNum]) {
+            const newKwitansi: Kwitansi = {
+                receiptNumber: `KW-2026-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+                amount: totalInvoiceVal,
+                paidAt: data.date,
+                receivedFrom: activeProject.clientName,
+                forPaymentOf: `Pelunasan Sewa Media Iklan - ${activeProject.name}`
+            };
+
+            setKwitansiByInvoice(prev => ({
+                ...prev,
+                [invNum]: newKwitansi
+            }));
+        }
+
+        setShowRecordPaymentModal(false);
+        setSuccessMessage(`Berhasil mencatat penerimaan kas ${fmt(data.amount)} untuk ${invNum}!`);
+        setTimeout(() => setSuccessMessage(""), 4000);
+    };
+
+    // Current active invoice payments summary
+    const activeInvNum = activeProject?.invoiceNumber || "";
+    const activeTotalAmount = activeProject ? activeProject.contractValue + (isPPN ? activeProject.contractValue * PPN_RATE : 0) : 0;
+    const activePayments = paymentsByInvoice[activeInvNum] || [];
+    const activeKwitansi = kwitansiByInvoice[activeInvNum];
+    
+    const activePaymentSummary = getInvoicePaymentSummary({
+        totalAmount: activeTotalAmount,
+        payments: activePayments,
+        status: activeProject?.invoiceIssued ? (activePayments.reduce((s, p) => s + p.amount, 0) >= activeTotalAmount ? "paid" : "issued") : "draft"
+    });
+
+    const activeInvoiceDataObject: InvoiceData | null = activeProject && activeProject.invoiceIssued ? {
+        id: activeProject.id,
+        invoiceNumber: activeProject.invoiceNumber,
+        projectId: activeProject.id,
+        projectCode: activeProject.code,
+        projectName: activeProject.name,
+        clientId: activeProject.clientId,
+        clientName: activeProject.clientName,
+        salesPIC: activeProject.salesPIC,
+        status: activePaymentSummary.paymentStatus === "paid" ? "paid" : "issued",
+        transactionDate: new Date().toISOString().split("T")[0],
+        dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
+        subtotal: activeProject.contractValue,
+        ppn: isPPN ? activeProject.contractValue * PPN_RATE : 0,
+        totalAmount: activeTotalAmount,
+        payments: activePayments,
+        kwitansi: activeKwitansi
+    } : null;
+
     return (
         <AppLayout
             activePage="sales-transactions"
             title="Penjualan (Invoices)"
             breadcrumbs={[{ label: 'Yousee Indonesia' }, { label: 'Transaksi' }, { label: 'Penjualan (Invoice)' }]}
         >
-            <div className="space-y-6">
+            <div className="w-full space-y-6">
                 
+                {/* Success Notification Alert */}
+                {successMessage && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                        <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>{successMessage}</span>
+                        </div>
+                        <button onClick={() => setSuccessMessage("")} className="text-emerald-600 hover:text-emerald-900 font-black">✕</button>
+                    </div>
+                )}
+
                 {/* VIEW A: LIST VIEW OF PROJECTS FOR INVOICING */}
                 {!selectedProjectId ? (
-                    <div className="space-y-6">
+                    <div className="w-full space-y-6">
                         {/* Header Area */}
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
                             <div>
                                 <h2 className="text-sm font-bold text-slate-800 tracking-tight">Daftar Penerbitan Invoice Client</h2>
                                 <p className="text-[11px] text-slate-400 font-semibold uppercase mt-0.5">
@@ -704,39 +832,55 @@ export default function SalesTransactions() {
                             </div>
                         </div>
 
-                        {/* Top Widgets Summary */}
+                        {/* Top Widgets Summary (Strict 2D Flat SVG Icons - No Emojis) */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+                            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
                                 <div className="space-y-1">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Proyek</span>
                                     <span className="text-lg font-black font-mono text-slate-800 block">{totalProjectsCount}</span>
                                     <span className="text-[9px] text-slate-400 font-semibold block">Tercatat di sistem</span>
                                 </div>
-                                <span className="text-2xl p-2 bg-slate-50 rounded-xl">📋</span>
+                                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
                             </div>
-                            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+                            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
                                 <div className="space-y-1">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Invoice Terbit</span>
                                     <span className="text-lg font-black font-mono text-emerald-600 block">{issuedCount}</span>
                                     <span className="text-[9px] text-emerald-600/80 font-bold block">{((issuedCount / (totalProjectsCount || 1)) * 100).toFixed(0)}% selesai ditagih</span>
                                 </div>
-                                <span className="text-2xl p-2 bg-emerald-50 rounded-xl">💰</span>
+                                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
                             </div>
-                            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+                            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
                                 <div className="space-y-1">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Menunggu Terbit</span>
                                     <span className="text-lg font-black font-mono text-amber-500 block">{pendingCount}</span>
                                     <span className="text-[9px] text-amber-500/80 font-bold block">{pendingCount} proyek belum ditagih</span>
                                 </div>
-                                <span className="text-2xl p-2 bg-amber-50 rounded-xl">⏳</span>
+                                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
                             </div>
-                            <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+                            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
                                 <div className="space-y-1">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Nilai Kontrak</span>
                                     <span className="text-lg font-black font-mono text-blue-600 block">{fmt(totalRevenueSum)}</span>
                                     <span className="text-[9px] text-slate-400 font-semibold block">{isPPN ? "Termasuk PPN 11%" : "Tanpa PPN"}</span>
                                 </div>
-                                <span className="text-2xl p-2 bg-blue-50 rounded-xl">📈</span>
+                                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                    </svg>
+                                </div>
                             </div>
                         </div>
 
@@ -747,32 +891,68 @@ export default function SalesTransactions() {
                                 const ppn = isPPN ? dpp * PPN_RATE : 0;
                                 const totalVal = dpp + ppn;
 
+                                const invPayments = paymentsByInvoice[proj.invoiceNumber] || [];
+                                const pmtSummary = getInvoicePaymentSummary({
+                                    totalAmount: totalVal,
+                                    payments: invPayments,
+                                    status: proj.invoiceIssued ? (invPayments.reduce((s, p) => s + p.amount, 0) >= totalVal ? "paid" : "issued") : "draft"
+                                });
+
                                 return (
                                     <div
                                         key={proj.id}
                                         onClick={() => setSelectedProjectId(proj.id)}
-                                        className="bg-white border border-slate-100 rounded-3xl p-5 hover:border-blue-200 hover:shadow-md cursor-pointer transition-all group flex flex-col justify-between"
+                                        className="bg-white border border-slate-200/80 rounded-3xl p-5 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all group flex flex-col justify-between"
                                     >
                                         <div className="space-y-3">
-                                            <div className="flex justify-between items-start">
+                                            <div className="flex justify-between items-start flex-wrap gap-2">
                                                 <span className="text-[10px] font-black text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded tracking-widest">{proj.code}</span>
-                                                {proj.invoiceIssued ? (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100/50">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                                        Invoice Terbit
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100/50">
+                                                
+                                                {/* Payment & Invoice Status Badges */}
+                                                {!proj.invoiceIssued ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
                                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                                         Belum Terbit
                                                     </span>
+                                                ) : pmtSummary.paymentStatus === "paid" ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                                                        PAID / LUNAS
+                                                    </span>
+                                                ) : pmtSummary.paymentStatus === "partial" ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+                                                        PARTIAL ({pmtSummary.percentage}%)
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                        ISSUED / PIUTANG
+                                                    </span>
                                                 )}
                                             </div>
+                                            
                                             <h3 className="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors line-clamp-1">{proj.name}</h3>
                                             <p className="text-[10px] text-slate-400 font-semibold">{proj.clientName} &middot; PIC: {proj.salesPIC}</p>
+                                            
+                                            {/* Progress Bar for Issued Invoices */}
+                                            {proj.invoiceIssued && (
+                                                <div className="space-y-1 pt-1">
+                                                    <div className="flex justify-between text-[10px] font-medium text-slate-500">
+                                                        <span>Penerimaan Kas</span>
+                                                        <span>{pmtSummary.percentage}%</span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className={`h-full transition-all duration-500 ${pmtSummary.paymentStatus === 'paid' ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                                                            style={{ width: `${pmtSummary.percentage}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
-                                        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                                        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                                             <div className="space-y-0.5">
                                                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Nilai Tagihan</span>
                                                 <span className="font-mono text-xs font-black text-slate-800">{fmt(totalVal)}</span>
@@ -784,7 +964,7 @@ export default function SalesTransactions() {
                                                         : "bg-blue-600 hover:bg-blue-700 text-white"
                                                 }`}
                                             >
-                                                {proj.invoiceIssued ? "Lihat Invoice" : "Proses Penerbitan"}
+                                                {proj.invoiceIssued ? "Detail Invoice & Pelunasan" : "Proses Penerbitan"}
                                             </button>
                                         </div>
                                     </div>
@@ -810,9 +990,9 @@ export default function SalesTransactions() {
                     </div>
                 ) : (
                     // VIEW B: INVOICE MANAGEMENT AND DETAILED DIGITAL INVOICE PREVIEW
-                    <div className="space-y-6">
+                    <div className="w-full space-y-6">
                         {/* Top back button toolbar */}
-                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
                             <button
                                 onClick={() => setSelectedProjectId(null)}
                                 className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition-all"
@@ -834,8 +1014,14 @@ export default function SalesTransactions() {
                             <div className="lg:col-span-2 space-y-6">
                                 <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-8 font-sans text-slate-800 relative overflow-hidden">
                                     {/* Status Watermark */}
-                                    <div className="absolute top-8 right-8 border-4 border-emerald-500/20 text-emerald-500/20 font-black text-xl px-4 py-2 rounded-xl rotate-12 tracking-widest uppercase pointer-events-none select-none">
-                                        {activeProject.invoiceIssued ? "ISSUED" : "DRAFT"}
+                                    <div className={`absolute top-8 right-8 border-4 font-black text-xl px-4 py-2 rounded-xl rotate-12 tracking-widest uppercase pointer-events-none select-none ${
+                                        activePaymentSummary.paymentStatus === 'paid'
+                                            ? 'border-emerald-500/30 text-emerald-600/30'
+                                            : activeProject.invoiceIssued
+                                            ? 'border-blue-500/20 text-blue-500/20'
+                                            : 'border-slate-300 text-slate-300'
+                                    }`}>
+                                        {activePaymentSummary.paymentStatus === 'paid' ? "PAID / LUNAS" : activeProject.invoiceIssued ? "ISSUED" : "DRAFT"}
                                     </div>
 
                                     {/* Invoice Corporate Header */}
@@ -848,11 +1034,6 @@ export default function SalesTransactions() {
                                             <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
                                                 PT. Yousee Media Indonesia<br />
                                                 Jl. Pandanaran No. 100, Kel. Pekunden<br />
-                                                Kec. Semarang Tengah, Kota Semarang 50134<br />
-                                                info@youseemedia.co.id &middot; (024) 8601234
-                                            </p>
-                                        </div>
-                                        <div className="text-right">
                                             <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase mb-2">INVOICE</h1>
                                             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-left text-xs">
                                                 <span className="text-slate-400 font-semibold">Nomor Invoice:</span>

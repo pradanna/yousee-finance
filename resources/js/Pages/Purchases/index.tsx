@@ -3,9 +3,11 @@ import AppLayout, { useFiscalMode } from "@/Layouts/AppLayout";
 import MetricCard from "@/Components/Card/MetricCard";
 import { IssuePOModal } from "@/Components/Modal/IssuePOModal";
 import type { IssuePOModalSubmitData } from "@/Components/Modal/IssuePOModal";
+import { RecordPaymentModal } from "@/Components/Modal/RecordPaymentModal";
+import type { RecordPaymentModalSubmitData } from "@/Components/Modal/RecordPaymentModal";
 import { initialProjectsPPN, initialProjectsNonPPN, initialVendorPOs } from "./purchasesData";
-import { PPN_RATE, fmt, formatDate } from "./purchasesTypes";
-import type { PurchaseProject, VendorPO, VendorPaymentTerm, BillboardLocation } from "./purchasesTypes";
+import { PPN_RATE, fmt, formatDate, getPOPaymentSummary } from "./purchasesTypes";
+import type { PurchaseProject, VendorPO, VendorPaymentTerm, BillboardLocation, VendorPaymentRecord } from "./purchasesTypes";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Purchases Page — Main Component
@@ -24,6 +26,11 @@ export default function Purchases() {
     const [vendorPOs, setVendorPOs] = useState<Record<string, VendorPO>>(initialVendorPOs);
     const [showPoForm, setShowPoForm] = useState(false);
     const [poFormVendor, setPoFormVendor] = useState<{ id: number; name: string; locs: BillboardLocation[] } | null>(null);
+
+    // State for Payment Recording & History Drawer
+    const [selectedPoForPayment, setSelectedPoForPayment] = useState<VendorPO | null>(null);
+    const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+    const [expandedPoPayment, setExpandedPoPayment] = useState<string | null>(null);
 
 
     const activeProject = projects.find((p) => p.id === selectedProjectId);
@@ -119,6 +126,46 @@ export default function Purchases() {
             data.lighting,
             data.topNotes
         );
+    };
+
+    // ─── Record Payment Handlers ──────────────────────────────────────────────
+    const handleOpenRecordPayment = (po: VendorPO) => {
+        setSelectedPoForPayment(po);
+        setShowRecordPaymentModal(true);
+    };
+
+    const handleSaveRecordPayment = (data: RecordPaymentModalSubmitData) => {
+        if (!selectedPoForPayment) return;
+
+        const newPayment: VendorPaymentRecord = {
+            id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
+            poNumber: data.poNumber,
+            termLabel: data.termLabel,
+            amount: data.amount,
+            date: data.date,
+            method: data.method,
+            referenceNo: data.referenceNo,
+            notes: data.notes,
+        };
+
+        setVendorPOs((prev) => {
+            const currentPO = prev[data.poNumber];
+            if (!currentPO) return prev;
+
+            const existingPayments = currentPO.payments || [];
+            return {
+                ...prev,
+                [data.poNumber]: {
+                    ...currentPO,
+                    payments: [...existingPayments, newPayment],
+                },
+            };
+        });
+
+        setShowRecordPaymentModal(false);
+        setExpandedPoPayment(data.poNumber);
+        setSuccessMessage(`Berhasil mencatat pembayaran ${fmt(data.amount)} untuk ${data.poNumber}!`);
+        setTimeout(() => setSuccessMessage(""), 4000);
     };
 
     // ─── PDF Download (POST to /po-pdf via hidden form) ───────────────────────
@@ -489,59 +536,169 @@ export default function Purchases() {
                                             <span className="w-2 h-2 rounded-full bg-emerald-500" />
                                             Daftar Dokumen PO Vendor Resmi Terbit
                                         </h3>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Dokumen PO resmi yang telah diterbitkan dan dikirim ke pihak vendor</p>
+                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Dokumen PO resmi yang telah diterbitkan beserta status dan riwayat pembayaran</p>
                                     </div>
                                     <span className="text-[10px] font-bold px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl">{Object.keys(vendorPOs).length} Dokumen PO</span>
                                 </div>
                                 <div className="border border-slate-200/80 rounded-2xl overflow-hidden divide-y divide-slate-100">
-                                    {Object.values(vendorPOs).map((po) => (
-                                        <div key={po.poNumber} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors flex-wrap">
-                                            <div className="space-y-1 min-w-0 flex-1">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold font-mono">{po.poNumber}</span>
-                                                    <span className="text-xs font-bold text-slate-900">{po.vendorName}</span>
+                                    {Object.values(vendorPOs).map((po) => {
+                                        const summary = getPOPaymentSummary(po);
+                                        const isExpanded = expandedPoPayment === po.poNumber;
+
+                                        return (
+                                            <div key={po.poNumber} className="divide-y divide-slate-100 bg-white hover:bg-slate-50/40 transition-colors">
+                                                <div className="p-4 flex items-center justify-between gap-4 flex-wrap">
+                                                    <div className="space-y-1.5 min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold font-mono">{po.poNumber}</span>
+                                                            <span className="text-xs font-bold text-slate-900">{po.vendorName}</span>
+                                                            
+                                                            {/* Payment Status Badge */}
+                                                            {summary.status === "paid" && (
+                                                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[10px] font-bold flex items-center gap-1">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                                                                    PAID / LUNAS
+                                                                </span>
+                                                            )}
+                                                            {summary.status === "partial" && (
+                                                                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-[10px] font-bold flex items-center gap-1">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+                                                                    PARTIALLY PAID ({summary.percentage}%)
+                                                                </span>
+                                                            )}
+                                                            {summary.status === "unpaid" && (
+                                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-300 rounded-full text-[10px] font-bold flex items-center gap-1">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                                                    BELUM DIBAYAR
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {/* Progress bar realisasi pembayaran */}
+                                                        <div className="w-full max-w-xs bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                            <div 
+                                                                className={`h-full transition-all duration-500 ${summary.status === 'paid' ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                                                                style={{ width: `${summary.percentage}%` }}
+                                                            />
+                                                        </div>
+
+                                                        <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                                                            <span>Terbit: <strong className="text-slate-700">{formatDate(po.issuedAt)}</strong></span>
+                                                            <span>&bull;</span>
+                                                            <span>Skema: <strong className="text-slate-700">{po.paymentTerms.notes || po.paymentTerms.type}</strong></span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-4 flex-shrink-0">
+                                                        <div className="text-right">
+                                                            <div className="text-xs font-bold font-mono text-slate-900">{fmt(po.totalAmount)}</div>
+                                                            <div className="text-[9.5px] text-slate-500 font-medium">
+                                                                Terbayar: <strong className="text-emerald-700 font-mono">{fmt(summary.totalPaid)}</strong> &bull; Sisa: <strong className="text-amber-700 font-mono">{fmt(summary.remaining)}</strong>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Record Payment Button */}
+                                                        {summary.remaining > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenRecordPayment(po)}
+                                                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl shadow-2xs transition-all cursor-pointer flex items-center gap-1"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                                </svg>
+                                                                <span>Catat Bayar</span>
+                                                            </button>
+                                                        )}
+
+                                                        {/* Toggle History Button */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setExpandedPoPayment(isExpanded ? null : po.poNumber)}
+                                                            className={`px-3 py-1.5 text-[11px] font-bold rounded-xl border transition-all flex items-center gap-1 ${
+                                                                isExpanded 
+                                                                    ? "bg-slate-200 text-slate-800 border-slate-300"
+                                                                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+                                                            }`}
+                                                        >
+                                                            <span>Riwayat ({po.payments?.length || 0})</span>
+                                                            <svg className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const poLocs = projects
+                                                                    .flatMap((p) => p.locations)
+                                                                    .filter((l) => l.poNumber === po.poNumber);
+                                                                const project = projects.find((p) =>
+                                                                    p.locations.some((l) => l.poNumber === po.poNumber)
+                                                                );
+                                                                handleDownloadPO(
+                                                                    po.vendorName,
+                                                                    po.poNumber,
+                                                                    poLocs,
+                                                                    project?.name ?? "",
+                                                                    project?.period ?? "",
+                                                                    po.lighting,
+                                                                    po.topNotes
+                                                                );
+                                                            }}
+                                                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-xl shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                            <span>PDF</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                                                    <span>Terbit: <strong className="text-slate-700">{formatDate(po.issuedAt)}</strong></span>
-                                                    <span>&bull;</span>
-                                                    <span>Skema: <strong className="text-slate-700">{po.paymentTerms.notes || po.paymentTerms.type}</strong></span>
-                                                </div>
+
+                                                {/* Expanded Payment History Drawer */}
+                                                {isExpanded && (
+                                                    <div className="p-4 bg-slate-50/80 border-t border-slate-100 space-y-3 animate-in slide-in-from-top-1 duration-200">
+                                                        <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                                                            <span>Catatan / Riwayat Pembayaran Kas Keluar PO ({po.poNumber})</span>
+                                                            <span className="text-[10px] text-slate-500 font-normal">Sistem Akuntansi YouSee Finance</span>
+                                                        </div>
+
+                                                        {po.payments && po.payments.length > 0 ? (
+                                                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white text-xs">
+                                                                <table className="w-full text-left border-collapse">
+                                                                    <thead>
+                                                                        <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider font-semibold border-b border-slate-200">
+                                                                            <th className="py-2 px-3">Tanggal</th>
+                                                                            <th className="py-2 px-3">Peruntukan / Label</th>
+                                                                            <th className="py-2 px-3">Metode Kas/Bank</th>
+                                                                            <th className="py-2 px-3">No. Referensi</th>
+                                                                            <th className="py-2 px-3 text-right">Nominal</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-slate-100">
+                                                                        {po.payments.map((pmt) => (
+                                                                            <tr key={pmt.id} className="hover:bg-slate-50/70">
+                                                                                <td className="py-2 px-3 font-mono text-[11px] text-slate-700">{formatDate(pmt.date)}</td>
+                                                                                <td className="py-2 px-3 font-semibold text-slate-900">{pmt.termLabel}</td>
+                                                                                <td className="py-2 px-3 text-slate-600">{pmt.method}</td>
+                                                                                <td className="py-2 px-3 font-mono text-slate-600">{pmt.referenceNo}</td>
+                                                                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">{fmt(pmt.amount)}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="p-4 bg-white border border-slate-200 rounded-xl text-center text-xs text-slate-500 italic">
+                                                                Belum ada catatan transaksi pembayaran untuk PO ini.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="flex items-center gap-4 flex-shrink-0">
-                                                <div className="text-right">
-                                                    <div className="text-xs font-bold font-mono text-slate-900">{fmt(po.totalAmount)}</div>
-                                                    <div className="text-[9px] text-slate-400">Dokumen PO Resmi</div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        // Find all locations belonging to this PO
-                                                        const poLocs = projects
-                                                            .flatMap((p) => p.locations)
-                                                            .filter((l) => l.poNumber === po.poNumber);
-                                                        const project = projects.find((p) =>
-                                                            p.locations.some((l) => l.poNumber === po.poNumber)
-                                                        );
-                                                        handleDownloadPO(
-                                                            po.vendorName,
-                                                            po.poNumber,
-                                                            poLocs,
-                                                            project?.name ?? "",
-                                                            project?.period ?? "",
-                                                            po.lighting,
-                                                            po.topNotes
-                                                        );
-                                                    }}
-                                                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-xl shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
-                                                >
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                    </svg>
-                                                    <span>Unduh PO PDF</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -764,6 +921,18 @@ export default function Purchases() {
                 />
             )}
 
+
+            {/* Record Payment Modal */}
+            <RecordPaymentModal
+                isOpen={showRecordPaymentModal}
+                po={selectedPoForPayment}
+                remainingAmount={selectedPoForPayment ? getPOPaymentSummary(selectedPoForPayment).remaining : 0}
+                onClose={() => {
+                    setShowRecordPaymentModal(false);
+                    setSelectedPoForPayment(null);
+                }}
+                onSubmit={handleSaveRecordPayment}
+            />
 
         </AppLayout>
     );

@@ -49,10 +49,31 @@ export interface VendorPaymentRecord {
     termLabel: string;   // e.g. "Termin 1 – DP", "Pelunasan", "Full Payment"
     amount: number;
     date: string;        // ISO date string
-    method: string;      // e.g. "Transfer Bank BCA"
+    method: string;      // e.g. "Transfer Bank BCA", "Kas Kecil"
     referenceNo: string;
     notes: string;
 }
+
+export type POPaymentStatus = "unpaid" | "partial" | "paid";
+
+export const getPOPaymentSummary = (po: VendorPO) => {
+    const totalPaid = (po.payments || []).reduce((sum, p) => sum + p.amount, 0);
+    const remaining = Math.max(0, po.totalAmount - totalPaid);
+    let status: POPaymentStatus = "unpaid";
+    
+    if (totalPaid >= po.totalAmount && po.totalAmount > 0) {
+        status = "paid";
+    } else if (totalPaid > 0) {
+        status = "partial";
+    }
+
+    return {
+        totalPaid,
+        remaining,
+        status,
+        percentage: po.totalAmount > 0 ? Math.min(100, Math.round((totalPaid / po.totalAmount) * 100)) : 0
+    };
+};
 
 export interface VendorPO {
     poNumber: string;
