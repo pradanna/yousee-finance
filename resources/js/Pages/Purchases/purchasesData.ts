@@ -124,7 +124,14 @@ export const initialVendorPOs: Record<string, VendorPO> = {
         poNumber: "PO-2026-0041", 
         vendorId: 1, 
         vendorName: "PT. Megah Billboard Jaya", 
-        paymentTerms: { type: "full", notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" }, 
+        paymentTerms: { 
+            type: "dp", 
+            dpPercent: 50,
+            dpAmount: 11250000,
+            dpDueDate: "2026-08-15",
+            pelunasanDueDate: "2026-09-01",
+            notes: "DP 50% di muka, Pelunasan setelah pemasangan" 
+        }, 
         issuedAt: "2026-06-20", 
         totalAmount: 22500000,
         payments: [
@@ -144,7 +151,14 @@ export const initialVendorPOs: Record<string, VendorPO> = {
         poNumber: "PO-2026-0042", 
         vendorId: 2, 
         vendorName: "CV. Media Ad Perkasa", 
-        paymentTerms: { type: "dp", dpPercent: 50, dpAmount: 11000000, notes: "DP 50% di muka, Pelunasan setelah pemasangan" }, 
+        paymentTerms: { 
+            type: "dp", 
+            dpPercent: 50, 
+            dpAmount: 11000000, 
+            dpDueDate: "2026-06-25",
+            pelunasanDueDate: "2026-07-01",
+            notes: "DP 50% di muka, Pelunasan setelah pemasangan" 
+        }, 
         issuedAt: "2026-06-21", 
         totalAmount: 22000000,
         payments: [
@@ -170,9 +184,72 @@ export const initialVendorPOs: Record<string, VendorPO> = {
             }
         ]
     },
-    "PO-2026-0091": { poNumber: "PO-2026-0091", vendorId: 2, vendorName: "CV. Media Ad Perkasa", paymentTerms: { type: "full", notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" }, issuedAt: "2026-06-22", totalAmount: 41000000, payments: [] },
-    "PO-2026-0055": { poNumber: "PO-2026-0055", vendorId: 3, vendorName: "PT. Promosi Outdoor Kreasindo", paymentTerms: { type: "dp", dpPercent: 30, dpAmount: 1650000, notes: "DP 30%, Pelunasan 70% setelah pemasangan selesai" }, issuedAt: "2026-06-23", totalAmount: 5500000, payments: [] },
-    "PO-2026-0056": { poNumber: "PO-2026-0056", vendorId: 4, vendorName: "UD. Spanduk & Baliho Makmur", paymentTerms: { type: "full", notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" }, issuedAt: "2026-06-24", totalAmount: 4200000, payments: [] },
-    "PO-2026-0060": { poNumber: "PO-2026-0060", vendorId: 4, vendorName: "UD. Spanduk & Baliho Makmur", paymentTerms: { type: "full", notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" }, issuedAt: "2026-06-25", totalAmount: 3500000, payments: [] },
-    "PO-2026-0099": { poNumber: "PO-2026-0099", vendorId: 2, vendorName: "CV. Media Ad Perkasa", paymentTerms: { type: "full", notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" }, issuedAt: "2026-05-15", totalAmount: 4500000, payments: [] },
+    "PO-2026-0055": { 
+        poNumber: "PO-2026-0055", 
+        vendorId: 3, 
+        vendorName: "PT. Promosi Outdoor Kreasindo", 
+        paymentTerms: { 
+            type: "dp", 
+            dpPercent: 30, 
+            dpAmount: 1650000, 
+            dpDueDate: "2026-08-14",
+            pelunasanDueDate: "2026-08-28",
+            notes: "DP 30%, Pelunasan 70% setelah pemasangan selesai" 
+        }, 
+        issuedAt: "2026-06-23", 
+        totalAmount: 5500000, 
+        payments: [] 
+    },
+    "PO-2026-0056": { 
+        poNumber: "PO-2026-0056", 
+        vendorId: 4, 
+        vendorName: "UD. Spanduk & Baliho Makmur", 
+        paymentTerms: { 
+            type: "full", 
+            fullDueDate: "2026-08-18",
+            notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" 
+        }, 
+        issuedAt: "2026-06-24", 
+        totalAmount: 4200000, 
+        payments: [] 
+    },
+    "PO-2026-0091": { 
+        poNumber: "PO-2026-0091", 
+        vendorId: 2, 
+        vendorName: "CV. Media Ad Perkasa", 
+        paymentTerms: { 
+            type: "full", 
+            fullDueDate: "2026-08-25",
+            notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" 
+        }, 
+        issuedAt: "2026-06-22", 
+        totalAmount: 41000000, 
+        payments: [] 
+    },
+    "PO-2026-0060": { 
+        poNumber: "PO-2026-0060", 
+        vendorId: 4, 
+        vendorName: "UD. Spanduk & Baliho Makmur", 
+        paymentTerms: { 
+            type: "full", 
+            fullDueDate: "2026-09-05",
+            notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" 
+        }, 
+        issuedAt: "2026-06-25", 
+        totalAmount: 3500000, 
+        payments: [] 
+    },
+    "PO-2026-0099": { 
+        poNumber: "PO-2026-0099", 
+        vendorId: 2, 
+        vendorName: "CV. Media Ad Perkasa", 
+        paymentTerms: { 
+            type: "full", 
+            fullDueDate: "2026-05-30",
+            notes: "Pembayaran 100% setelah penyerahan dokumen penagihan lengkap" 
+        }, 
+        issuedAt: "2026-05-15", 
+        totalAmount: 4500000, 
+        payments: [] 
+    },
 };

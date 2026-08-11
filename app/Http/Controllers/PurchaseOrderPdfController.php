@@ -26,6 +26,9 @@ class PurchaseOrderPdfController extends Controller
         $qrData = "https://drive.google.com/file/d/1z4ikYYW_ZwNhQN7aZFaE2jbhtMjatgul/view?usp=sharing";
         $qrCodeBase64 = base64_encode(\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(100)->errorCorrection('M')->generate($qrData));
 
+        $lighting = $request->input('locations.0.lighting', $request->input('lighting', 'Berlampu'));
+        $topNotes = $request->input('locations.0.topNotes', $request->input('topNotes', 'Lunas setelah visual terpasang'));
+
         $pdf = Pdf::loadView('pdf.purchase_order', [
             'project' => $project,
             'vendorName' => $vendorName,
@@ -36,6 +39,8 @@ class PurchaseOrderPdfController extends Controller
             'totalDPP' => $totalDPP,
             'totalPPN' => $totalPPN,
             'grandTotal' => $grandTotal,
+            'lighting' => $lighting,
+            'topNotes' => $topNotes,
             'qrCodeBase64' => $qrCodeBase64,
         ]);
 

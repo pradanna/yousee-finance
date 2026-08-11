@@ -1,5 +1,6 @@
-import React from 'react';
-import { Link } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Link, router } from '@inertiajs/react';
+import Modal from '@/Components/UI/Modal';
 
 interface SidebarProps {
     activePage: 'overview' | 'vendors' | 'clients' | 'sales' | 'projects' | 'debt-receivable' | 'invoice-po' | 'purchases' | 'sales-transactions' | 'journal' | 'ppn' | 'cashflow';
@@ -26,6 +27,19 @@ export default function Sidebar({
     onFiscalModeToggle,
     isCollapsed = false,
 }: SidebarProps) {
+    const [targetMode, setTargetMode] = useState<'ppn' | 'non-ppn' | null>(null);
+
+    const handleModeClick = (newMode: 'ppn' | 'non-ppn') => {
+        if (newMode === fiscalMode) return;
+        setTargetMode(newMode);
+    };
+
+    const confirmModeChange = () => {
+        if (!targetMode) return;
+        onFiscalModeToggle(targetMode);
+        setTargetMode(null);
+        router.visit('/overview');
+    };
     const sections: NavSection[] = [
         {
             items: [
@@ -196,7 +210,7 @@ export default function Sidebar({
                     <div className="bg-slate-200/60 p-1 rounded-xl flex gap-1 border border-slate-200/80">
                         <button
                             id="toggle-mode-ppn"
-                            onClick={() => onFiscalModeToggle('ppn')}
+                            onClick={() => handleModeClick('ppn')}
                             className={`flex-1 text-center py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all ${
                                 fiscalMode === 'ppn'
                                     ? 'bg-primary text-white shadow-neon-primary shadow-2xs'
@@ -208,7 +222,7 @@ export default function Sidebar({
                         </button>
                         <button
                             id="toggle-mode-non-ppn"
-                            onClick={() => onFiscalModeToggle('non-ppn')}
+                            onClick={() => handleModeClick('non-ppn')}
                             className={`flex-1 text-center py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all ${
                                 fiscalMode === 'non-ppn'
                                     ? 'bg-primary text-white shadow-neon-primary shadow-2xs'
@@ -284,6 +298,51 @@ export default function Sidebar({
                     </div>
                 )}
             </div>
+
+            {/* Modal Konfirmasi Ganti Mode Fiskal */}
+            <Modal show={targetMode !== null} onClose={() => setTargetMode(null)} maxWidth="md">
+                <div className="p-6 space-y-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-900">Konfirmasi Beralih Silo Mode Fiskal</h3>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                Mode Fiskal akan diubah ke <strong className="text-slate-800 uppercase">{targetMode === 'ppn' ? 'Mode PPN (PKP)' : 'Mode Non-PPN'}</strong>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed font-medium space-y-1">
+                        <p>
+                            ⚠️ <strong>Perhatian:</strong> Data transaksi, proyek, dan invoice pada <strong>{targetMode === 'ppn' ? 'Mode PPN' : 'Mode Non-PPN'}</strong> terisolasi secara terpisah.
+                        </p>
+                        <p>
+                            Anda akan diarahkan kembali ke <strong>Dashboard Overview</strong> setelah beralih mode.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button
+                            type="button"
+                            onClick={() => setTargetMode(null)}
+                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            onClick={confirmModeChange}
+                            className="px-4 py-2 bg-primary hover:bg-primary-700 text-white rounded-xl text-xs font-bold shadow-neon-primary transition-all cursor-pointer"
+                        >
+                            Ya, Ganti Mode &amp; Buka Dashboard
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </aside>
     );
 }

@@ -1,6 +1,5 @@
-import React, { useState } from "react";
-import { fmt } from "@/Pages/Invoices/invoiceTypes";
-import type { InvoiceData } from "@/Pages/Invoices/invoiceTypes";
+import React, { useState, useEffect } from "react";
+import Modal from "@/Components/UI/Modal";
 
 export interface RecordInvoicePaymentModalSubmitData {
     invoiceNumber: string;
@@ -14,11 +13,35 @@ export interface RecordInvoicePaymentModalSubmitData {
 
 interface RecordInvoicePaymentModalProps {
     isOpen: boolean;
-    invoice: InvoiceData | null;
+    invoice: {
+        id: number;
+        invoiceNumber: string;
+        clientName: string;
+        projectName: string;
+        totalAmount: number;
+        paymentTerms?: {
+            type: string;
+            dpPercent?: number;
+            installments?: Array<{ percent: number; note: string; amount: number }>;
+        };
+    } | null;
     remainingAmount: number;
     onClose: () => void;
     onSubmit: (data: RecordInvoicePaymentModalSubmitData) => void;
 }
+
+const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`;
+
+const formatIndoDate = (dateStr?: string) => {
+    if (!dateStr) return "";
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+        return dateStr;
+    }
+};
 
 export const RecordInvoicePaymentModal: React.FC<RecordInvoicePaymentModalProps> = ({
     isOpen,
@@ -29,16 +52,48 @@ export const RecordInvoicePaymentModal: React.FC<RecordInvoicePaymentModalProps>
 }) => {
     if (!isOpen || !invoice) return null;
 
-    const [termLabel, setTermLabel] = useState("Pelunasan Invoice");
+    const [optionType, setOptionType] = useState<"lunas" | "cicil">("lunas");
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-    const [method, setMethod] = useState("Transfer Bank BCA");
-    const [referenceNo, setReferenceNo] = useState(`BKM-2026-${Math.floor(100000 + Math.random() * 900000)}`);
-    const [notes, setNotes] = useState("");
+    const [method, setMethod] = useState("Transfer BCA");
+    const [referenceNo, setReferenceNo] = useState("");
+    const [termLabel, setTermLabel] = useState("");
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (amount <= 0) return;
+    // Detect installment details from terms or set default labels
+    useEffect(() => {
+        if (isOpen && invoice) {
+            setAmount(remainingAmount);
+            setOptionType("lunas");
+            setDate(new Date().toISOString().split("T")[0]);
+            setReferenceNo("");
+            
+            // Build default term label based on schema type
+            if (invoice.paymentTerms?.type === "dp") {
+                setTermLabel("DP / Uang Muka");
+            } else if (invoice.paymentTerms?.type === "termin") {
+                setTermLabel("Pembayaran Termin");
+            } else if (invoice.paymentTerms?.type === "installment") {
+                setTermLabel("Cicilan Bulanan");
+            } else {
+                setTermLabel("Pelunasan Invoice");
+            }
+        }
+    }, [isOpen, invoice, remainingAmount]);
+
+    const handleSelectOption = (opt: "lunas" | "cicil") => {
+        setOptionType(opt);
+        if (opt === "lunas") {
+            setAmount(remainingAmount);
+        } else {
+            setAmount(Math.round(remainingAmount * 0.5)); // default partial to 50% of remainder
+        }
+    };
+
+    const handleSubmit = () => {
+        if (amount <= 0) {
+            alert("Nominal pembayaran harus lebih besar dari Rp 0!");
+            return;
+        }
         onSubmit({
             invoiceNumber: invoice.invoiceNumber,
             termLabel,
@@ -46,182 +101,156 @@ export const RecordInvoicePaymentModal: React.FC<RecordInvoicePaymentModalProps>
             date,
             method,
             referenceNo,
-            notes,
+            notes: `${termLabel} via ${method}`,
         });
     };
 
-    const isFullPay = amount >= remainingAmount;
+    // Calculate dynamic porsi tagihan
+    const porsiTagihanPct = invoice.totalAmount > 0 ? Math.round((remainingAmount / invoice.totalAmount) * 100) : 100;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden border border-slate-200 dark:border-slate-800">
-                {/* Modal Header */}
-                <div className="px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex justify-between items-center">
+        <Modal show={isOpen} onClose={onClose} maxWidth="xl">
+            <div className="bg-white rounded-3xl overflow-hidden flex flex-col max-h-[90vh] text-slate-800">
+                {/* Header */}
+                <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white">
                     <div>
-                        <h3 className="font-bold text-lg">Catat Penerimaan Kas (Client Payment)</h3>
-                        <p className="text-xs text-emerald-100 font-mono">
-                            {invoice.invoiceNumber} — {invoice.clientName}
+                        <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+                            Terima Pembayaran Client
+                        </h3>
+                        <p className="text-[11px] text-slate-400 font-bold mt-1.5 leading-tight">
+                            {invoice.clientName} · {invoice.projectName}
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-emerald-100 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-lg transition"
+                        className="p-2 rounded-full text-slate-400 bg-slate-50 hover:bg-slate-100 hover:text-slate-700 transition-all cursor-pointer"
                     >
-                        ✕
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                     </button>
                 </div>
 
-                {/* Form Body */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {/* Summary Card */}
-                    <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs">
+                {/* Body Content */}
+                <div className="px-8 py-6 overflow-y-auto space-y-5 flex-1 bg-white">
+                    {/* Top Total Amount and portion Display */}
+                    <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 flex justify-between items-center">
                         <div>
-                            <div className="text-slate-500 dark:text-slate-400">Total Tagihan Invoice</div>
-                            <div className="font-bold text-slate-900 dark:text-white text-base font-mono">
-                                {fmt(invoice.totalAmount)}
-                            </div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">TARGET TAGIHAN TERMIN</span>
+                            <span className="font-mono text-base font-black text-slate-800 block mt-1">{fmt(remainingAmount)}</span>
                         </div>
                         <div className="text-right">
-                            <div className="text-slate-500 dark:text-slate-400">Sisa Piutang (Balance Due)</div>
-                            <div className="font-bold text-emerald-600 dark:text-emerald-400 text-base font-mono">
-                                {fmt(remainingAmount)}
-                            </div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">PORSI PROYEK</span>
+                            <span className="text-sm font-black text-emerald-600 block mt-1">{porsiTagihanPct}%</span>
                         </div>
                     </div>
 
-                    {/* Skema / Label */}
-                    <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Label / Peruntukan Pembayaran
-                        </label>
-                        <select
-                            value={termLabel}
-                            onChange={(e) => setTermLabel(e.target.value)}
-                            className="w-full text-xs rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 py-2.5 px-3"
-                        >
-                            <option value="DP 30%">DP 30%</option>
-                            <option value="DP 50%">DP 50%</option>
-                            <option value="Termin 1">Termin 1</option>
-                            <option value="Termin 2">Termin 2</option>
-                            <option value="Pelunasan Invoice">Pelunasan Invoice</option>
-                            <option value="Full Payment">Full Payment</option>
-                            <option value="Pembayaran Cicilan">Pembayaran Cicilan</option>
-                        </select>
+                    {/* Payment Options (Lunas vs Cicil) */}
+                    <div className="space-y-2.5">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">OPSI PEMBAYARAN</label>
+                        <div className="grid grid-cols-2 gap-4">
+                            {[
+                                { id: "lunas", label: "Lunas Sekaligus", desc: "100% nominal termin" },
+                                { id: "cicil", label: "Cicil / Parsial", desc: "Sebagian nominal" },
+                            ].map((opt) => (
+                                <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => handleSelectOption(opt.id as "lunas" | "cicil")}
+                                    className={`p-4 rounded-3xl border text-left transition-all cursor-pointer ${
+                                        optionType === opt.id
+                                            ? "bg-emerald-50/50 border-emerald-500 text-slate-900 ring-2 ring-emerald-500/20 font-bold shadow-2xs"
+                                            : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                                    }`}
+                                >
+                                    <div className="text-xs font-black text-slate-900">{opt.label}</div>
+                                    <div className="text-[10px] text-slate-400 mt-1 font-semibold leading-tight">{opt.desc}</div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Nominal */}
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                Nominal Diterima (Rp)
-                            </label>
-                            <button
-                                type="button"
-                                onClick={() => setAmount(remainingAmount)}
-                                className="text-[11px] text-emerald-600 hover:underline font-bold"
-                            >
-                                Lunasi Semua ({fmt(remainingAmount)})
-                            </button>
-                        </div>
+                    {/* Numeric Input */}
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Nominal Diterima (Rp)</label>
                         <input
                             type="number"
-                            min={1}
-                            max={remainingAmount}
                             value={amount || ""}
-                            onChange={(e) => setAmount(Number(e.target.value))}
-                            required
-                            className="w-full text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 py-2.5 px-3"
+                            disabled={optionType === "lunas"}
+                            onChange={(e) => setAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                            placeholder="Ketik nominal transfer..."
+                            className="w-full bg-slate-50/60 border border-slate-200 rounded-2xl px-4 py-3 text-xs font-black text-slate-800 focus:outline-none focus:border-emerald-500 disabled:bg-slate-100/70 disabled:text-slate-500 disabled:cursor-not-allowed"
                         />
                     </div>
 
-                    {/* Grid: Tanggal & Bank */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                Tanggal Diterima
-                            </label>
-                            <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                required
-                                className="w-full text-xs rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 py-2 px-3"
-                            />
+                    {/* Form Layout fields */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Tanggal Bayar</label>
+                            <div className="relative flex items-center">
+                                <div className="w-full px-4 py-3 text-xs border border-slate-200 rounded-2xl bg-white font-mono font-bold text-slate-800 flex items-center justify-between cursor-pointer hover:border-emerald-500 transition-all">
+                                    <span>{formatIndoDate(date)}</span>
+                                    <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                </div>
+                                <input
+                                    type="date"
+                                    value={date}
+                                    onChange={(e) => setDate(e.target.value)}
+                                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                Akun Bank / Kas Masuk
-                            </label>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Metode Bayar</label>
                             <select
                                 value={method}
                                 onChange={(e) => setMethod(e.target.value)}
-                                className="w-full text-xs rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 py-2 px-3"
+                                className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-xs font-black text-slate-800 focus:outline-none focus:border-emerald-500 cursor-pointer appearance-none"
                             >
-                                <option value="Transfer Bank BCA">Transfer Bank BCA</option>
-                                <option value="Transfer Bank Mandiri">Transfer Bank Mandiri</option>
-                                <option value="Transfer Bank BRI">Transfer Bank BRI</option>
-                                <option value="Kas Utama">Kas Utama (Cash)</option>
+                                <option value="Transfer BCA">Transfer BCA</option>
+                                <option value="Transfer Mandiri">Transfer Mandiri</option>
+                                <option value="Transfer BNI">Transfer BNI</option>
+                                <option value="Transfer BRI">Transfer BRI</option>
+                                <option value="Cash / Tunai">Cash / Tunai</option>
                             </select>
                         </div>
                     </div>
 
-                    {/* No Ref */}
-                    <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            No. Referensi / Bukti Kas Masuk (BKM)
-                        </label>
+                    {/* Reference text box */}
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">No. Ref / Bukti Transfer (Opsional)</label>
                         <input
                             type="text"
                             value={referenceNo}
                             onChange={(e) => setReferenceNo(e.target.value)}
-                            placeholder="Misal: BKM-2026-0810 / Transfer Ref"
-                            required
-                            className="w-full text-xs font-mono rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 py-2 px-3"
+                            placeholder="Contoh: TRX-884920 / BCA a/n Client"
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
                         />
                     </div>
+                </div>
 
-                    {/* Automatic Kwitansi Trigger Notice */}
-                    {isFullPay && (
-                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300">
-                            <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span>Pembayaran ini melunasi 100% Invoice. <strong>Kwitansi Resmi (KW-xxx)</strong> akan otomatis diterbitkan oleh sistem.</span>
-                        </div>
-                    )}
-
-                    {/* Notes */}
-                    <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Catatan / Keterangan (Opsional)
-                        </label>
-                        <textarea
-                            rows={2}
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Catatan tambahan penerimaan pembayaran..."
-                            className="w-full text-xs rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 py-2 px-3"
-                        />
-                    </div>
-
-                    {/* Submit buttons */}
-                    <div className="pt-2 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
-                        >
-                            Batal
-                        </button>
-                        <button
-                            type="submit"
-                            className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition"
-                        >
-                            Simpan Penerimaan Kas
-                        </button>
-                    </div>
-                </form>
+                {/* Footer Action Buttons */}
+                <div className="px-8 py-5 bg-white border-t border-slate-100 flex items-center justify-between flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-6 py-3 text-xs font-black text-slate-500 hover:text-slate-800 transition-all cursor-pointer"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSubmit}
+                        className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black shadow-lg shadow-emerald-600/10 hover:shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                        <span>Simpan Pembayaran</span>
+                    </button>
+                </div>
             </div>
-        </div>
+        </Modal>
     );
 };

@@ -342,8 +342,8 @@
             <div class="notes-info">
                 <strong>Rate* :</strong><br>
                 <strong>Materi :</strong> {{ $project['name'] ?? '' }}<br>
-                <strong>Penerangan :</strong> {{ $locations[0]['lighting'] ?? 'Berlampu' }}<br>
-                <strong>Term Of Payment :</strong> {{ $locations[0]['topNotes'] ?? 'Lunas setelah visual terpasang' }}
+                <strong>Penerangan :</strong> {{ $lighting }}<br>
+                <strong>Term Of Payment :</strong> {{ $topNotes }}
             </div>
 
             <div class="instructions-box">
