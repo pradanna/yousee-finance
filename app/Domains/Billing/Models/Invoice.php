@@ -88,7 +88,12 @@ class Invoice extends Model
 
             // Kwitansi & Jurnal Pelunasan saat status berubah jadi Paid
             if ($invoice->isDirty('status') && $invoice->getOriginal('status') === 'issued' && $invoice->status === 'paid') {
-                $invoice->generateKwitansi();
+                $paymentCode = request()->input('payment_account_code', '1110'); // Default to kas tunai
+                $invoice->generateKwitansi($paymentCode);
+                
+                // Refresh relasi kwitansi agar postPaidJournal bisa membaca akun yang benar
+                $invoice->load('kwitansi');
+                
                 $invoice->postPaidJournal();
             }
         });
@@ -156,14 +161,14 @@ class Invoice extends Model
 
         // Debet Piutang
         $journal->items()->create([
-            'account_name' => 'Piutang Dagang',
+            'account_name' => 'Piutang Dagang Client',
             'debit' => $this->total,
             'credit' => 0,
         ]);
 
         // Kredit Pendapatan
         $journal->items()->create([
-            'account_name' => 'Pendapatan Usaha',
+            'account_name' => 'Pendapatan Sewa Media Iklan (Billboard/Videotron)',
             'debit' => 0,
             'credit' => $this->subtotal,
         ]);
@@ -171,7 +176,7 @@ class Invoice extends Model
         // Kredit PPN Keluaran (jika ada)
         if ($this->ppn > 0) {
             $journal->items()->create([
-                'account_name' => 'PPN Keluaran',
+                'account_name' => 'Hutang PPN Keluaran (11%)',
                 'debit' => 0,
                 'credit' => $this->ppn,
             ]);
@@ -193,16 +198,25 @@ class Invoice extends Model
             'transaction_date' => now(), // Tanggal pembayaran saat ini
         ]);
 
+        // Ambil nama akun bank dari kwitansi, atau default
+        $bankAccountName = 'Kas Tunai / Operasional';
+        if ($this->kwitansi && $this->kwitansi->payment_account_code) {
+            $code = $this->kwitansi->payment_account_code;
+            if ($code === '1111') $bankAccountName = 'Bank Mandiri Solo Baru (138-00-2010633-7)';
+            elseif ($code === '1112') $bankAccountName = 'Bank BCA Operasional Utama';
+            elseif ($code === '1110') $bankAccountName = 'Kas Tunai / Operasional';
+        }
+
         // Debet Kas/Bank
         $journal->items()->create([
-            'account_name' => 'Kas / Bank',
+            'account_name' => $bankAccountName,
             'debit' => $this->total,
             'credit' => 0,
         ]);
 
         // Kredit Piutang
         $journal->items()->create([
-            'account_name' => 'Piutang Dagang',
+            'account_name' => 'Piutang Dagang Client',
             'debit' => 0,
             'credit' => $this->total,
         ]);
@@ -211,7 +225,7 @@ class Invoice extends Model
     /**
      * Terbit otomatis Kwitansi ketika Invoice lunas.
      */
-    public function generateKwitansi(): void
+    public function generateKwitansi(string $paymentAccountCode = null): void
     {
         if ($this->kwitansi()->exists()) {
             return;
@@ -221,6 +235,7 @@ class Invoice extends Model
             'receipt_number' => 'KW-' . strtoupper(uniqid()),
             'amount' => $this->total,
             'paid_at' => now(),
+            'payment_account_code' => $paymentAccountCode,
         ]);
     }
 }

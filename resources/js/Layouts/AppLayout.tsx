@@ -33,7 +33,7 @@ export const useDemoFiscalMode = useFiscalMode;
 
 interface AppLayoutProps {
     children: React.ReactNode;
-    activePage: 'overview' | 'vendors' | 'clients' | 'sales' | 'projects' | 'debt-receivable' | 'invoice-po' | 'purchases' | 'sales-transactions' | 'journal' | 'ppn' | 'cashflow';
+    activePage: 'overview' | 'vendors' | 'clients' | 'sales' | 'projects' | 'debt-receivable' | 'invoice-po' | 'purchases' | 'cash-out' | 'sales-transactions' | 'journal' | 'ppn' | 'cashflow';
     title: string;
     breadcrumbs: Array<{ label: string; href?: string }>;
 }

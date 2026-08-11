@@ -24,6 +24,9 @@ class PurchaseOrder extends Model
         'transaction_date',
         'has_ppn',
         'total',
+        'status',
+        'paid_at',
+        'payment_account_code',
     ];
 
     protected $casts = [
@@ -49,17 +52,26 @@ class PurchaseOrder extends Model
         static::saved(function (PurchaseOrder $po) {
             // Validasi minimal 1 POItem (Invarian)
             if ($po->items()->count() === 0) {
-                // Di Laravel, jika saat seeding kita ingin memasukkan item, kita simpan PO dulu baru item.
-                // Jadi invariant ini dilewati jika relasi belum diset tetapi dalam mode testing/seeding tertentu.
-                // Namun, untuk operasional, kita pastikan ada item.
-                // Mari beri kelonggaran jika sedang running di database seeder agar tidak mempersulit setup awal.
                 if (!app()->runningInConsole()) {
                     throw new \DomainException("Purchase Order tidak boleh kosong. Minimal harus ada 1 item.");
                 }
             }
+        });
 
-            // Trigger Posting Jurnal otomatis
-            $po->postJournalEntry();
+        static::updated(function (PurchaseOrder $po) {
+            // Jika berubah ke issued, post jurnal kewajiban
+            if ($po->isDirty('status') && $po->getOriginal('status') === 'draft' && $po->status === 'issued') {
+                $po->postJournalEntry();
+            }
+
+            // Jika berubah ke paid, post jurnal pelunasan
+            if ($po->isDirty('status') && $po->getOriginal('status') === 'issued' && $po->status === 'paid') {
+                if (empty($po->paid_at)) {
+                    $po->paid_at = now();
+                    $po->saveQuietly();
+                }
+                $po->postPaymentJournal();
+            }
         });
     }
 
@@ -130,7 +142,7 @@ class PurchaseOrder extends Model
 
         // Debet Beban/Persediaan
         $journal->items()->create([
-            'account_name' => 'Beban / Persediaan',
+            'account_name' => 'Beban HPP Sewa Billboard Vendor',
             'debit' => $debetBeban,
             'credit' => 0,
         ]);
@@ -138,7 +150,7 @@ class PurchaseOrder extends Model
         // Debet PPN Masukan (jika ada)
         if ($ppnMasukan > 0) {
             $journal->items()->create([
-                'account_name' => 'PPN Masukan',
+                'account_name' => 'PPN Masukan (11%)',
                 'debit' => $ppnMasukan,
                 'credit' => 0,
             ]);
@@ -146,7 +158,49 @@ class PurchaseOrder extends Model
 
         // Kredit Hutang / Kas
         $journal->items()->create([
-            'account_name' => 'Hutang Dagang / Kas',
+            'account_name' => 'Hutang Dagang Vendor Billboard',
+            'debit' => 0,
+            'credit' => $kreditHutang,
+        ]);
+    }
+
+    /**
+     * Posting Jurnal Otomatis saat PO dibayar (Paid).
+     * Debet: Hutang Dagang Vendor Billboard
+     * Kredit: Bank (sesuai payment_account_code)
+     */
+    public function postPaymentJournal(): void
+    {
+        $journal = JournalEntry::create([
+            'source_type' => self::class,
+            'source_id' => $this->id,
+            'fiscal_mode' => $this->fiscal_mode,
+            'description' => "Jurnal Pembayaran PO #{$this->id} - Vendor: {$this->vendor->name}",
+            'transaction_date' => $this->paid_at ?? now(),
+        ]);
+
+        // Hitung total hutang (total + PPN)
+        $totalPO = $this->total;
+        $ppnMasukan = $this->has_ppn ? $totalPO * 0.11 : 0;
+        $kreditHutang = $totalPO + $ppnMasukan;
+
+        // Ambil nama akun bank dari payment_account_code, atau default
+        $bankAccountName = 'Kas Tunai / Operasional';
+        $code = $this->payment_account_code;
+        if ($code === '1111') $bankAccountName = 'Bank Mandiri Solo Baru (138-00-2010633-7)';
+        elseif ($code === '1112') $bankAccountName = 'Bank BCA Operasional Utama';
+        elseif ($code === '1110') $bankAccountName = 'Kas Tunai / Operasional';
+
+        // Debet Hutang
+        $journal->items()->create([
+            'account_name' => 'Hutang Dagang Vendor Billboard',
+            'debit' => $kreditHutang,
+            'credit' => 0,
+        ]);
+
+        // Kredit Kas/Bank
+        $journal->items()->create([
+            'account_name' => $bankAccountName,
             'debit' => 0,
             'credit' => $kreditHutang,
         ]);

@@ -62,6 +62,10 @@ Route::get('/purchases', function () {
     return Inertia::render('Purchases');
 })->name('purchases');
 
+Route::get('/cash-out', function () {
+    return Inertia::render('CashOut');
+})->name('cash-out');
+
 Route::get('/sales-transactions', function () {
     return Inertia::render('SalesTransactions');
 })->name('sales-transactions');

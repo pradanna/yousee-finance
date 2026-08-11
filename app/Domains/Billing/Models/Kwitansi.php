@@ -12,6 +12,7 @@ class Kwitansi extends Model
         'receipt_number',
         'amount',
         'paid_at',
+        'payment_account_code',
     ];
 
     protected $casts = [
