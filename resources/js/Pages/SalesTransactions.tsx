@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import Pagination from '@/Components/Table/Pagination';
 import { RecordInvoicePaymentModal } from "@/Components/Modal/RecordInvoicePaymentModal";
@@ -217,12 +217,64 @@ export default function SalesTransactions() {
 
     const [projectsPPN, setProjectsPPN] = useState<Project[]>(initialProjectsPPN);
     const [projectsNonPPN, setProjectsNonPPN] = useState<Project[]>(initialProjectsNonPPN);
-    const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showInvoiceForm, setShowInvoiceForm] = useState(false);
-    const [activeTab, setActiveTab] = useState<"all" | "pending" | "issued" | "ar_schedule">("all");
+
+    // Initial state from URL query parameters (?project=103&tab=issued)
+    const [selectedProjectId, setSelectedProjectIdState] = useState<number | null>(() => {
+        if (typeof window === 'undefined') return null;
+        const params = new URLSearchParams(window.location.search);
+        const pId = params.get('project');
+        return pId ? parseInt(pId, 10) : null;
+    });
+
+    const [activeTab, setActiveTabState] = useState<"all" | "pending" | "issued" | "ar_schedule">(() => {
+        if (typeof window === 'undefined') return "all";
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab && ["all", "pending", "issued", "ar_schedule"].includes(tab)) {
+            return tab as any;
+        }
+        return "all";
+    });
+
+    const setSelectedProjectId = (id: number | null) => {
+        setSelectedProjectIdState(id);
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            if (id !== null) {
+                url.searchParams.set('project', String(id));
+            } else {
+                url.searchParams.delete('project');
+            }
+            window.history.replaceState({}, '', url.toString());
+        }
+    };
+
+    const setActiveTab = (tab: "all" | "pending" | "issued" | "ar_schedule") => {
+        setActiveTabState(tab);
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', tab);
+            window.history.replaceState({}, '', url.toString());
+        }
+    };
+
+    useEffect(() => {
+        const handlePopState = () => {
+            const params = new URLSearchParams(window.location.search);
+            const pId = params.get('project');
+            setSelectedProjectIdState(pId ? parseInt(pId, 10) : null);
+            const tab = params.get('tab');
+            if (tab && ["all", "pending", "issued", "ar_schedule"].includes(tab)) {
+                setActiveTabState(tab as any);
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
     const [expandedInvoicePayment, setExpandedInvoicePayment] = useState<string | null>(null);
     const [filterSalesPIC, setFilterSalesPIC] = useState<string>("all");
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showInvoiceForm, setShowInvoiceForm] = useState(false);
 
     // Pagination
     const ITEMS_PER_PAGE = 6;
@@ -322,11 +374,21 @@ export default function SalesTransactions() {
         const invNum = selectedInvoiceForPayment.invoiceNumber;
         const totalInvoiceVal = selectedInvoiceForPayment.contractValue * (isPPN ? (1 + PPN_RATE) : 1);
 
+        const locDetails = selectedInvoiceForPayment.locations && selectedInvoiceForPayment.locations.length > 0
+            ? selectedInvoiceForPayment.locations.map(loc => `Pemasangan ${loc.type} ${loc.size} ${loc.description}${loc.area ? ' (' + loc.area + ')' : ''}`).join(' dan ')
+            : selectedInvoiceForPayment.name;
+
+        const totalTerms = selectedInvoiceForPayment.paymentTerms?.installments?.length || (selectedInvoiceForPayment.paymentTerms?.type === "dp" ? 2 : 1);
+
         const newPaymentRecord: InvoicePaymentRecord = {
             id: `PAY-INV-${Math.floor(1000 + Math.random() * 9000)}`,
-            invoiceNumber: invNum, termLabel: data.termLabel,
-            amount: data.amount, date: data.date, method: data.method,
-            referenceNo: data.referenceNo, notes: data.notes
+            invoiceNumber: invNum,
+            termLabel: data.termLabel,
+            amount: data.amount,
+            date: data.date,
+            method: data.method,
+            referenceNo: data.referenceNo,
+            notes: data.notes || `Pembayaran ${data.termLabel}${totalTerms > 1 ? ' dari ' + totalTerms + ' Termin' : ''} Sewa Media Iklan - ${locDetails}`
         };
 
         const updatedPayments = [...(paymentsByInvoice[invNum] || []), newPaymentRecord];
@@ -361,6 +423,37 @@ export default function SalesTransactions() {
     const activeRemaining = Math.max(0, activeTotalAmount - activeTotalPaid);
     const activeInvoiceStatus: "draft" | "issued" | "partial" | "paid" = !activeProject?.invoiceIssued
         ? "draft" : activeTotalPaid >= activeTotalAmount ? "paid" : activeTotalPaid > 0 ? "partial" : "issued";
+
+    const activeScheduleItems = activeProject ? (() => {
+        const total = activeTotalAmount;
+        const terms = activeProject.paymentTerms;
+        if (!terms) {
+            return [{ label: "Pelunasan Full (100%)", percent: 100, dueDate: undefined, amount: total }];
+        }
+        if (terms.type === "full") {
+            return [{ label: "Full Payment (100%)", percent: 100, dueDate: terms.fullDueDate, amount: total }];
+        }
+        if (terms.type === "dp") {
+            const dpPct = terms.dpPercent || 50;
+            const dpAmt = terms.dpAmount || Math.round(total * (dpPct / 100));
+            return [
+                { label: `Uang Muka (DP ${dpPct}%)`, percent: dpPct, dueDate: terms.dpDueDate, amount: dpAmt },
+                { label: `Pelunasan (${100 - dpPct}%)`, percent: 100 - dpPct, dueDate: terms.pelunasanDueDate, amount: total - dpAmt },
+            ];
+        }
+        if (terms.type === "termin" && terms.installments) {
+            return terms.installments.map((inst, i) => ({
+                label: inst.note || `Termin ${i + 1}`,
+                percent: inst.percent,
+                dueDate: inst.dueDate,
+                amount: inst.amount,
+            }));
+        }
+        if (terms.type === "installment") {
+            return [{ label: "Cicilan Bulanan", percent: 100, dueDate: terms.fullDueDate, amount: total }];
+        }
+        return [{ label: "Pembayaran Invoice", percent: 100, dueDate: undefined, amount: total }];
+    })() : [];
 
     // ── Helper: get invoice status for a project ──────────────────────────────
     const getProjectInvoiceStatus = (p: Project): "draft" | "issued" | "partial" | "paid" => {
@@ -456,6 +549,77 @@ export default function SalesTransactions() {
         document.body.appendChild(form);
         form.submit();
         document.body.removeChild(form);
+    };
+
+    // ── Download Kwitansi PDF ─────────────────────────────────────────────────
+    const handleDownloadKwitansiPdf = (p: Project, pmt?: InvoicePaymentRecord) => {
+        const invNum = p.invoiceNumber;
+        const kwitansi = kwitansiByInvoice[invNum];
+        const totalAmount = p.contractValue * (isPPN ? (1 + PPN_RATE) : 1);
+
+        const locDetails = p.locations && p.locations.length > 0
+            ? p.locations.map(loc => `Pemasangan ${loc.type} ${loc.size} ${loc.description}${loc.area ? ' (' + loc.area + ')' : ''}`).join(' dan ')
+            : p.name;
+
+        const totalTerms = p.paymentTerms?.installments?.length || (p.paymentTerms?.type === "dp" ? 2 : 1);
+
+        let receiptNum = kwitansi?.receiptNumber;
+        let amountVal = kwitansi?.amount || totalAmount;
+        let dateVal = kwitansi?.paidAt || new Date().toISOString().split('T')[0];
+
+        let paymentTermText = pmt?.termLabel
+            ? `${pmt.termLabel}${totalTerms > 1 ? ' dari ' + totalTerms + ' Termin' : ''}`
+            : `Pelunasan`;
+
+        let paymentDesc = kwitansi?.forPaymentOf || `Pembayaran ${paymentTermText} Sewa Media Iklan - ${locDetails}`;
+
+        if (pmt) {
+            if (pmt.referenceNo) {
+                receiptNum = `KW-${pmt.referenceNo}`;
+            }
+            amountVal = pmt.amount;
+            dateVal = pmt.date;
+            paymentDesc = pmt.notes || `Pembayaran ${pmt.termLabel}${totalTerms > 1 ? ' dari ' + totalTerms + ' Termin' : ''} Sewa Media Iklan - ${locDetails}`;
+        }
+
+        const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '';
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/kwitansi-pdf';
+        form.target = '_blank';
+
+        const appendInput = (name: string, value: string) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        };
+
+        appendInput('_token', csrfToken);
+        appendInput('receiptNumber', receiptNum || `KW-${p.invoiceNumber}`);
+        appendInput('receivedFrom', kwitansi?.receivedFrom || p.clientName);
+        appendInput('amount', String(amountVal));
+        appendInput('forPaymentOf', paymentDesc);
+        appendInput('date', dateVal);
+        appendInput('stream', 'true');
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    };
+
+    const handleSendTerminInvoice = (item: { label: string; amount: number }) => {
+        if (!activeProject) return;
+        handleDownloadInvoicePdf(activeProject);
+        setSuccessMessage(`Invoice ${item.label} (${fmt(item.amount)}) berhasil dikirim / disiapkan untuk ${activeProject.clientName}!`);
+        setTimeout(() => setSuccessMessage(""), 4000);
+    };
+
+    const handleRecordPaymentForTermin = (item: { label: string; amount: number }) => {
+        if (!activeProject) return;
+        setSelectedInvoiceForPayment(activeProject);
+        setShowRecordPaymentModal(true);
     };
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -692,12 +856,12 @@ export default function SalesTransactions() {
                                                         </div>
                                                         <button onClick={() => { setSelectedProjectId(p.id); setShowInvoiceForm(true); }}
                                                             disabled={isDraft}
-                                                            title={isDraft ? "Tidak dapat terbitkan invoice untuk proyek Draft" : "Terbitkan Invoice"}
+                                                            title={isDraft ? "Tidak dapat tetapkan skema pembayaran untuk proyek Draft" : "Tetapkan Skema Pembayaran"}
                                                             className={`px-3.5 py-1.5 text-[11px] font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 ${isDraft ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200" : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"}`}>
                                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                                                             </svg>
-                                                            <span>Terbitkan Invoice</span>
+                                                            <span>Tetapkan Skema Pembayaran</span>
                                                         </button>
                                                     </div>
                                                 );
@@ -805,6 +969,7 @@ export default function SalesTransactions() {
                                                                             <th className="py-2 px-3">Metode</th>
                                                                             <th className="py-2 px-3">No. Referensi</th>
                                                                             <th className="py-2 px-3 text-right">Nominal</th>
+                                                                            <th className="py-2 px-3 text-center">Aksi</th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody className="divide-y divide-slate-100">
@@ -815,6 +980,16 @@ export default function SalesTransactions() {
                                                                                 <td className="py-2 px-3 text-slate-600">{pmt.method}</td>
                                                                                 <td className="py-2 px-3 font-mono text-slate-600">{pmt.referenceNo}</td>
                                                                                 <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">{fmt(pmt.amount)}</td>
+                                                                                <td className="py-2 px-3 text-center">
+                                                                                    <button type="button" onClick={() => handleDownloadKwitansiPdf(p, pmt)}
+                                                                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg shadow-2xs transition-all flex items-center gap-1 mx-auto cursor-pointer"
+                                                                                        title="Cetak Kwitansi PDF untuk pembayaran ini">
+                                                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                                                        </svg>
+                                                                                        <span>Cetak Kwitansi</span>
+                                                                                    </button>
+                                                                                </td>
                                                                             </tr>
                                                                         ))}
                                                                     </tbody>
@@ -999,7 +1174,7 @@ export default function SalesTransactions() {
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                                             </svg>
-                                            Terbitkan Invoice Sekarang
+                                            Tetapkan Skema Pembayaran
                                         </button>
                                     </div>
                                 ) : (
@@ -1008,33 +1183,12 @@ export default function SalesTransactions() {
                                         <div className="flex items-center justify-between flex-wrap gap-4">
                                             <div>
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <span className="px-2.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-lg text-xs font-bold font-mono">{activeProject.invoiceNumber}</span>
+                                                    <span className="px-2.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-lg text-xs font-bold font-mono">{activeProject.invoiceNumber || "INVOICE DRAFT"}</span>
                                                     <InvoiceStatusBadge status={activeInvoiceStatus} />
                                                     {activeKwitansi && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-bold">✓ Kwitansi: {activeKwitansi.receiptNumber}</span>}
                                                 </div>
                                                 <p className="text-[11px] text-slate-400 font-medium">Skema: {activeProject.paymentTerms?.notes || "-"}</p>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {activeRemaining > 0 && (
-                                                    <button onClick={() => { setSelectedInvoiceForPayment(activeProject); setShowRecordPaymentModal(true); }}
-                                                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
-                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                                                        <span>Catat Terima Bayar</span>
-                                                    </button>
-                                                )}
-                                                <button onClick={() => handleDownloadInvoicePdf(activeProject)}
-                                                    className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                                    <span>Download Invoice PDF</span>
-                                                </button>
-                                                {activePayments.length === 0 && (
-                                                    <button onClick={handleCancelInvoice}
-                                                        className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
-                                                        Batalkan Invoice
-                                                    </button>
-                                                )}
-                                            </div>
-
                                         </div>
 
                                         {/* Payment Summary Bar */}
@@ -1053,7 +1207,105 @@ export default function SalesTransactions() {
                                             </div>
                                         </div>
 
-                                        {/* Payment History Table */}
+                                         {/* Scheduled Invoices / Payment Terms Table */}
+                                         <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                                             <div className="bg-slate-100/90 px-4 py-2.5 text-[10px] font-black text-slate-600 uppercase tracking-wider flex items-center justify-between border-b border-slate-200/80">
+                                                 <span>Rincian Tagihan & Skema Termin ({activeProject.paymentTerms?.notes || activeProject.paymentTerms?.type || "Full Payment"})</span>
+                                                 <span className="text-[9.5px] font-mono text-slate-500 font-bold px-2 py-0.5 bg-slate-200/70 rounded-md">{activeScheduleItems.length} TERMIN TAGIHAN</span>
+                                             </div>
+                                             <table className="w-full text-left border-collapse text-xs">
+                                                 <thead>
+                                                     <tr className="border-b border-slate-200 text-slate-600 text-[10px] uppercase tracking-wider font-bold bg-slate-50/70">
+                                                         <th className="py-2.5 px-4">Termin / Deskripsi</th>
+                                                         <th className="py-2.5 px-4 text-center">Porsi (%)</th>
+                                                         <th className="py-2.5 px-4">Jatuh Tempo</th>
+                                                         <th className="py-2.5 px-4 text-right">Nominal Tagihan</th>
+                                                         <th className="py-2.5 px-4 text-center">Status Tagihan</th>
+                                                         <th className="py-2.5 px-4 text-center">Aksi</th>
+                                                     </tr>
+                                                 </thead>
+                                                 <tbody className="divide-y divide-slate-100">
+                                                     {activeScheduleItems.map((item, idx) => {
+                                                         const dueDateStatus = getDueDateStatus(item.dueDate);
+                                                         const paidSum = activePayments.reduce((s, p) => s + p.amount, 0);
+                                                         let isItemPaid = false;
+                                                         if (activeInvoiceStatus === "paid") {
+                                                             isItemPaid = true;
+                                                         } else if (idx === 0 && paidSum >= item.amount) {
+                                                             isItemPaid = true;
+                                                         }
+
+                                                         return (
+                                                             <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                                                                 <td className="py-3 px-4 font-bold text-slate-900">
+                                                                     {item.label}
+                                                                 </td>
+                                                                 <td className="py-3 px-4 text-center font-mono font-bold text-slate-600">
+                                                                     {item.percent ? `${item.percent}%` : "-"}
+                                                                 </td>
+                                                                 <td className="py-3 px-4">
+                                                                     <div className="flex items-center gap-1.5">
+                                                                         <span className={`w-2 h-2 rounded-full ${dueDateStatus.dot}`} />
+                                                                         <span className="text-slate-700 font-medium">{item.dueDate ? formatDate(item.dueDate) : "Sesuai Kesepakatan"}</span>
+                                                                     </div>
+                                                                 </td>
+                                                                 <td className="py-3 px-4 text-right font-mono font-black text-slate-900">
+                                                                     {fmt(item.amount)}
+                                                                 </td>
+                                                                 <td className="py-3 px-4 text-center">
+                                                                     {isItemPaid ? (
+                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                                             Lunas
+                                                                         </span>
+                                                                     ) : (
+                                                                         <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9.5px] border ${dueDateStatus.style}`}>
+                                                                             <span className={`w-1.5 h-1.5 rounded-full ${dueDateStatus.dot}`} />
+                                                                             {dueDateStatus.label}
+                                                                         </span>
+                                                                     )}
+                                                                 </td>
+                                                                 <td className="py-3 px-4 text-center">
+                                                                     <div className="flex items-center justify-center gap-2">
+                                                                         {!isItemPaid && (
+                                                                             <button type="button" onClick={() => handleRecordPaymentForTermin(item)}
+                                                                                 className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10.5px] font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
+                                                                                 title={`Catat pembayaran untuk ${item.label}`}>
+                                                                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                                                 </svg>
+                                                                                 <span>Catat Pembayaran</span>
+                                                                             </button>
+                                                                         )}
+                                                                         {activeProject.invoiceIssued ? (
+                                                                             <button type="button" onClick={() => handleDownloadInvoicePdf(activeProject)}
+                                                                                 className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10.5px] font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                                                                                 title={`Download Invoice PDF untuk ${item.label}`}>
+                                                                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                                 </svg>
+                                                                                 <span>Download Invoice</span>
+                                                                             </button>
+                                                                         ) : (
+                                                                             <button type="button" onClick={() => setShowInvoiceForm(true)}
+                                                                                 className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10.5px] font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
+                                                                                 title={`Terbitkan Invoice untuk ${item.label}`}>
+                                                                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                                                                 </svg>
+                                                                                 <span>Terbitkan Invoice</span>
+                                                                             </button>
+                                                                         )}
+                                                                     </div>
+                                                                 </td>
+                                                             </tr>
+                                                         );
+                                                     })}
+                                                 </tbody>
+                                             </table>
+                                         </div>
+
+                                         {/* Payment History Table */}
                                         <div className="border border-slate-200 rounded-xl overflow-hidden">
                                             <div className="bg-slate-100 px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                                                 Riwayat Penerimaan Kas
@@ -1062,21 +1314,32 @@ export default function SalesTransactions() {
                                                 <table className="w-full text-left border-collapse text-xs">
                                                     <thead>
                                                         <tr className="border-b border-slate-200 text-slate-600 text-[10px] uppercase tracking-wider font-semibold">
-                                                            <th className="py-2 px-4">Tanggal</th>
-                                                            <th className="py-2 px-4">Label / Termin</th>
-                                                            <th className="py-2 px-4">Metode</th>
-                                                            <th className="py-2 px-4">No. Referensi</th>
-                                                            <th className="py-2 px-4 text-right">Nominal</th>
+                                                            <th className="py-2.5 px-4">Tanggal</th>
+                                                            <th className="py-2.5 px-4">Label / Termin</th>
+                                                            <th className="py-2.5 px-4">Metode</th>
+                                                            <th className="py-2.5 px-4">No. Referensi</th>
+                                                            <th className="py-2.5 px-4 text-right">Nominal</th>
+                                                            <th className="py-2.5 px-4 text-center">Kwitansi</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100">
                                                         {activePayments.map(pmt => (
                                                             <tr key={pmt.id} className="hover:bg-slate-50/70">
-                                                                <td className="py-2 px-4 font-mono text-slate-700">{formatDate(pmt.date)}</td>
-                                                                <td className="py-2 px-4 font-semibold text-slate-900">{pmt.termLabel}</td>
-                                                                <td className="py-2 px-4 text-slate-600">{pmt.method}</td>
-                                                                <td className="py-2 px-4 font-mono text-slate-600">{pmt.referenceNo}</td>
-                                                                <td className="py-2 px-4 text-right font-mono font-bold text-emerald-700">{fmt(pmt.amount)}</td>
+                                                                <td className="py-2.5 px-4 font-mono text-slate-700">{formatDate(pmt.date)}</td>
+                                                                <td className="py-2.5 px-4 font-semibold text-slate-900">{pmt.termLabel}</td>
+                                                                <td className="py-2.5 px-4 text-slate-600">{pmt.method}</td>
+                                                                <td className="py-2.5 px-4 font-mono text-slate-600">{pmt.referenceNo || "-"}</td>
+                                                                <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-700">{fmt(pmt.amount)}</td>
+                                                                <td className="py-2.5 px-4 text-center">
+                                                                    <button type="button" onClick={() => handleDownloadKwitansiPdf(activeProject, pmt)}
+                                                                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10.5px] font-bold rounded-xl transition-all flex items-center gap-1 mx-auto cursor-pointer"
+                                                                        title={`Download Kwitansi PDF untuk ${pmt.termLabel}`}>
+                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                        </svg>
+                                                                        <span>Cetak Kwitansi</span>
+                                                                    </button>
+                                                                </td>
                                                             </tr>
                                                         ))}
                                                     </tbody>

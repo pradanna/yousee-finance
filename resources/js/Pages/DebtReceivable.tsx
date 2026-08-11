@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
+import ActionDropdown, { ActionMenuItem } from '@/Components/UI/ActionDropdown';
+import SelectInput from '@/Components/Form/SelectInput';
+import Pagination from '@/Components/Table/Pagination';
+import EmptyState from '@/Components/Table/EmptyState';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types
+// Types & Interfaces
 // ─────────────────────────────────────────────────────────────────────────────
 interface PaymentTerms {
     type: 'full' | 'dp' | 'termin';
@@ -30,6 +34,7 @@ interface ReceivableItem {
     paid: number;
     status: 'paid' | 'partial' | 'unpaid';
     terms: PaymentTerms;
+    salesPIC?: string;
 }
 
 interface PayableItem {
@@ -110,10 +115,8 @@ const getMilestones = (item: ReceivableItem | PayableItem): ResolvedMilestone[] 
     return list;
 };
 
-const getNearestMilestoneInfo = (item: ReceivableItem | PayableItem, currentDateStr: string = '2026-06-27'): MilestoneStatus => {
+const getNearestMilestoneInfo = (item: ReceivableItem | PayableItem, currentDateStr: string = new Date().toISOString().split('T')[0]): MilestoneStatus => {
     const milestones = getMilestones(item);
-    
-    // Find first milestone where paid < cumulativeAmount (accounting for rounding)
     const unpaidMilestone = milestones.find(m => item.paid < m.cumulativeAmount - 1);
     
     if (!unpaidMilestone) {
@@ -126,7 +129,9 @@ const getNearestMilestoneInfo = (item: ReceivableItem | PayableItem, currentDate
     }
     
     const currentDate = new Date(currentDateStr);
+    currentDate.setHours(0, 0, 0, 0);
     const dueDate = new Date(unpaidMilestone.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
     
     const timeDiff = currentDate.getTime() - dueDate.getTime();
     const isOverdue = timeDiff > 0;
@@ -139,6 +144,8 @@ const getNearestMilestoneInfo = (item: ReceivableItem | PayableItem, currentDate
         statusText: unpaidMilestone.label
     };
 };
+
+const ITEMS_PER_PAGE = 10;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page Component
@@ -158,7 +165,8 @@ export default function DebtReceivable() {
             total: isPPN ? 11100000 : 10000000,
             paid: isPPN ? 11100000 : 10000000,
             status: 'paid',
-            terms: { type: 'full', notes: 'Pembayaran 100% lunas 30 hari setelah invoice diterima.' }
+            terms: { type: 'full', notes: 'Pembayaran 100% lunas 30 hari setelah invoice diterima.' },
+            salesPIC: 'Eko Prasetyo'
         },
         {
             id: isPPN ? 'INV-PPN-002' : 'INV-NP-002',
@@ -176,7 +184,8 @@ export default function DebtReceivable() {
                 dpDueDate: '2026-06-25',
                 pelunasanDueDate: '2026-07-22',
                 notes: 'Uang muka (DP) 30% dibayar di awal, pelunasan 70% setelah pasang.'
-            }
+            },
+            salesPIC: 'Rina Wijaya'
         },
         {
             id: isPPN ? 'INV-PPN-003' : 'INV-NP-003',
@@ -194,7 +203,28 @@ export default function DebtReceivable() {
                     { percent: 50, amount: isPPN ? 4440000 : 4000000, note: 'Termin 2 (Pelunasan 50%)', dueDate: '2026-07-12' }
                 ],
                 notes: 'Pembayaran dibagi 2 termin (Termin 1: 50%, Termin 2: 50%).'
-            }
+            },
+            salesPIC: 'Budi Santoso'
+        },
+        {
+            id: isPPN ? 'INV-PPN-004' : 'INV-NP-004',
+            client: 'CV. Soto Bangkong Lestari',
+            project: 'Baliho Kuliner Lokal Soto Bangkong - Solo',
+            date: '2026-08-01',
+            due: '2026-08-11',
+            total: isPPN ? 49950000 : 45000000,
+            paid: 0,
+            status: 'unpaid',
+            terms: {
+                type: 'termin',
+                installments: [
+                    { percent: 30, amount: isPPN ? 14985000 : 13500000, note: 'Termin 1', dueDate: '2026-08-11' },
+                    { percent: 40, amount: isPPN ? 19980000 : 18000000, note: 'Termin 2', dueDate: '2026-08-25' },
+                    { percent: 30, amount: isPPN ? 14985000 : 13500000, note: 'Termin 3', dueDate: '2026-09-10' }
+                ],
+                notes: 'Angsuran berkala 3 bulan (30-40-30)'
+            },
+            salesPIC: 'Eko Prasetyo'
         }
     ]);
 
@@ -242,13 +272,23 @@ export default function DebtReceivable() {
         }
     ]);
 
-    const [activeTab, setActiveTab] = useState<'receivable' | 'payable'>('receivable');
+    const [activeTab, setActiveTab] = useState<'payable' | 'receivable'>('payable');
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [partnerFilter, setPartnerFilter] = useState<string>('all');
+    const [sortOrder, setSortOrder] = useState<string>('due');
+
+    const [receivablesPage, setReceivablesPage] = useState(1);
+    const [payablesPage, setPayablesPage] = useState(1);
     
     // Modal states
     const [paymentModal, setPaymentModal] = useState<{ isOpen: boolean; type: 'receivable' | 'payable'; item: any } | null>(null);
     const [termsModal, setTermsModal] = useState<{ isOpen: boolean; item: any } | null>(null);
     const [payAmountInput, setPayAmountInput] = useState('');
+    const [payMethodInput, setPayMethodInput] = useState('Transfer BCA');
+    const [payRefInput, setPayRefInput] = useState('');
+    const [payDateInput, setPayDateInput] = useState(new Date().toISOString().split('T')[0]);
+    const [payNotesInput, setPayNotesInput] = useState('');
     const [successAlert, setSuccessAlert] = useState<string | null>(null);
 
     // Dynamic computations
@@ -256,39 +296,88 @@ export default function DebtReceivable() {
     const totalPayable = payables.reduce((s, p) => s + (p.total - p.paid), 0);
     const netBalance = totalReceivable - totalPayable;
 
-    const overdueReceivables = receivables.filter(r => {
-        const info = getNearestMilestoneInfo(r);
-        return info.isOverdue;
-    });
-
-    const overduePayables = payables.filter(p => {
-        const info = getNearestMilestoneInfo(p);
-        return info.isOverdue;
-    });
-
+    const overdueReceivables = receivables.filter(r => getNearestMilestoneInfo(r).isOverdue);
+    const overduePayables = payables.filter(p => getNearestMilestoneInfo(p).isOverdue);
     const totalOverdueCount = overdueReceivables.length + overduePayables.length;
 
-    // Filter lists
-    const filteredReceivables = receivables.filter(r => 
-        r.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.project.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Extract unique partner names
+    const clientList = useMemo(() => Array.from(new Set(receivables.map(r => r.client))), [receivables]);
+    const vendorList = useMemo(() => Array.from(new Set(payables.map(p => p.vendor))), [payables]);
 
-    const filteredPayables = payables.filter(p => 
-        p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.vendor.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.project.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Filter & Sort Receivables
+    const filteredReceivables = useMemo(() => {
+        return receivables.filter(r => {
+            const matchesSearch = r.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                r.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                r.project.toLowerCase().includes(searchQuery.toLowerCase());
+            
+            const milestoneInfo = getNearestMilestoneInfo(r);
+            let matchesStatus = true;
+            if (statusFilter === 'overdue') matchesStatus = milestoneInfo.isOverdue;
+            else if (statusFilter === 'partial') matchesStatus = r.status === 'partial';
+            else if (statusFilter === 'unpaid') matchesStatus = r.status === 'unpaid';
+            else if (statusFilter === 'paid') matchesStatus = r.status === 'paid';
 
-    // Open catat pembayaran
+            let matchesPartner = partnerFilter === 'all' || r.client === partnerFilter;
+
+            return matchesSearch && matchesStatus && matchesPartner;
+        }).sort((a, b) => {
+            if (sortOrder === 'amount_desc') return (b.total - b.paid) - (a.total - a.paid);
+            if (sortOrder === 'newest') return new Date(b.date).getTime() - new Date(a.date).getTime();
+            return new Date(a.due).getTime() - new Date(b.due).getTime();
+        });
+    }, [receivables, searchQuery, statusFilter, partnerFilter, sortOrder]);
+
+    // Filter & Sort Payables
+    const filteredPayables = useMemo(() => {
+        return payables.filter(p => {
+            const matchesSearch = p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.vendor.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.project.toLowerCase().includes(searchQuery.toLowerCase());
+
+            const milestoneInfo = getNearestMilestoneInfo(p);
+            let matchesStatus = true;
+            if (statusFilter === 'overdue') matchesStatus = milestoneInfo.isOverdue;
+            else if (statusFilter === 'partial') matchesStatus = p.status === 'partial';
+            else if (statusFilter === 'unpaid') matchesStatus = p.status === 'unpaid';
+            else if (statusFilter === 'paid') matchesStatus = p.status === 'paid';
+
+            let matchesPartner = partnerFilter === 'all' || p.vendor === partnerFilter;
+
+            return matchesSearch && matchesStatus && matchesPartner;
+        }).sort((a, b) => {
+            if (sortOrder === 'amount_desc') return (b.total - b.paid) - (a.total - a.paid);
+            if (sortOrder === 'newest') return new Date(b.date).getTime() - new Date(a.date).getTime();
+            return new Date(a.due).getTime() - new Date(b.due).getTime();
+        });
+    }, [payables, searchQuery, statusFilter, partnerFilter, sortOrder]);
+
+    // Paginated items
+    const paginatedReceivables = useMemo(() => {
+        const start = (receivablesPage - 1) * ITEMS_PER_PAGE;
+        return filteredReceivables.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredReceivables, receivablesPage]);
+
+    const paginatedPayables = useMemo(() => {
+        const start = (payablesPage - 1) * ITEMS_PER_PAGE;
+        return filteredPayables.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredPayables, payablesPage]);
+
+    // Open Catat Pembayaran Modal
     const handleOpenPayment = (type: 'receivable' | 'payable', item: any) => {
         const remaining = item.total - item.paid;
+        const milestoneInfo = getNearestMilestoneInfo(item);
+        const milestoneAmt = milestoneInfo.nearestMilestone ? milestoneInfo.nearestMilestone.amount : remaining;
+        
         setPaymentModal({ isOpen: true, type, item });
-        setPayAmountInput(String(remaining));
+        setPayAmountInput(String(Math.min(remaining, milestoneAmt)));
+        setPayMethodInput('Transfer BCA');
+        setPayRefInput(`TRX-${Math.floor(100000 + Math.random() * 900000)}`);
+        setPayDateInput(new Date().toISOString().split('T')[0]);
+        setPayNotesInput(`Pembayaran ${milestoneInfo.nearestMilestone?.label || 'Tagihan'} - ${item.project}`);
     };
 
-    // Confirm catat pembayaran
+    // Confirm Catat Pembayaran
     const handleConfirmPayment = (e: React.FormEvent) => {
         e.preventDefault();
         if (!paymentModal) return;
@@ -331,52 +420,143 @@ export default function DebtReceivable() {
         setTimeout(() => setSuccessAlert(null), 5000);
     };
 
+    // Build Action Menu Items for Table Rows
+    const getReceivableActionItems = (r: ReceivableItem): ActionMenuItem[] => {
+        const remaining = r.total - r.paid;
+        const items: ActionMenuItem[] = [];
+
+        if (remaining > 0) {
+            items.push({
+                label: 'Catat Terima Bayar',
+                icon: (
+                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                ),
+                onClick: () => handleOpenPayment('receivable', r)
+            });
+        }
+
+        if (r.paid > 0) {
+            items.push({
+                label: 'Cetak Kwitansi PDF',
+                icon: (
+                    <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                ),
+                onClick: () => alert(`Membuka dokumen Kwitansi PDF untuk Invoice ${r.id}...`)
+            });
+        }
+
+        items.push({
+            label: 'Download Invoice PDF',
+            icon: (
+                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+            ),
+            onClick: () => alert(`Mengunduh dokumen Invoice ${r.id}...`)
+        });
+
+        items.push({
+            label: 'Lihat Skema Termin',
+            icon: (
+                <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+            ),
+            onClick: () => setTermsModal({ isOpen: true, item: r })
+        });
+
+        return items;
+    };
+
+    const getPayableActionItems = (p: PayableItem): ActionMenuItem[] => {
+        const remaining = p.total - p.paid;
+        const items: ActionMenuItem[] = [];
+
+        if (remaining > 0) {
+            items.push({
+                label: 'Catat Bayar Vendor',
+                icon: (
+                    <svg className="w-4 h-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                ),
+                onClick: () => handleOpenPayment('payable', p)
+            });
+        }
+
+        items.push({
+            label: 'Download PO PDF',
+            icon: (
+                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+            ),
+            onClick: () => alert(`Mengunduh dokumen Purchase Order ${p.id}...`)
+        });
+
+        items.push({
+            label: 'Lihat Skema Termin Vendor',
+            icon: (
+                <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+            ),
+            onClick: () => setTermsModal({ isOpen: true, item: p })
+        });
+
+        return items;
+    };
+
     return (
         <AppLayout
             activePage="debt-receivable"
-            title="Monitoring Hutang Piutang"
+            title="Hutang & Piutang Usaha"
             breadcrumbs={[{ label: 'Yousee Indonesia' }, { label: 'Transaksi' }, { label: 'Hutang Piutang' }]}
         >
-            <div className="space-y-6">
+            <div className="w-full space-y-6">
                 
                 {/* Header Section */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
                     <div>
-                        <h2 className="text-sm font-bold text-slate-800 tracking-tight">Buku Pembantu Hutang & Piutang</h2>
-                        <p className="text-[11px] text-slate-400 font-semibold uppercase mt-0.5">
-                            Monitoring saldo piutang client dan hutang HPP vendor Yousee Indonesia
+                        <div className="flex items-center gap-2 mb-1">
+                            <h2 className="text-base font-bold text-slate-900 tracking-tight">Buku Pembantu Hutang & Piutang Usaha</h2>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isPPN ? "bg-blue-100 text-blue-800 border border-blue-200" : "bg-slate-100 text-slate-700 border border-slate-200"}`}>
+                                Mode {isPPN ? "PPN 11%" : "Non-PPN"}
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                            Monitoring piutang tagihan client (AR), kewajiban biaya vendor (AP), serta kelancaran pencatatan penerimaan & pengeluaran kas.
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3 w-full md:w-auto">
-                        <div className="relative w-full md:w-64">
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Cari nomor, nama partner, atau proyek..."
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 focus:bg-white transition-all placeholder-slate-400"
-                            />
-                            <svg className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        <button onClick={() => alert("Mengunduh Laporan Umur Piutang (Aging AR/AP Report)...")}
+                            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs">
+                            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                        </div>
+                            <span>Export Rekap AP/AR</span>
+                        </button>
                     </div>
                 </div>
 
                 {/* Overdue Alert Banner */}
                 {totalOverdueCount > 0 && (
-                    <div className="bg-rose-50 border border-rose-100 rounded-3xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs">
+                    <div className="bg-rose-50/80 border border-rose-200/80 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
                         <div className="flex items-start gap-3.5">
-                            <div className="w-10 h-10 rounded-2xl bg-rose-500 flex items-center justify-center text-white shrink-0 shadow-sm animate-pulse">
-                                <svg className="w-5.5 h-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <div className="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                 </svg>
                             </div>
                             <div>
-                                <h3 className="text-xs font-bold text-rose-950">Ada Tagihan yang Melewati Jatuh Tempo!</h3>
-                                <p className="text-[11px] text-rose-700/80 font-semibold mt-0.5 leading-relaxed">
-                                    Terdapat <strong className="text-rose-950 font-black">{overdueReceivables.length} Piutang Client</strong> dan <strong className="text-rose-950 font-black">{overduePayables.length} Hutang Vendor</strong> yang telah melewati batas pembayaran term/termin terdekat. Segera lakukan tindak lanjut penagihan atau pembayaran.
+                                <h3 className="text-xs font-bold text-rose-950">Perhatian: Terdapat Tagihan yang Melewati Jatuh Tempo!</h3>
+                                <p className="text-xs text-rose-800/90 font-medium mt-0.5 leading-relaxed">
+                                    Terdapat <strong className="text-rose-950 font-bold">{overdueReceivables.length} Piutang Client</strong> dan <strong className="text-rose-950 font-bold">{overduePayables.length} Hutang Vendor</strong> yang memerlukan tindak lanjut penagihan/pembayaran segera.
                                 </p>
                             </div>
                         </div>
@@ -385,127 +565,259 @@ export default function DebtReceivable() {
 
                 {/* Success Alert Banner */}
                 {successAlert && (
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center gap-3 transition-all animate-fade-in">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-white shrink-0">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3 transition-all animate-fade-in shadow-2xs">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white shrink-0">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                         </div>
-                        <div className="text-xs font-bold text-emerald-800 leading-tight">
+                        <div className="text-xs font-bold text-emerald-900 leading-tight">
                             {successAlert}
                         </div>
                     </div>
                 )}
 
-                {/* Quick Widget Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-5 rounded-2xl border border-slate-100/80 shadow-xs space-y-1.5">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">TOTAL PIUTANG CLIENT (RECEIVABLES)</span>
-                        <span className="text-xl font-bold text-blue-600 font-mono block">{fmt(totalReceivable)}</span>
-                        <span className="text-[10px] text-slate-400 font-semibold block">Sisa dana penagihan yang belum diterima dari client</span>
+                {/* Executive Summary Metric Cards (4 Grid) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">PIUTANG CLIENT (ACTIVE AR)</span>
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold border border-blue-100">Client AR</span>
+                        </div>
+                        <span className="text-2xl font-bold text-slate-900 font-mono block">{fmt(totalReceivable)}</span>
+                        <span className="text-[11px] text-slate-500 font-medium block">Dari {receivables.filter(r => r.status !== 'paid').length} proyek penagihan aktif</span>
                     </div>
-                    <div className="bg-white p-5 rounded-2xl border border-slate-100/80 shadow-xs space-y-1.5">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">TOTAL HUTANG VENDOR (PAYABLES)</span>
-                        <span className="text-xl font-bold text-rose-500 font-mono block">{fmt(totalPayable)}</span>
-                        <span className="text-[10px] text-slate-400 font-semibold block">Sisa kewajiban biaya HPP sewa ke vendor billboard</span>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">PIUTANG JATUH TEMPO</span>
+                            <span className="px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full text-[10px] font-bold border border-rose-100">{overdueReceivables.length} Invoice</span>
+                        </div>
+                        <span className="text-2xl font-bold text-rose-600 font-mono block">
+                            {fmt(overdueReceivables.reduce((s, r) => s + (r.total - r.paid), 0))}
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-medium block">Memerlukan penagihan intensif</span>
                     </div>
-                    <div className="bg-white p-5 rounded-2xl border border-slate-100/80 shadow-xs space-y-1.5">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">NET OUTSTANDING BALANCE</span>
-                        <span className={`text-xl font-bold font-mono block ${netBalance >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">HUTANG VENDOR (ACTIVE AP)</span>
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-800 rounded-full text-[10px] font-bold border border-amber-100">Vendor AP</span>
+                        </div>
+                        <span className="text-2xl font-bold text-slate-900 font-mono block">{fmt(totalPayable)}</span>
+                        <span className="text-[11px] text-slate-500 font-medium block">Kewajiban bayar PO ke vendor billboard</span>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">NET WORKING CAPITAL EXPOSURE</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${netBalance >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-800 border-amber-100"}`}>
+                                {netBalance >= 0 ? "Surplus AR" : "Defisit AP"}
+                            </span>
+                        </div>
+                        <span className={`text-2xl font-bold font-mono block ${netBalance >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
                             {fmt(netBalance)}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-semibold block">Selisih piutang client dikurangi hutang vendor</span>
+                        <span className="text-[11px] text-slate-500 font-medium block">Selisih piutang client dikurangi hutang vendor</span>
                     </div>
                 </div>
 
-                {/* Tab Switcher Toolbar */}
-                <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <div className="bg-slate-100 p-1 rounded-xl flex gap-1 border border-slate-200 w-full sm:w-auto">
-                        <button
-                            onClick={() => setActiveTab('receivable')}
-                            className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                                activeTab === 'receivable' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                            }`}
-                        >
-                            <span>Piutang Client</span>
-                            <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full">
-                                {receivables.filter(r => r.status !== 'paid').length}
-                            </span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('payable')}
-                            className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                                activeTab === 'payable' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                            }`}
-                        >
-                            <span>Hutang Vendor</span>
-                            <span className="bg-rose-100 text-rose-700 text-[10px] font-black px-2 py-0.5 rounded-full">
-                                {payables.filter(p => p.status !== 'paid').length}
-                            </span>
-                        </button>
+                {/* Main Tab Navigation & Filter Panel */}
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
+                    {/* Tab Buttons */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                        <div className="bg-slate-100 p-1 rounded-xl flex gap-1 border border-slate-200/80 w-full sm:w-auto">
+                            <button
+                                onClick={() => { setActiveTab('payable'); setPayablesPage(1); }}
+                                className={`flex-1 sm:flex-initial px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                    activeTab === 'payable' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                                <span>Hutang Usaha (Vendor AP)</span>
+                                <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                    {payables.filter(p => p.status !== 'paid').length}
+                                </span>
+                            </button>
+
+                            <button
+                                onClick={() => { setActiveTab('receivable'); setReceivablesPage(1); }}
+                                className={`flex-1 sm:flex-initial px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                    activeTab === 'receivable' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Piutang Usaha (Client AR)</span>
+                                <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                    {receivables.filter(r => r.status !== 'paid').length}
+                                </span>
+                            </button>
+                        </div>
+
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            {activeTab === 'receivable' ? 'Daftar Tagihan Penjualan (Invoices)' : 'Daftar Kewajiban Pembelian (PO)'}
+                        </div>
                     </div>
-                    
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                        {activeTab === 'receivable' ? 'Daftar Tagihan Penjualan (Invoices)' : 'Daftar Tagihan Pembelian (PO)'}
+
+                    {/* Filter Panel Bar */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:items-end">
+                        {/* Search Input */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pencarian Data</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setReceivablesPage(1);
+                                        setPayablesPage(1);
+                                    }}
+                                    placeholder="Cari No., Partner, atau Proyek..."
+                                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-9 pr-4 py-2.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-primary transition-all placeholder-slate-400 shadow-2xs"
+                                />
+                                <svg className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Filter Status */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Filter Status Tagihan</label>
+                            <SelectInput
+                                value={statusFilter}
+                                onChange={(e) => {
+                                    setStatusFilter(e.target.value);
+                                    setReceivablesPage(1);
+                                    setPayablesPage(1);
+                                }}
+                                options={[
+                                    { value: 'all', label: 'Semua Status' },
+                                    { value: 'overdue', label: '⚠ Melewati Jatuh Tempo' },
+                                    { value: 'unpaid', label: 'Belum Dibayar (Unpaid)' },
+                                    { value: 'partial', label: 'Terbayar Sebagian (Partial)' },
+                                    { value: 'paid', label: 'Lunas (Paid)' },
+                                ]}
+                            />
+                        </div>
+
+                        {/* Filter Partner */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                {activeTab === 'receivable' ? 'Filter Client' : 'Filter Vendor'}
+                            </label>
+                            <SelectInput
+                                value={partnerFilter}
+                                onChange={(e) => {
+                                    setPartnerFilter(e.target.value);
+                                    setReceivablesPage(1);
+                                    setPayablesPage(1);
+                                }}
+                                options={[
+                                    { value: 'all', label: activeTab === 'receivable' ? 'Semua Client' : 'Semua Vendor' },
+                                    ...(activeTab === 'receivable'
+                                        ? clientList.map(c => ({ value: c, label: c }))
+                                        : vendorList.map(v => ({ value: v, label: v }))
+                                    )
+                                ]}
+                            />
+                        </div>
+
+                        {/* Sort Order */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Urutkan Berdasarkan</label>
+                            <SelectInput
+                                value={sortOrder}
+                                onChange={(e) => setSortOrder(e.target.value)}
+                                options={[
+                                    { value: 'due', label: 'Jatuh Tempo Terdekat' },
+                                    { value: 'amount_desc', label: 'Nominal Terbesar' },
+                                    { value: 'newest', label: 'Tanggal Terbaru' },
+                                ]}
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {/* Data Table */}
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden">
+                {/* Data Table Container */}
+                <div className="bg-white rounded-2xl border border-slate-100/80 shadow-xs overflow-hidden">
                     <div className="overflow-x-auto">
                         {activeTab === 'receivable' ? (
-                            <table className="w-full border-collapse">
+                            <table className="w-full text-left border-collapse text-xs">
                                 <thead>
-                                    <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-left bg-slate-50/40">
-                                        <th className="px-6 py-4">No. Invoice</th>
-                                        <th className="px-6 py-4">Client / Pelanggan</th>
-                                        <th className="px-6 py-4">Deskripsi Proyek</th>
-                                        <th className="px-6 py-4 text-right">Total Invoice</th>
-                                        <th className="px-6 py-4 text-right">Telah Terbayar</th>
-                                        <th className="px-6 py-4 text-right">Sisa Piutang</th>
-                                        <th className="px-6 py-4">Tagihan Terdekat</th>
-                                        <th className="px-6 py-4 text-center">Status</th>
-                                        <th className="px-6 py-4 text-center">Aksi</th>
+                                    <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left bg-slate-50/40 px-6 py-4">
+                                        <th className="py-4 px-6">No. Invoice & Tanggal</th>
+                                        <th className="py-4 px-6">Client / Pelanggan</th>
+                                        <th className="py-4 px-6">Proyek Media</th>
+                                        <th className="py-4 px-6 text-right">Total Tagihan</th>
+                                        <th className="py-4 px-6 text-right">Telah Terbayar</th>
+                                        <th className="py-4 px-6 text-right">Sisa Piutang</th>
+                                        <th className="py-4 px-6">Tagihan Terdekat</th>
+                                        <th className="py-4 px-6 text-center">Status</th>
+                                        <th className="py-4 px-6 text-center">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
-                                    {filteredReceivables.map((r) => {
+                                <tbody className="divide-y divide-slate-100">
+                                    {paginatedReceivables.map((r) => {
                                         const remaining = r.total - r.paid;
                                         const milestoneInfo = getNearestMilestoneInfo(r);
+                                        const percentPaid = r.total > 0 ? Math.min(100, Math.round((r.paid / r.total) * 100)) : 0;
                                         return (
-                                            <tr key={r.id} className="hover:bg-slate-50/30 transition-colors">
-                                                <td className="px-6 py-4 font-mono font-bold text-slate-900">{r.id}</td>
-                                                <td className="px-6 py-4 font-bold text-slate-800">{r.client}</td>
-                                                <td className="px-6 py-4 font-semibold text-slate-500 max-w-[200px] truncate">{r.project}</td>
-                                                <td className="px-6 py-4 text-right font-mono font-bold text-slate-600">{fmt(r.total)}</td>
-                                                <td className="px-6 py-4 text-right font-mono font-bold text-emerald-600">{fmt(r.paid)}</td>
-                                                <td className="px-6 py-4 text-right font-mono font-bold text-rose-500 bg-rose-50/10">{fmt(remaining)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                            <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="py-4 px-6">
+                                                    <div className="font-mono font-bold text-slate-900">{r.id}</div>
+                                                    <div className="text-[10.5px] text-slate-400 font-medium">{formatDateIndo(r.date)}</div>
+                                                </td>
+                                                <td className="py-4 px-6">
+                                                    <div className="font-bold text-slate-800">{r.client}</div>
+                                                    {r.salesPIC && <div className="text-[10px] text-slate-400 font-medium">Sales: {r.salesPIC}</div>}
+                                                </td>
+                                                <td className="py-4 px-6 font-semibold text-slate-600 max-w-[220px] truncate" title={r.project}>
+                                                    {r.project}
+                                                </td>
+                                                <td className="py-4 px-6 text-right font-mono font-bold text-slate-900">
+                                                    {fmt(r.total)}
+                                                </td>
+                                                <td className="py-4 px-6 text-right">
+                                                    <div className="font-mono font-bold text-emerald-700">{fmt(r.paid)}</div>
+                                                    <div className="w-20 bg-slate-100 h-1.5 rounded-full ml-auto mt-1 overflow-hidden">
+                                                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${percentPaid}%` }} />
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-6 text-right font-mono font-bold text-rose-600">
+                                                    {fmt(remaining)}
+                                                </td>
+                                                <td className="py-4 px-6 whitespace-nowrap">
                                                     {milestoneInfo.nearestMilestone ? (
                                                         <div className="space-y-1">
-                                                            <div className="font-bold text-slate-700">{milestoneInfo.nearestMilestone.label}</div>
+                                                            <div className="font-bold text-slate-800">{milestoneInfo.nearestMilestone.label}</div>
                                                             <div className="flex items-center gap-1.5">
-                                                                <span className="text-[10px] text-slate-400 font-semibold">
+                                                                <span className="text-[10.5px] text-slate-500 font-medium">
                                                                     {formatDateIndo(milestoneInfo.nearestMilestone.dueDate)}
                                                                 </span>
                                                                 {milestoneInfo.isOverdue ? (
-                                                                    <span className="bg-rose-50 text-rose-600 text-[9px] font-bold px-1.5 py-0.5 rounded-sm border border-rose-100 shrink-0">
+                                                                    <span className="bg-rose-50 text-rose-700 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full border border-rose-200 shrink-0">
                                                                         Terlewat {milestoneInfo.overdueDays} hari
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="bg-slate-50 text-slate-500 text-[9px] font-bold px-1.5 py-0.5 rounded-sm border border-slate-100 shrink-0">
+                                                                    <span className="bg-slate-100 text-slate-600 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full border border-slate-200 shrink-0">
                                                                         Menunggu
                                                                     </span>
                                                                 )}
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-slate-400 font-semibold italic">Lunas / Tidak ada</span>
+                                                        <span className="text-slate-400 font-medium italic">Lunas</span>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 text-center whitespace-nowrap">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                                        r.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                                                        r.status === 'partial' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                        'bg-amber-50 text-amber-700 border-amber-100'
+                                                <td className="py-4 px-6 text-center whitespace-nowrap">
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border leading-none ${
+                                                        r.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                        r.status === 'partial' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        'bg-amber-50 text-amber-800 border-amber-200'
                                                     }`}>
                                                         <span className={`w-1.5 h-1.5 rounded-full ${
                                                             r.status === 'paid' ? 'bg-emerald-500' :
@@ -515,23 +827,8 @@ export default function DebtReceivable() {
                                                         {r.status === 'paid' ? 'Lunas' : r.status === 'partial' ? 'Sebagian' : 'Belum Bayar'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <button
-                                                            onClick={() => setTermsModal({ isOpen: true, item: r })}
-                                                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all"
-                                                        >
-                                                            Milestone
-                                                        </button>
-                                                        {remaining > 0 && (
-                                                            <button
-                                                                onClick={() => handleOpenPayment('receivable', r)}
-                                                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-all"
-                                                            >
-                                                                Catat Bayar
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                <td className="py-4 px-6 text-center whitespace-nowrap">
+                                                    <ActionDropdown items={getReceivableActionItems(r)} />
                                                 </td>
                                             </tr>
                                         );
@@ -539,68 +836,85 @@ export default function DebtReceivable() {
 
                                     {filteredReceivables.length === 0 && (
                                         <tr>
-                                            <td colSpan={9} className="py-12 text-center text-slate-400 font-semibold">
-                                                Tidak ditemukan piutang client yang cocok.
+                                            <td colSpan={9} className="py-12 text-center">
+                                                <EmptyState title="Belum Ada Data Piutang" message="Tidak ditemukan catatan piutang client yang sesuai dengan pencarian / filter Anda." />
                                             </td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         ) : (
-                            <table className="w-full border-collapse">
+                            <table className="w-full text-left border-collapse text-xs">
                                 <thead>
-                                    <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-left bg-slate-50/40">
-                                        <th className="px-6 py-4">No. PO</th>
-                                        <th className="px-6 py-4">Vendor Partner</th>
-                                        <th className="px-6 py-4">Deskripsi Proyek</th>
-                                        <th className="px-6 py-4 text-right">Total PO</th>
-                                        <th className="px-6 py-4 text-right">Telah Terbayar</th>
-                                        <th className="px-6 py-4 text-right">Sisa Hutang</th>
-                                        <th className="px-6 py-4">Tagihan Terdekat</th>
-                                        <th className="px-6 py-4 text-center">Status</th>
-                                        <th className="px-6 py-4 text-center">Aksi</th>
+                                    <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left bg-slate-50/40 px-6 py-4">
+                                        <th className="py-4 px-6">No. PO & Tanggal</th>
+                                        <th className="py-4 px-6">Vendor / Supplier</th>
+                                        <th className="py-4 px-6">Proyek Media</th>
+                                        <th className="py-4 px-6 text-right">Total Kewajiban PO</th>
+                                        <th className="py-4 px-6 text-right">Telah Terbayar</th>
+                                        <th className="py-4 px-6 text-right">Sisa Hutang</th>
+                                        <th className="py-4 px-6">Jatuh Tempo Terdekat</th>
+                                        <th className="py-4 px-6 text-center">Status</th>
+                                        <th className="py-4 px-6 text-center">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
-                                    {filteredPayables.map((p) => {
+                                <tbody className="divide-y divide-slate-100">
+                                    {paginatedPayables.map((p) => {
                                         const remaining = p.total - p.paid;
                                         const milestoneInfo = getNearestMilestoneInfo(p);
+                                        const percentPaid = p.total > 0 ? Math.min(100, Math.round((p.paid / p.total) * 100)) : 0;
                                         return (
-                                            <tr key={p.id} className="hover:bg-slate-50/30 transition-colors">
-                                                <td className="px-6 py-4 font-mono font-bold text-slate-900">{p.id}</td>
-                                                <td className="px-6 py-4 font-bold text-slate-800">{p.vendor}</td>
-                                                <td className="px-6 py-4 font-semibold text-slate-500 max-w-[200px] truncate">{p.project}</td>
-                                                <td className="px-6 py-4 text-right font-mono font-bold text-slate-600">{fmt(p.total)}</td>
-                                                <td className="px-6 py-4 text-right font-mono font-bold text-emerald-600">{fmt(p.paid)}</td>
-                                                <td className="px-6 py-4 text-right font-mono font-bold text-rose-500 bg-rose-50/10">{fmt(remaining)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                            <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="py-4 px-6">
+                                                    <div className="font-mono font-bold text-slate-900">{p.id}</div>
+                                                    <div className="text-[10.5px] text-slate-400 font-medium">{formatDateIndo(p.date)}</div>
+                                                </td>
+                                                <td className="py-4 px-6">
+                                                    <div className="font-bold text-slate-800">{p.vendor}</div>
+                                                </td>
+                                                <td className="py-4 px-6 font-semibold text-slate-600 max-w-[220px] truncate" title={p.project}>
+                                                    {p.project}
+                                                </td>
+                                                <td className="py-4 px-6 text-right font-mono font-bold text-slate-900">
+                                                    {fmt(p.total)}
+                                                </td>
+                                                <td className="py-4 px-6 text-right">
+                                                    <div className="font-mono font-bold text-emerald-700">{fmt(p.paid)}</div>
+                                                    <div className="w-20 bg-slate-100 h-1.5 rounded-full ml-auto mt-1 overflow-hidden">
+                                                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${percentPaid}%` }} />
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-6 text-right font-mono font-bold text-rose-600">
+                                                    {fmt(remaining)}
+                                                </td>
+                                                <td className="py-4 px-6 whitespace-nowrap">
                                                     {milestoneInfo.nearestMilestone ? (
                                                         <div className="space-y-1">
-                                                            <div className="font-bold text-slate-700">{milestoneInfo.nearestMilestone.label}</div>
+                                                            <div className="font-bold text-slate-800">{milestoneInfo.nearestMilestone.label}</div>
                                                             <div className="flex items-center gap-1.5">
-                                                                <span className="text-[10px] text-slate-400 font-semibold">
+                                                                <span className="text-[10.5px] text-slate-500 font-medium">
                                                                     {formatDateIndo(milestoneInfo.nearestMilestone.dueDate)}
                                                                 </span>
                                                                 {milestoneInfo.isOverdue ? (
-                                                                    <span className="bg-rose-50 text-rose-600 text-[9px] font-bold px-1.5 py-0.5 rounded-sm border border-rose-100 shrink-0">
+                                                                    <span className="bg-rose-50 text-rose-700 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full border border-rose-200 shrink-0">
                                                                         Terlewat {milestoneInfo.overdueDays} hari
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="bg-slate-50 text-slate-500 text-[9px] font-bold px-1.5 py-0.5 rounded-sm border border-slate-100 shrink-0">
+                                                                    <span className="bg-slate-100 text-slate-600 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full border border-slate-200 shrink-0">
                                                                         Menunggu
                                                                     </span>
                                                                 )}
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-slate-400 font-semibold italic">Lunas / Tidak ada</span>
+                                                        <span className="text-slate-400 font-medium italic">Lunas</span>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 text-center whitespace-nowrap">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                                        p.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                                                        p.status === 'partial' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                        'bg-amber-50 text-amber-700 border-amber-100'
+                                                <td className="py-4 px-6 text-center whitespace-nowrap">
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border leading-none ${
+                                                        p.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                        p.status === 'partial' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        'bg-amber-50 text-amber-800 border-amber-200'
                                                     }`}>
                                                         <span className={`w-1.5 h-1.5 rounded-full ${
                                                             p.status === 'paid' ? 'bg-emerald-500' :
@@ -610,23 +924,8 @@ export default function DebtReceivable() {
                                                         {p.status === 'paid' ? 'Lunas' : p.status === 'partial' ? 'Sebagian' : 'Belum Bayar'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <button
-                                                            onClick={() => setTermsModal({ isOpen: true, item: p })}
-                                                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all"
-                                                        >
-                                                            Milestone
-                                                        </button>
-                                                        {remaining > 0 && (
-                                                            <button
-                                                                onClick={() => handleOpenPayment('payable', p)}
-                                                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-all"
-                                                            >
-                                                                Catat Bayar
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                <td className="py-4 px-6 text-center whitespace-nowrap">
+                                                    <ActionDropdown items={getPayableActionItems(p)} />
                                                 </td>
                                             </tr>
                                         );
@@ -634,8 +933,8 @@ export default function DebtReceivable() {
 
                                     {filteredPayables.length === 0 && (
                                         <tr>
-                                            <td colSpan={9} className="py-12 text-center text-slate-400 font-semibold">
-                                                Tidak ditemukan hutang vendor yang cocok.
+                                            <td colSpan={9} className="py-12 text-center">
+                                                <EmptyState title="Belum Ada Data Hutang" message="Tidak ditemukan kewajiban hutang vendor yang sesuai dengan pencarian / filter Anda." />
                                             </td>
                                         </tr>
                                     )}
@@ -643,6 +942,31 @@ export default function DebtReceivable() {
                             </table>
                         )}
                     </div>
+
+                    {/* Pagination */}
+                    {activeTab === 'receivable' && filteredReceivables.length > 0 && (
+                        <div className="p-4 border-t border-slate-100">
+                            <Pagination
+                                currentPage={receivablesPage}
+                                totalPages={Math.ceil(filteredReceivables.length / ITEMS_PER_PAGE)}
+                                totalItems={filteredReceivables.length}
+                                itemsPerPage={ITEMS_PER_PAGE}
+                                onPageChange={setReceivablesPage}
+                            />
+                        </div>
+                    )}
+
+                    {activeTab === 'payable' && filteredPayables.length > 0 && (
+                        <div className="p-4 border-t border-slate-100">
+                            <Pagination
+                                currentPage={payablesPage}
+                                totalPages={Math.ceil(filteredPayables.length / ITEMS_PER_PAGE)}
+                                totalItems={filteredPayables.length}
+                                itemsPerPage={ITEMS_PER_PAGE}
+                                onPageChange={setPayablesPage}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -650,61 +974,107 @@ export default function DebtReceivable() {
             {paymentModal && paymentModal.isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs" onClick={() => setPaymentModal(null)} />
-                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative z-10 animate-fade-in border border-slate-100">
+                    <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden relative z-10 animate-fade-in border border-slate-100">
                         <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
                             <div>
-                                <h3 className="font-bold text-sm">Catat Pembayaran Baru</h3>
-                                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                                    {paymentModal.type === 'receivable' ? 'Penerimaan Piutang Client' : 'Pembayaran Hutang Vendor'}
+                                <h3 className="font-bold text-sm">Catat Transaksi Pembayaran</h3>
+                                <p className="text-xs text-slate-400 font-medium mt-0.5">
+                                    {paymentModal.type === 'receivable' ? 'Penerimaan Kas Piutang Client' : 'Pengeluaran Kas Hutang Vendor'}
                                 </p>
                             </div>
-                            <button onClick={() => setPaymentModal(null)} className="text-slate-400 hover:text-white text-xs font-bold transition-all">Tutup</button>
+                            <button onClick={() => setPaymentModal(null)} className="text-slate-400 hover:text-white text-xs font-bold transition-all cursor-pointer">✕</button>
                         </div>
 
                         <form onSubmit={handleConfirmPayment} className="p-6 space-y-4">
-                            <div className="space-y-1.5">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Identitas Transaksi</span>
-                                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs font-semibold text-slate-700 space-y-1">
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-400">Nomor Dokumen:</span>
-                                        <span className="font-mono font-bold text-slate-900">{paymentModal.item.id}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-400">Partner terkait:</span>
-                                        <span className="font-bold text-slate-800">{paymentModal.type === 'receivable' ? paymentModal.item.client : paymentModal.item.vendor}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-400">Nama Proyek:</span>
-                                        <span className="font-bold text-slate-800 truncate max-w-[200px]">{paymentModal.item.project}</span>
-                                    </div>
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 text-xs text-slate-700 space-y-1.5">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500 font-medium">Nomor Dokumen:</span>
+                                    <span className="font-mono font-bold text-slate-900">{paymentModal.item.id}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500 font-medium">Mitra Partner:</span>
+                                    <span className="font-bold text-slate-900">{paymentModal.type === 'receivable' ? paymentModal.item.client : paymentModal.item.vendor}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500 font-medium">Nama Proyek:</span>
+                                    <span className="font-bold text-slate-900 truncate max-w-[260px]">{paymentModal.item.project}</span>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2">
-                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100/80 text-center">
-                                    <span className="text-[9px] font-bold text-slate-400 block">TOTAL TAGIHAN</span>
-                                    <span className="font-mono font-bold text-slate-800 text-[11px]">{fmt(paymentModal.item.total)}</span>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
+                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">TOTAL TAGIHAN</span>
+                                    <span className="font-mono font-bold text-slate-900 text-xs">{fmt(paymentModal.item.total)}</span>
                                 </div>
-                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100/80 text-center">
-                                    <span className="text-[9px] font-bold text-slate-400 block">TERBAYAR</span>
-                                    <span className="font-mono font-bold text-emerald-600 text-[11px]">{fmt(paymentModal.item.paid)}</span>
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
+                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">TERBAYAR</span>
+                                    <span className="font-mono font-bold text-emerald-700 text-xs">{fmt(paymentModal.item.paid)}</span>
                                 </div>
-                                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100/80 text-center">
-                                    <span className="text-[9px] font-bold text-slate-400 block">SISA SALDO</span>
-                                    <span className="font-mono font-bold text-rose-500 text-[11px]">{fmt(paymentModal.item.total - paymentModal.item.paid)}</span>
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-center">
+                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">SISA SALDO</span>
+                                    <span className="font-mono font-bold text-rose-600 text-xs">{fmt(paymentModal.item.total - paymentModal.item.paid)}</span>
                                 </div>
                             </div>
 
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">Jumlah Pembayaran yang Diterima/Dibayarkan (IDR)</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-700 tracking-tight block">Jumlah Pembayaran (IDR)</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        min="1"
+                                        max={paymentModal.item.total - paymentModal.item.paid}
+                                        value={payAmountInput}
+                                        onChange={(e) => setPayAmountInput(e.target.value)}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-primary transition-all"
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-700 tracking-tight block">Metode Pembayaran</label>
+                                    <SelectInput
+                                        value={payMethodInput}
+                                        onChange={(e) => setPayMethodInput(e.target.value)}
+                                        options={[
+                                            { value: 'Transfer BCA', label: 'Transfer BCA' },
+                                            { value: 'Transfer Mandiri', label: 'Transfer Mandiri' },
+                                            { value: 'Kas Tunai', label: 'Kas Tunai' },
+                                            { value: 'Giro / Cek', label: 'Giro / Cek' },
+                                        ]}
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-700 tracking-tight block">Tanggal Transaksi</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={payDateInput}
+                                        onChange={(e) => setPayDateInput(e.target.value)}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-primary transition-all"
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-700 tracking-tight block">No. Referensi / Bukti Transfer</label>
+                                    <input
+                                        type="text"
+                                        value={payRefInput}
+                                        onChange={(e) => setPayRefInput(e.target.value)}
+                                        placeholder="No. Ref Bank..."
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-primary transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-700 tracking-tight block">Catatan / Keterangan Pembayaran</label>
                                 <input
-                                    type="number"
-                                    required
-                                    min="1"
-                                    max={paymentModal.item.total - paymentModal.item.paid}
-                                    value={payAmountInput}
-                                    onChange={(e) => setPayAmountInput(e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
+                                    type="text"
+                                    value={payNotesInput}
+                                    onChange={(e) => setPayNotesInput(e.target.value)}
+                                    placeholder="Keterangan tambahan..."
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-primary transition-all"
                                 />
                             </div>
 
@@ -712,13 +1082,13 @@ export default function DebtReceivable() {
                                 <button
                                     type="button"
                                     onClick={() => setPaymentModal(null)}
-                                    className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-200"
+                                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
                                 >
                                     Batal
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all"
+                                    className="flex-1 bg-primary hover:bg-primary-700 text-white py-2.5 rounded-xl text-xs font-bold shadow-neon-primary transition-all cursor-pointer"
                                 >
                                     Simpan Transaksi
                                 </button>
@@ -732,88 +1102,77 @@ export default function DebtReceivable() {
             {termsModal && termsModal.isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs" onClick={() => setTermsModal(null)} />
-                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative z-10 animate-fade-in border border-slate-100">
+                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden relative z-10 animate-fade-in border border-slate-100">
                         <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
                             <div>
                                 <h3 className="font-bold text-sm">Detail Skema & Syarat Pembayaran</h3>
-                                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{termsModal.item.id}</p>
+                                <p className="text-xs text-slate-400 font-medium mt-0.5">{termsModal.item.id} · {termsModal.item.client || termsModal.item.vendor}</p>
                             </div>
-                            <button onClick={() => setTermsModal(null)} className="text-slate-400 hover:text-white text-xs font-bold transition-all">Tutup</button>
+                            <button onClick={() => setTermsModal(null)} className="text-slate-400 hover:text-white text-xs font-bold transition-all cursor-pointer">✕</button>
                         </div>
 
                         <div className="p-6 space-y-4 text-slate-800">
                             <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Metode / Skema:</span>
-                                <div className="text-xs font-bold text-slate-800 uppercase tracking-wider bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 inline-block">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Skema Pembayaran</span>
+                                <div className="text-xs font-bold text-slate-800 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 inline-block">
                                     {termsModal.item.terms.type === 'full' ? 'Full Payment 100%' :
                                      termsModal.item.terms.type === 'dp' ? 'DP & Pelunasan' :
                                      'Termin Bertahap'}
                                 </div>
                             </div>
 
-                             <div className="space-y-2">
-                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Rincian Milestone Pembayaran:</span>
-                                 
-                                 <div className="space-y-2.5">
-                                     {getMilestones(termsModal.item).map((milestone, idx) => {
-                                         const isMilestonePaid = termsModal.item.paid >= milestone.cumulativeAmount - 1;
-                                         const dueDate = new Date(milestone.dueDate);
-                                         const currentDate = new Date('2026-06-27');
-                                         const timeDiff = currentDate.getTime() - dueDate.getTime();
-                                         const isOverdue = !isMilestonePaid && timeDiff > 0;
-                                         const overdueDays = isOverdue ? Math.ceil(timeDiff / (1000 * 3600 * 24)) : 0;
+                            <div className="space-y-2">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rincian Milestone Pembayaran:</span>
+                                
+                                <div className="space-y-2">
+                                    {getMilestones(termsModal.item).map((milestone, idx) => {
+                                        const isMilestonePaid = termsModal.item.paid >= milestone.cumulativeAmount - 1;
+                                        const milestoneInfo = getNearestMilestoneInfo(termsModal.item);
 
-                                         return (
-                                             <div
-                                                 key={idx}
-                                                 className={`p-3.5 rounded-xl border text-xs font-semibold space-y-1.5 transition-all ${
-                                                     isMilestonePaid ? 'bg-emerald-50/50 border-emerald-100 text-emerald-900' :
-                                                     isOverdue ? 'bg-rose-50/50 border-rose-100 text-rose-900' :
-                                                     'bg-slate-50 border-slate-100 text-slate-800'
-                                                 }`}
-                                             >
-                                                 <div className="flex justify-between items-center">
-                                                     <span className={`${isMilestonePaid ? 'text-emerald-800' : isOverdue ? 'text-rose-800' : 'text-slate-500'}`}>
-                                                         {milestone.label}
-                                                     </span>
-                                                     <span className="font-mono font-bold text-slate-900">{fmt(milestone.amount)}</span>
-                                                 </div>
-                                                 <div className="flex justify-between items-center text-[10px]">
-                                                     <span className={`${isMilestonePaid ? 'text-emerald-600' : isOverdue ? 'text-rose-600' : 'text-slate-400'}`}>
-                                                         Jatuh Tempo: {formatDateIndo(milestone.dueDate)}
-                                                     </span>
-                                                     <span>
-                                                         {isMilestonePaid ? (
-                                                             <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black px-1.5 py-0.5 rounded-sm">
-                                                                 Lunas
-                                                             </span>
-                                                         ) : isOverdue ? (
-                                                             <span className="bg-rose-100 text-rose-700 text-[9px] font-black px-1.5 py-0.5 rounded-sm">
-                                                                 Terlewat {overdueDays} hari
-                                                             </span>
-                                                         ) : (
-                                                             <span className="bg-slate-100 text-slate-500 text-[9px] font-black px-1.5 py-0.5 rounded-sm">
-                                                                 Menunggu
-                                                             </span>
-                                                         )}
-                                                     </span>
-                                                 </div>
-                                             </div>
-                                         );
-                                     })}
-                                 </div>
-                                 
-                                 {termsModal.item.terms.notes && (
-                                     <div className="text-[10px] text-slate-400 italic mt-2">
-                                         Keterangan tambahan: {termsModal.item.terms.notes}
-                                     </div>
-                                 )}
-                             </div>
+                                        return (
+                                            <div
+                                                key={idx}
+                                                className={`p-3.5 rounded-xl border text-xs font-semibold space-y-1.5 transition-all ${
+                                                    isMilestonePaid ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950' :
+                                                    'bg-slate-50 border-slate-200/80 text-slate-800'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-center">
+                                                    <span className="font-bold">{milestone.label}</span>
+                                                    <span className="font-mono font-bold text-slate-900">{fmt(milestone.amount)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-[11px]">
+                                                    <span className="text-slate-500">
+                                                        Jatuh Tempo: {formatDateIndo(milestone.dueDate)}
+                                                    </span>
+                                                    <span>
+                                                        {isMilestonePaid ? (
+                                                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                                                ✓ Lunas
+                                                            </span>
+                                                        ) : (
+                                                            <span className="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-300">
+                                                                Menunggu
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                
+                                {termsModal.item.terms.notes && (
+                                    <div className="text-xs text-slate-500 italic mt-2 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                                        Catatan: {termsModal.item.terms.notes}
+                                    </div>
+                                )}
+                            </div>
 
                             <div className="pt-4 border-t border-slate-100 flex justify-end">
                                 <button
                                     onClick={() => setTermsModal(null)}
-                                    className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs"
+                                    className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
                                 >
                                     Tutup Detail
                                 </button>

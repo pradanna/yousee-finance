@@ -80,6 +80,7 @@ Route::get('/cashflow', function () {
 
 Route::match(['get', 'post'], '/po-pdf', [\App\Http\Controllers\PurchaseOrderPdfController::class, 'generatePdf'])->name('po.pdf');
 Route::match(['get', 'post'], '/client-invoice-pdf', [\App\Http\Controllers\ClientInvoicePdfController::class, 'generatePdf'])->name('client-invoice.pdf');
+Route::match(['get', 'post'], '/kwitansi-pdf', [\App\Http\Controllers\KwitansiPdfController::class, 'generatePdf'])->name('kwitansi.pdf');
 Route::get('/projects/{projectId}/payment', function ($projectId) {
     return Inertia::render('Projects/ProjectPayment', ['projectId' => (int) $projectId]);
 })->name('project.payment');
