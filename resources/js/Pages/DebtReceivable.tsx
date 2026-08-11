@@ -1031,15 +1031,15 @@ export default function DebtReceivable() {
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-700 tracking-tight block">Metode Pembayaran</label>
+                                    <label className="text-xs font-bold text-slate-700 tracking-tight block">Akun Kas / Bank Destinasi (COA)</label>
                                     <SelectInput
                                         value={payMethodInput}
                                         onChange={(e) => setPayMethodInput(e.target.value)}
                                         options={[
-                                            { value: 'Transfer BCA', label: 'Transfer BCA' },
-                                            { value: 'Transfer Mandiri', label: 'Transfer Mandiri' },
-                                            { value: 'Kas Tunai', label: 'Kas Tunai' },
-                                            { value: 'Giro / Cek', label: 'Giro / Cek' },
+                                            { value: '1111 - Bank Mandiri Solo Baru (138-00-2010633-7)', label: '1111 - Bank Mandiri Solo Baru' },
+                                            { value: '1112 - Bank BCA Operasional Utama', label: '1112 - Bank BCA Operasional' },
+                                            { value: '1110 - Kas Tunai / Operasional', label: '1110 - Kas Tunai Operasional' },
+                                            { value: '1113 - Bank BRI Giro Usaha', label: '1113 - Bank BRI Giro Usaha' },
                                         ]}
                                     />
                                 </div>
