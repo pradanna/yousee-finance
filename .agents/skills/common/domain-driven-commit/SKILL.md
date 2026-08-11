@@ -27,7 +27,7 @@ To maintain a clean and traceable project history that aligns with our Lite DDD 
   - `chore`: Build process, dependencies, or configuration changes (like `.agents/` updates)
   - `test`: Adding missing tests or correcting existing tests
 - **Domain Scope**: The scope MUST be the specific Domain name or a high-level context.
-  - Backend Scopes: `identity`, `master`, `procurement`, `billing`, `accounting`, `shared`, `core`
+  - Backend Scopes: `identity`, `vendor`, `client`, `sales`, `project`, `procurement`, `billing`, `accounting`, `shared`, `core`
   - Frontend Scopes: `frontend`, `ui`, `components`
 - **Description & Changelog**: 
   - The title must be in lowercase, imperative mood (e.g., "add kwitansi generator").

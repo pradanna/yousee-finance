@@ -3,7 +3,7 @@
 namespace App\Domains\Accounting\Models;
 
 use App\Domains\Identity\Enums\UserRole;
-use App\Models\User;
+use App\Domains\Identity\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 use App\Domains\Shared\Enums\FiscalMode;
@@ -70,7 +70,7 @@ class ClosingPeriod extends Model
      */
     public function unlock(User $user, string $reason): void
     {
-        if ($user->role !== UserRole::PIMPINAN) {
+        if (!$user->hasRole(\App\Domains\Identity\Enums\UserRole::PIMPINAN->value)) {
             throw new \DomainException("Hanya user dengan role Pimpinan yang boleh membuka kembali (unlock) periode akuntansi.");
         }
 

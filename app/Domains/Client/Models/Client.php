@@ -1,18 +1,22 @@
 <?php
 
-namespace App\Domains\Master\Models;
+namespace App\Domains\Client\Models;
 
 use App\Domains\Billing\Models\Invoice;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Client extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'name',
+        'email',
+        'phone',
+        'address',
         'npwp',
         'is_archived',
     ];
@@ -20,6 +24,11 @@ class Client extends Model
     protected $casts = [
         'is_archived' => 'boolean',
     ];
+
+    protected static function newFactory()
+    {
+        return \Database\Factories\ClientFactory::new();
+    }
 
     public static function boot(): void
     {

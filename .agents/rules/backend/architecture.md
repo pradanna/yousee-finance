@@ -24,10 +24,28 @@ This project uses a "Lite DDD" (Action-Based) architecture to maintain a clean, 
 - **Constraints**: DO NOT use the Repository Pattern. Utilize Query Scopes within the Model to encapsulate long or complex queries.
 - **Financial Rules (CRITICAL)**: To store monetary values/balances, ALWAYS use `decimal` or `integer` data types (storing in cents/smallest unit) in the database. Never use `float` or `double` to avoid precision calculation issues.
 
+<CRITICAL_RULES>
+- **Model Placement**: ALL Models MUST be placed inside their respective domain folders: `app/Domains/<DomainName>/Models/<ModelName>.php`. DO NOT use the default `app/Models/` directory.
+- **Factory Placement**: Factories MUST remain in the default `database/factories/` directory (e.g., `database/factories/VendorFactory.php`).
+- **Factory Resolution**: Because Models are moved out of the default directory, Laravel's auto-discovery for factories will fail. Therefore, EVERY Model MUST explicitly define the `newFactory()` method to return its corresponding factory instance.
+  Example:
+  ```php
+  protected static function newFactory()
+  {
+      return \Database\Factories\VendorFactory::new();
+  }
+  ```
+  Additionally, the Factory class MUST define the `$model` property pointing to the correct Domain Model path:
+  ```php
+  protected $model = \App\Domains\Vendor\Models\Vendor::class;
+  ```
+</CRITICAL_RULES>
+
 ## 4. Validation, DTOs, & Enums
 - **Core Rule**: Never trust client-side input.
 - **Responsibility**: 
   - Use `Form Requests` (`app/Http/Requests`) to validate input *before* it reaches the Controller/Action.
+  - **CRITICAL CONSTRAINT**: Form Requests MUST ONLY contain validation (`rules()`) and authorization (`authorize()`). STRICTLY NO business logic (e.g., `Auth::attempt()`, creating models, hitting RateLimiters directly for business flows) is allowed inside Form Requests. All execution logic must be deferred to the Action class.
   - Use PHP *Enums* for data types with fixed states (e.g., `TransactionType::INCOME`, `TransactionType::EXPENSE`).
   - (Optional but recommended) Use *Data Transfer Objects* (DTOs) to encapsulate data arrays sent to Actions to ensure type safety.
 
@@ -41,3 +59,12 @@ This project uses a "Lite DDD" (Action-Based) architecture to maintain a clean, 
   - To paginate, simply return `ResourceName::collection($model->paginate(10))`. 
   - Do NOT manually build pagination metadata. Laravel's Resource Collection automatically encapsulates the result into `data` and `meta` (which contains pagination links) objects, which Inertia consumes natively.
 - **Formatting**: Use Resources to format data for the UI (e.g., formatting monetary integers into currency strings) and to prevent data leaks (explicitly pick safe fields).
+
+## 6. Complex Queries & Calculations
+- **Core Rule**: Do NOT place complex queries, cross-domain logic, or heavy mathematical calculations inside Controllers or Models.
+- **Responsibility**: 
+  - For standard complex queries (e.g., filtering, aggregations on a single domain), use **Eloquent Query Scopes** inside the Model.
+  - For extremely complex operations (e.g., cross-domain calculations, financial ledger generation, projections), create a dedicated Read/Query **Action Class** (or Domain Service) in the `Actions` folder (e.g., `GenerateMonthlyCashflow`).
+- **Constraints**: 
+  - Models must not contain logic that touches other domains (e.g., `Invoice` model should not query `ClosingPeriod` directly).
+  - Actions must remain strictly Single Responsibility. If an Action needs another calculation, use Dependency Injection to call another Action.
