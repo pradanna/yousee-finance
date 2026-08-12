@@ -1,5 +1,3 @@
-import React from 'react';
-
 export interface DebtItem {
     id: string;
     actualId: string;
@@ -31,68 +29,101 @@ export default function UpcomingDebtsWidget({
     const unpaidCount = debts.filter((d) => d.status === 'unpaid').length;
 
     return (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col justify-between">
+        <div className="shadow-xs flex flex-col justify-between overflow-hidden rounded-3xl border border-slate-200/80 bg-white">
             <div>
-                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50/20">
+                <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/20 px-6 py-5">
                     <div>
                         <div className="flex items-center gap-2">
-                            <h2 className="text-sm font-bold text-slate-800 tracking-tight">Hutang Jatuh Tempo ≤ 7 Hari</h2>
-                            <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-black px-2 py-0.5 rounded-full">
+                            <h2 className="text-sm font-bold tracking-tight text-slate-800">
+                                Hutang Jatuh Tempo ≤ 7 Hari
+                            </h2>
+                            <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">
                                 {unpaidCount} Antrean
                             </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5">Kewajiban Pembayaran Vendor (Outflow)</p>
+                        <p className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
+                            Kewajiban Pembayaran Vendor (Outflow)
+                        </p>
                     </div>
                 </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
                         <thead>
-                            <tr className="border-b border-slate-100 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-left bg-slate-50/10">
+                            <tr className="border-b border-slate-100 bg-slate-50/10 text-left text-[9px] font-bold uppercase tracking-wider text-slate-400">
                                 <th className="px-4 py-3">No. PO / Vendor</th>
                                 <th className="px-4 py-3">Deskripsi Proyek</th>
                                 <th className="px-4 py-3">Jatuh Tempo</th>
-                                <th className="px-4 py-3 text-right">Nominal</th>
+                                <th className="px-4 py-3 text-right">
+                                    Nominal
+                                </th>
                                 <th className="px-4 py-3 text-center">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
+                        <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                             {debts.map((debt) => {
                                 const isPaid = debt.status === 'paid';
-                                const currentSimulatedDate = new Date(`${selectedYear}-${selectedMonth}-27`);
+                                const currentSimulatedDate = new Date(
+                                    `${selectedYear}-${selectedMonth}-27`,
+                                );
                                 const dueDate = new Date(debt.dueDate);
-                                const diffTime = dueDate.getTime() - currentSimulatedDate.getTime();
-                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                const diffTime =
+                                    dueDate.getTime() -
+                                    currentSimulatedDate.getTime();
+                                const diffDays = Math.ceil(
+                                    diffTime / (1000 * 60 * 60 * 24),
+                                );
 
                                 return (
-                                    <tr key={debt.id} className="hover:bg-slate-50/30 transition-colors">
+                                    <tr
+                                        key={debt.id}
+                                        className="transition-colors hover:bg-slate-50/30"
+                                    >
                                         <td className="px-4 py-3.5">
-                                            <div className="font-mono font-bold text-slate-900 text-[11px]">{debt.actualId}</div>
-                                            <div className="font-bold text-slate-800 text-[10px] mt-0.5">{debt.vendor}</div>
+                                            <div className="font-mono text-[11px] font-bold text-slate-900">
+                                                {debt.actualId}
+                                            </div>
+                                            <div className="mt-0.5 text-[10px] font-bold text-slate-800">
+                                                {debt.vendor}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3.5">
-                                            <div className="font-semibold text-slate-500 max-w-[130px] truncate">{debt.project}</div>
-                                            <div className="text-[9px] text-slate-400 font-normal italic mt-0.5">{debt.notes}</div>
+                                            <div className="max-w-[130px] truncate font-semibold text-slate-500">
+                                                {debt.project}
+                                            </div>
+                                            <div className="mt-0.5 text-[9px] font-normal italic text-slate-400">
+                                                {debt.notes}
+                                            </div>
                                         </td>
-                                        <td className="px-4 py-3.5 whitespace-nowrap">
-                                            <div className="font-semibold text-slate-700 text-[11px]">{formatDateIndo(debt.dueDate)}</div>
+                                        <td className="whitespace-nowrap px-4 py-3.5">
+                                            <div className="text-[11px] font-semibold text-slate-700">
+                                                {formatDateIndo(debt.dueDate)}
+                                            </div>
                                             {!isPaid && (
-                                                <div className="text-[9px] text-amber-600 font-bold mt-0.5 flex items-center gap-1">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                                                <div className="mt-0.5 flex items-center gap-1 text-[9px] font-bold text-amber-600">
+                                                    <span className="h-1.5 w-1.5 animate-ping rounded-full bg-amber-500"></span>
                                                     {diffDays} Hari Lagi
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                                        <td className="whitespace-nowrap px-4 py-3.5 text-right font-mono font-bold text-slate-900">
                                             {formatRupiah(debt.actualAmount)}
                                         </td>
-                                        <td className="px-4 py-3.5 whitespace-nowrap text-center">
+                                        <td className="whitespace-nowrap px-4 py-3.5 text-center">
                                             {isPaid ? (
-                                                <span className="text-[10px] font-bold text-slate-400">Terbayar</span>
+                                                <span className="text-[10px] font-bold text-slate-400">
+                                                    Terbayar
+                                                </span>
                                             ) : (
                                                 <button
-                                                    onClick={() => onPayDebt(debt.id, debt.actualAmount, debt.vendor)}
-                                                    className="px-2 py-1 rounded-lg text-[9px] font-bold bg-primary hover:bg-primary-700 text-white shadow-2xs transition-all cursor-pointer"
+                                                    onClick={() =>
+                                                        onPayDebt(
+                                                            debt.id,
+                                                            debt.actualAmount,
+                                                            debt.vendor,
+                                                        )
+                                                    }
+                                                    className="shadow-2xs cursor-pointer rounded-lg bg-primary px-2 py-1 text-[9px] font-bold text-white transition-all hover:bg-primary-700"
                                                 >
                                                     Catat Bayar
                                                 </button>

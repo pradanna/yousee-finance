@@ -16,6 +16,7 @@
 ## Business Domain & Ubiquitous Language
 > **CONDITIONAL TRIGGER - DOMAIN**: Jika ada tugas yang berkaitan dengan logika bisnis, penamaan entitas, atau struktur data, SEBELUM menulis kode apa pun, KAMU WAJIB MUTLAK menggunakan tool `view_file` untuk membaca file berikut:
 > - [Domain Dictionary](rules/domain-dictionary.md)
+> - [Accounting Journal Workflow](rules/accounting-journal-flow.md)
 
 ## Backend (Laravel) Rules
 > **CONDITIONAL TRIGGER - BACKEND**: JIKA user meminta pembuatan atau modifikasi fitur Backend (Model, Controller, Action, Migration, dll), **STOP!** Sebelum kamu menulis kode atau merancang plan apa pun, kamu **WAJIB MUTLAK menggunakan tool `view_file`** pada file-file berikut. Dilarang keras menggunakan asumsi arsitektur default Laravel:

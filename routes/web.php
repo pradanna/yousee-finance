@@ -30,6 +30,18 @@ Route::middleware('auth')->group(function () {
     Route::resource('sales', \App\Http\Controllers\Sales\SalesController::class)->only(['index', 'store', 'update', 'destroy']);
 });
 
+// Accounting Domain — Master COA & Settings (Mock View Mode - Unauthenticated / Public access for testing)
+// TODO: Pindahkan kembali ke dalam Route::middleware('auth') jika sudah terkoneksi ke backend & DB
+Route::prefix('accounting')->name('accounting.')->group(function () {
+    Route::get('coa', function () {
+        return Inertia::render('Accounting/MasterCoa/Index');
+    })->name('coa.index');
+
+    Route::get('settings', function () {
+        return Inertia::render('Accounting/Settings/Index');
+    })->name('settings.index');
+});
+
 Route::get('/overview', function () {
     return Inertia::render('Overview'); 
 })->name('overview');
@@ -85,8 +97,13 @@ Route::get('/cashflow', function () {
 Route::match(['get', 'post'], '/po-pdf', [\App\Http\Controllers\PurchaseOrderPdfController::class, 'generatePdf'])->name('po.pdf');
 Route::match(['get', 'post'], '/client-invoice-pdf', [\App\Http\Controllers\ClientInvoicePdfController::class, 'generatePdf'])->name('client-invoice.pdf');
 Route::match(['get', 'post'], '/kwitansi-pdf', [\App\Http\Controllers\KwitansiPdfController::class, 'generatePdf'])->name('kwitansi.pdf');
+Route::match(['get', 'post'], '/ppn-pdf', [\App\Http\Controllers\PpnReportPdfController::class, 'generatePdf'])->name('ppn.pdf');
 Route::get('/projects/{projectId}/payment', function ($projectId) {
     return Inertia::render('Projects/ProjectPayment', ['projectId' => (int) $projectId]);
 })->name('project.payment');
+
+Route::get('/projects/{projectId}', function ($projectId) {
+    return Inertia::render('Projects/Show', ['projectId' => (int) $projectId]);
+})->name('projects.show');
 
 require __DIR__.'/auth.php';

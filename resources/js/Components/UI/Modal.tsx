@@ -14,7 +14,17 @@ export default function Modal({
     onClose = () => {},
 }: PropsWithChildren<{
     show: boolean;
-    maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl';
+    maxWidth?:
+        | 'sm'
+        | 'md'
+        | 'lg'
+        | 'xl'
+        | '2xl'
+        | '3xl'
+        | '4xl'
+        | '5xl'
+        | '6xl'
+        | '7xl';
     closeable?: boolean;
     onClose: CallableFunction;
 }>) {
@@ -53,7 +63,7 @@ export default function Modal({
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" />
+                    <div className="backdrop-blur-xs absolute inset-0 bg-slate-900/60" />
                 </TransitionChild>
 
                 <TransitionChild

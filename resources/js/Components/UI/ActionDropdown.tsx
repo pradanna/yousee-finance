@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 export interface ActionMenuItem {
@@ -24,7 +24,10 @@ export default function ActionDropdown({
     const [isOpen, setIsOpen] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
-    const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+    const [coords, setCoords] = useState<{ top: number; left: number }>({
+        top: 0,
+        left: 0,
+    });
 
     const updateCoords = () => {
         if (!buttonRef.current) return;
@@ -33,12 +36,13 @@ export default function ActionDropdown({
         const estimatedHeight = items.length * 40 + 16;
 
         const spaceBelow = window.innerHeight - rect.bottom;
-        const renderUpward = spaceBelow < estimatedHeight && rect.top > estimatedHeight;
+        const renderUpward =
+            spaceBelow < estimatedHeight && rect.top > estimatedHeight;
 
         let left = align === 'right' ? rect.right - menuWidth : rect.left;
         left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
 
-        let top = renderUpward
+        const top = renderUpward
             ? rect.top - estimatedHeight - 4
             : rect.bottom + 4;
 
@@ -54,8 +58,10 @@ export default function ActionDropdown({
             const handleScrollOrResize = () => updateCoords();
             const handleClickOutside = (event: MouseEvent) => {
                 if (
-                    buttonRef.current && !buttonRef.current.contains(event.target as Node) &&
-                    menuRef.current && !menuRef.current.contains(event.target as Node)
+                    buttonRef.current &&
+                    !buttonRef.current.contains(event.target as Node) &&
+                    menuRef.current &&
+                    !menuRef.current.contains(event.target as Node)
                 ) {
                     setIsOpen(false);
                 }
@@ -66,7 +72,11 @@ export default function ActionDropdown({
             document.addEventListener('mousedown', handleClickOutside);
 
             return () => {
-                window.removeEventListener('scroll', handleScrollOrResize, true);
+                window.removeEventListener(
+                    'scroll',
+                    handleScrollOrResize,
+                    true,
+                );
                 window.removeEventListener('resize', handleScrollOrResize);
                 document.removeEventListener('mousedown', handleClickOutside);
             };
@@ -83,10 +93,14 @@ export default function ActionDropdown({
                     if (!isOpen) updateCoords();
                     setIsOpen(!isOpen);
                 }}
-                className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-all cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="shadow-2xs focus:ring-primary/20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2"
                 title="Aksi Tambahan"
             >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                    className="h-4 w-4"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                >
                     <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                 </svg>
             </button>
@@ -101,7 +115,7 @@ export default function ActionDropdown({
                             top: `${coords.top}px`,
                             left: `${coords.left}px`,
                         }}
-                        className="w-48 bg-white rounded-2xl border border-slate-100 shadow-2xl p-1.5 z-[9999] animate-in fade-in zoom-in-95 duration-150"
+                        className="animate-in fade-in zoom-in-95 z-[9999] w-48 rounded-2xl border border-slate-100 bg-white p-1.5 shadow-2xl duration-150"
                     >
                         {items.map((item, idx) => {
                             const isDanger = item.variant === 'danger';
@@ -113,19 +127,23 @@ export default function ActionDropdown({
                                         item.onClick();
                                         setIsOpen(false);
                                     }}
-                                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold rounded-xl transition-all text-left cursor-pointer ${
+                                    className={`flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-bold transition-all ${
                                         isDanger
                                             ? 'text-rose-600 hover:bg-rose-50'
                                             : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                                     }`}
                                 >
-                                    {item.icon && <span className="shrink-0">{item.icon}</span>}
+                                    {item.icon && (
+                                        <span className="shrink-0">
+                                            {item.icon}
+                                        </span>
+                                    )}
                                     <span>{item.label}</span>
                                 </button>
                             );
                         })}
                     </div>,
-                    document.body
+                    document.body,
                 )}
         </div>
     );

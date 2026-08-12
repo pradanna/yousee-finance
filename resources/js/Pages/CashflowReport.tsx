@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
-import ActionDropdown, { ActionMenuItem } from '@/Components/UI/ActionDropdown';
 import SelectInput from '@/Components/Form/SelectInput';
-import Pagination from '@/Components/Table/Pagination';
 import EmptyState from '@/Components/Table/EmptyState';
+import Pagination from '@/Components/Table/Pagination';
+import ActionDropdown, { ActionMenuItem } from '@/Components/UI/ActionDropdown';
+import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
+import React, { useMemo, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Interfaces
@@ -37,15 +37,25 @@ interface BankAccountBalance {
     currentBalance: number;
 }
 
-const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`;
+const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
 
 const formatDateIndo = (dateStr: string) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
     const months = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        'Januari',
+        'Februari',
+        'Maret',
+        'April',
+        'Mei',
+        'Juni',
+        'Juli',
+        'Agustus',
+        'September',
+        'Oktober',
+        'November',
+        'Desember',
     ];
     return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 };
@@ -59,7 +69,9 @@ export default function CashflowReport() {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
-    const [activeTab, setActiveTab] = useState<'registry' | 'psak' | 'banks'>('registry');
+    const [activeTab, setActiveTab] = useState<'registry' | 'psak' | 'banks'>(
+        'registry',
+    );
 
     // Beginning Balances
     const initialBeginningBalance = 150000000; // Rp 150.000.000 awal periode
@@ -74,7 +86,8 @@ export default function CashflowReport() {
             beginningBalance: 85000000,
             inflowTotal: isPPN ? 11100000 : 10000000,
             outflowTotal: isPPN ? 3330000 : 3000000,
-            currentBalance: 85000000 + (isPPN ? 11100000 - 3330000 : 10000000 - 3000000)
+            currentBalance:
+                85000000 + (isPPN ? 11100000 - 3330000 : 10000000 - 3000000),
         },
         {
             code: '1112',
@@ -84,7 +97,8 @@ export default function CashflowReport() {
             beginningBalance: 50000000,
             inflowTotal: isPPN ? 16650000 : 15000000,
             outflowTotal: isPPN ? 1200000 : 1200000,
-            currentBalance: 50000000 + (isPPN ? 16650000 - 1200000 : 15000000 - 1200000)
+            currentBalance:
+                50000000 + (isPPN ? 16650000 - 1200000 : 15000000 - 1200000),
         },
         {
             code: '1110',
@@ -94,8 +108,8 @@ export default function CashflowReport() {
             beginningBalance: 15000000,
             inflowTotal: 0,
             outflowTotal: 1500000,
-            currentBalance: 13500000
-        }
+            currentBalance: 13500000,
+        },
     ]);
 
     // Initial Raw Cashflow Mutasi Dataset
@@ -111,7 +125,7 @@ export default function CashflowReport() {
             partnerName: 'PT. Gojek Tokopedia',
             type: 'inflow',
             category: 'operating',
-            amount: isPPN ? 11100000 : 10000000
+            amount: isPPN ? 11100000 : 10000000,
         },
         {
             id: 'CF-2026-002',
@@ -124,7 +138,7 @@ export default function CashflowReport() {
             partnerName: 'PT. Megah Billboard Jaya',
             type: 'outflow',
             category: 'operating',
-            amount: isPPN ? 3330000 : 3000000
+            amount: isPPN ? 3330000 : 3000000,
         },
         {
             id: 'CF-2026-003',
@@ -137,7 +151,7 @@ export default function CashflowReport() {
             partnerName: 'Traveloka Corp',
             type: 'inflow',
             category: 'operating',
-            amount: isPPN ? 5550000 : 5000000
+            amount: isPPN ? 5550000 : 5000000,
         },
         {
             id: 'CF-2026-004',
@@ -146,11 +160,12 @@ export default function CashflowReport() {
             docNo: 'ADJ-2026-001',
             accountCode: '1110',
             accountName: 'Kas Tunai Operasional',
-            description: 'Pembayaran Beban Operasional Listrik Videotron Simpang Lima Juni',
+            description:
+                'Pembayaran Beban Operasional Listrik Videotron Simpang Lima Juni',
             partnerName: 'PLN Persero',
             type: 'outflow',
             category: 'operating',
-            amount: 1500000
+            amount: 1500000,
         },
         {
             id: 'CF-2026-005',
@@ -163,7 +178,7 @@ export default function CashflowReport() {
             partnerName: 'Shopee Indonesia',
             type: 'inflow',
             category: 'operating',
-            amount: isPPN ? 11100000 : 10000000
+            amount: isPPN ? 11100000 : 10000000,
         },
         {
             id: 'CF-2026-006',
@@ -172,12 +187,13 @@ export default function CashflowReport() {
             docNo: 'PO-PPN-003',
             accountCode: '1111',
             accountName: 'Bank Mandiri Solo Baru (138-00-2010633-7)',
-            description: 'Pembayaran Belanja Konstruksi Rangka Billboard Baru Ring Road',
+            description:
+                'Pembayaran Belanja Konstruksi Rangka Billboard Baru Ring Road',
             partnerName: 'CV. Media Ad Perkasa',
             type: 'outflow',
             category: 'investing',
-            amount: 12000000
-        }
+            amount: 12000000,
+        },
     ]);
 
     // Filter states
@@ -195,7 +211,8 @@ export default function CashflowReport() {
 
     // Form inputs for manual cashflow
     const [newType, setNewType] = useState<CashflowType>('outflow');
-    const [newCategory, setNewCategory] = useState<ActivityCategory>('operating');
+    const [newCategory, setNewCategory] =
+        useState<ActivityCategory>('operating');
     const [newAccountCode, setNewAccountCode] = useState('1111');
     const [newAmount, setNewAmount] = useState('');
     const [newPartner, setNewPartner] = useState('');
@@ -203,54 +220,95 @@ export default function CashflowReport() {
     const [newRefNo, setNewRefNo] = useState('');
 
     // Compute Running Balance & Filtered Mutasi
-    const { computedCashflows, totalInflow, totalOutflow, endingBalance } = useMemo(() => {
-        // Sort chronologically ascending for running balance calculation
-        const sortedAsc = [...cashflowList].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const { computedCashflows, totalInflow, totalOutflow, endingBalance } =
+        useMemo(() => {
+            // Sort chronologically ascending for running balance calculation
+            const sortedAsc = [...cashflowList].sort(
+                (a, b) =>
+                    new Date(a.date).getTime() - new Date(b.date).getTime(),
+            );
 
-        let cumBalance = initialBeginningBalance;
-        let totIn = 0;
-        let totOut = 0;
+            let cumBalance = initialBeginningBalance;
+            let totIn = 0;
+            let totOut = 0;
 
-        const withRunning = sortedAsc.map(item => {
-            if (item.type === 'inflow') {
-                cumBalance += item.amount;
-                totIn += item.amount;
-            } else {
-                cumBalance -= item.amount;
-                totOut += item.amount;
-            }
-            return { ...item, runningBalance: cumBalance };
-        });
+            const withRunning = sortedAsc.map((item) => {
+                if (item.type === 'inflow') {
+                    cumBalance += item.amount;
+                    totIn += item.amount;
+                } else {
+                    cumBalance -= item.amount;
+                    totOut += item.amount;
+                }
+                return { ...item, runningBalance: cumBalance };
+            });
 
-        // Now sort descending for page display (latest date first)
-        const sortedDesc = [...withRunning].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            // Now sort descending for page display (latest date first)
+            const sortedDesc = [...withRunning].sort(
+                (a, b) =>
+                    new Date(b.date).getTime() - new Date(a.date).getTime(),
+            );
 
-        // Apply UI Filters
-        const filtered = sortedDesc.filter(item => {
-            const matchesSearch = item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                item.refNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                item.docNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                item.partnerName.toLowerCase().includes(searchQuery.toLowerCase());
+            // Apply UI Filters
+            const filtered = sortedDesc.filter((item) => {
+                const matchesSearch =
+                    item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    item.refNo
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                    item.docNo
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                    item.description
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                    item.partnerName
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase());
 
-            const matchesAccount = accountFilter === 'all' || item.accountCode === accountFilter;
-            const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
-            const matchesType = typeFilter === 'all' || item.type === typeFilter;
+                const matchesAccount =
+                    accountFilter === 'all' ||
+                    item.accountCode === accountFilter;
+                const matchesCategory =
+                    categoryFilter === 'all' ||
+                    item.category === categoryFilter;
+                const matchesType =
+                    typeFilter === 'all' || item.type === typeFilter;
 
-            let matchesDate = true;
-            if (startDateFilter) matchesDate = matchesDate && new Date(item.date) >= new Date(startDateFilter);
-            if (endDateFilter) matchesDate = matchesDate && new Date(item.date) <= new Date(endDateFilter);
+                let matchesDate = true;
+                if (startDateFilter)
+                    matchesDate =
+                        matchesDate &&
+                        new Date(item.date) >= new Date(startDateFilter);
+                if (endDateFilter)
+                    matchesDate =
+                        matchesDate &&
+                        new Date(item.date) <= new Date(endDateFilter);
 
-            return matchesSearch && matchesAccount && matchesCategory && matchesType && matchesDate;
-        });
+                return (
+                    matchesSearch &&
+                    matchesAccount &&
+                    matchesCategory &&
+                    matchesType &&
+                    matchesDate
+                );
+            });
 
-        return {
-            computedCashflows: filtered,
-            totalInflow: totIn,
-            totalOutflow: totOut,
-            endingBalance: initialBeginningBalance + totIn - totOut
-        };
-    }, [cashflowList, searchQuery, accountFilter, categoryFilter, typeFilter, startDateFilter, endDateFilter]);
+            return {
+                computedCashflows: filtered,
+                totalInflow: totIn,
+                totalOutflow: totOut,
+                endingBalance: initialBeginningBalance + totIn - totOut,
+            };
+        }, [
+            cashflowList,
+            searchQuery,
+            accountFilter,
+            categoryFilter,
+            typeFilter,
+            startDateFilter,
+            endDateFilter,
+        ]);
 
     // Paginated Dataset
     const paginatedCashflows = useMemo(() => {
@@ -267,7 +325,7 @@ export default function CashflowReport() {
         let financingIn = 0;
         let financingOut = 0;
 
-        cashflowList.forEach(c => {
+        cashflowList.forEach((c) => {
             if (c.category === 'operating') {
                 if (c.type === 'inflow') operatingIn += c.amount;
                 else operatingOut += c.amount;
@@ -286,10 +344,16 @@ export default function CashflowReport() {
         const netCashIncrease = netOperating + netInvesting + netFinancing;
 
         return {
-            operatingIn, operatingOut, netOperating,
-            investingIn, investingOut, netInvesting,
-            financingIn, financingOut, netFinancing,
-            netCashIncrease
+            operatingIn,
+            operatingOut,
+            netOperating,
+            investingIn,
+            investingOut,
+            netInvesting,
+            financingIn,
+            financingOut,
+            netFinancing,
+            netCashIncrease,
         };
     }, [cashflowList]);
 
@@ -297,11 +361,23 @@ export default function CashflowReport() {
     const getActivityBadge = (cat: ActivityCategory) => {
         switch (cat) {
             case 'operating':
-                return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">Operasional</span>;
+                return (
+                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                        Operasional
+                    </span>
+                );
             case 'investing':
-                return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">Investasi Aset</span>;
+                return (
+                    <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">
+                        Investasi Aset
+                    </span>
+                );
             case 'financing':
-                return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Pendanaan Usaha</span>;
+                return (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                        Pendanaan Usaha
+                    </span>
+                );
         }
     };
 
@@ -314,41 +390,48 @@ export default function CashflowReport() {
             return;
         }
 
-        const selectedAcc = bankAccounts.find(b => b.code === newAccountCode);
+        const selectedAcc = bankAccounts.find((b) => b.code === newAccountCode);
 
         const newEntry: CashflowEntry = {
             id: `CF-2026-${Math.floor(100 + Math.random() * 900)}`,
             date: new Date().toISOString().split('T')[0],
-            refNo: newRefNo || `REF-${Math.floor(10000 + Math.random() * 90000)}`,
+            refNo:
+                newRefNo || `REF-${Math.floor(10000 + Math.random() * 90000)}`,
             docNo: `CASH-${Math.floor(1000 + Math.random() * 9000)}`,
             accountCode: newAccountCode,
-            accountName: selectedAcc ? `${selectedAcc.bankName} (${selectedAcc.accountNumber})` : 'Kas Operasional',
+            accountName: selectedAcc
+                ? `${selectedAcc.bankName} (${selectedAcc.accountNumber})`
+                : 'Kas Operasional',
             description: newDesc,
             partnerName: newPartner || 'Umum',
             type: newType,
             category: newCategory,
-            amount: amt
+            amount: amt,
         };
 
-        setCashflowList(prev => [newEntry, ...prev]);
+        setCashflowList((prev) => [newEntry, ...prev]);
 
         // Update Bank Balance Account
-        setBankAccounts(prev => prev.map(acc => {
-            if (acc.code === newAccountCode) {
-                const addIn = newType === 'inflow' ? amt : 0;
-                const addOut = newType === 'outflow' ? amt : 0;
-                return {
-                    ...acc,
-                    inflowTotal: acc.inflowTotal + addIn,
-                    outflowTotal: acc.outflowTotal + addOut,
-                    currentBalance: acc.currentBalance + (addIn - addOut)
-                };
-            }
-            return acc;
-        }));
+        setBankAccounts((prev) =>
+            prev.map((acc) => {
+                if (acc.code === newAccountCode) {
+                    const addIn = newType === 'inflow' ? amt : 0;
+                    const addOut = newType === 'outflow' ? amt : 0;
+                    return {
+                        ...acc,
+                        inflowTotal: acc.inflowTotal + addIn,
+                        outflowTotal: acc.outflowTotal + addOut,
+                        currentBalance: acc.currentBalance + (addIn - addOut),
+                    };
+                }
+                return acc;
+            }),
+        );
 
         setAddCashflowModal(false);
-        setSuccessAlert(`Sukses! Transaksi Mutasi Kas (${newType === 'inflow' ? 'Uang Masuk' : 'Uang Keluar'}) sebesar ${fmt(amt)} berhasil dicatat.`);
+        setSuccessAlert(
+            `Sukses! Transaksi Mutasi Kas (${newType === 'inflow' ? 'Uang Masuk' : 'Uang Keluar'}) sebesar ${fmt(amt)} berhasil dicatat.`,
+        );
         setTimeout(() => setSuccessAlert(null), 5000);
 
         // Reset form
@@ -364,12 +447,25 @@ export default function CashflowReport() {
             {
                 label: 'Cetak Bukti Mutasi Kas PDF',
                 icon: (
-                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <svg
+                        className="h-4 w-4 text-blue-600"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
                     </svg>
                 ),
-                onClick: () => alert(`Mencetak Bukti Mutasi Kas #${cf.id} (${cf.refNo})...`)
-            }
+                onClick: () =>
+                    alert(
+                        `Mencetak Bukti Mutasi Kas #${cf.id} (${cf.refNo})...`,
+                    ),
+            },
         ];
     };
 
@@ -377,41 +473,75 @@ export default function CashflowReport() {
         <AppLayout
             activePage="cashflow"
             title="Laporan Arus Kas (Statement of Cash Flows)"
-            breadcrumbs={[{ label: 'Yousee Indonesia' }, { label: 'Accounting' }, { label: 'Cashflow' }]}
+            breadcrumbs={[
+                { label: 'Yousee Indonesia' },
+                { label: 'Accounting' },
+                { label: 'Cashflow' },
+            ]}
         >
             <div className="w-full space-y-6">
-
                 {/* Header Section */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="shadow-xs flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 md:flex-row md:items-center">
                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <h2 className="text-base font-bold text-slate-900 tracking-tight">Laporan Arus Kas (Statement of Cash Flows & Cash Registry)</h2>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isPPN ? "bg-blue-100 text-blue-800 border border-blue-200" : "bg-slate-100 text-slate-700 border border-slate-200"}`}>
-                                Mode {isPPN ? "PPN 11%" : "Non-PPN"}
+                        <div className="mb-1 flex items-center gap-2">
+                            <h2 className="text-base font-bold tracking-tight text-slate-900">
+                                Laporan Arus Kas (Statement of Cash Flows & Cash
+                                Registry)
+                            </h2>
+                            <span
+                                className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${isPPN ? 'border border-blue-200 bg-blue-100 text-blue-800' : 'border border-slate-200 bg-slate-100 text-slate-700'}`}
+                            >
+                                Mode {isPPN ? 'PPN 11%' : 'Non-PPN'}
                             </span>
                         </div>
-                        <p className="text-xs text-slate-500 font-medium">
-                            Monitoring realisasi penerimaan uang masuk, pengeluaran kas, saldo berjalan (running balance), serta laporan arus kas terstruktur PSAK.
+                        <p className="text-xs font-medium text-slate-500">
+                            Monitoring realisasi penerimaan uang masuk,
+                            pengeluaran kas, saldo berjalan (running balance),
+                            serta laporan arus kas terstruktur PSAK.
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3 w-full md:w-auto">
+                    <div className="flex w-full items-center gap-3 md:w-auto">
                         <button
-                            onClick={() => alert("Mengunduh Rekap Laporan Arus Kas (PDF / Excel)...")}
-                            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                            onClick={() =>
+                                alert(
+                                    'Mengunduh Rekap Laporan Arus Kas (PDF / Excel)...',
+                                )
+                            }
+                            className="shadow-2xs flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50"
                         >
-                            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            <svg
+                                className="h-4 w-4 text-slate-500"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
                             </svg>
                             <span>Export Laporan</span>
                         </button>
 
                         <button
                             onClick={() => setAddCashflowModal(true)}
-                            className="bg-primary hover:bg-primary-700 active:bg-primary-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold tracking-wider uppercase shadow-neon-primary hover:shadow-neon-primary-lg transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer"
+                            className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-neon-primary transition-all duration-300 hover:bg-primary-700 hover:shadow-neon-primary-lg active:bg-primary-800"
                         >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.5}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                />
                             </svg>
                             <span>+ Mutasi Kas Manual</span>
                         </button>
@@ -420,162 +550,308 @@ export default function CashflowReport() {
 
                 {/* Success Alert Banner */}
                 {successAlert && (
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3 transition-all animate-fade-in shadow-2xs">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white shrink-0">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    <div className="animate-fade-in shadow-2xs flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 transition-all">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.5}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M5 13l4 4L19 7"
+                                />
+                            </svg>
                         </div>
-                        <div className="text-xs font-bold text-emerald-900 leading-tight">
+                        <div className="text-xs font-bold leading-tight text-emerald-900">
                             {successAlert}
                         </div>
                     </div>
                 )}
 
                 {/* Executive Summary Metric Cards (4 Grid) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">SALDO AWAL KAS & BANK</span>
-                        <span className="text-2xl font-bold text-slate-900 font-mono block">{fmt(initialBeginningBalance)}</span>
-                        <span className="text-[11px] text-slate-500 font-medium block">Posisi pembuka awal bulan</span>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="shadow-xs space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 transition-all hover:shadow-md">
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            SALDO AWAL KAS & BANK
+                        </span>
+                        <span className="block font-mono text-2xl font-bold text-slate-900">
+                            {fmt(initialBeginningBalance)}
+                        </span>
+                        <span className="block text-[11px] font-medium text-slate-500">
+                            Posisi pembuka awal bulan
+                        </span>
                     </div>
 
-                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2">
+                    <div className="shadow-xs space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 transition-all hover:shadow-md">
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">TOTAL UANG MASUK (INFLOW)</span>
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-100">+ Inflow</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                TOTAL UANG MASUK (INFLOW)
+                            </span>
+                            <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                + Inflow
+                            </span>
                         </div>
-                        <span className="text-2xl font-bold text-emerald-700 font-mono block">{fmt(totalInflow)}</span>
-                        <span className="text-[11px] text-slate-500 font-medium block">Dari pelunasan invoice client</span>
+                        <span className="block font-mono text-2xl font-bold text-emerald-700">
+                            {fmt(totalInflow)}
+                        </span>
+                        <span className="block text-[11px] font-medium text-slate-500">
+                            Dari pelunasan invoice client
+                        </span>
                     </div>
 
-                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2">
+                    <div className="shadow-xs space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 transition-all hover:shadow-md">
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">TOTAL UANG KELUAR (OUTFLOW)</span>
-                            <span className="px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full text-[10px] font-bold border border-rose-100">- Outflow</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                TOTAL UANG KELUAR (OUTFLOW)
+                            </span>
+                            <span className="rounded-full border border-rose-100 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+                                - Outflow
+                            </span>
                         </div>
-                        <span className="text-2xl font-bold text-rose-600 font-mono block">{fmt(totalOutflow)}</span>
-                        <span className="text-[11px] text-slate-500 font-medium block">Dari pembayaran PO vendor & beban</span>
+                        <span className="block font-mono text-2xl font-bold text-rose-600">
+                            {fmt(totalOutflow)}
+                        </span>
+                        <span className="block text-[11px] font-medium text-slate-500">
+                            Dari pembayaran PO vendor & beban
+                        </span>
                     </div>
 
-                    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-2 bg-gradient-to-br from-blue-50/60 to-white">
+                    <div className="shadow-xs space-y-2 rounded-2xl border border-slate-200/80 bg-white bg-gradient-to-br from-blue-50/60 to-white p-5 transition-all hover:shadow-md">
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">SALDO AKHIR KAS & BANK</span>
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[10px] font-bold border border-blue-200">Ending Cash</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                SALDO AKHIR KAS & BANK
+                            </span>
+                            <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">
+                                Ending Cash
+                            </span>
                         </div>
-                        <span className="text-2xl font-bold text-blue-800 font-mono block">{fmt(endingBalance)}</span>
-                        <span className="text-[11px] text-slate-500 font-medium block">Net likuiditas kas perusahaan</span>
+                        <span className="block font-mono text-2xl font-bold text-blue-800">
+                            {fmt(endingBalance)}
+                        </span>
+                        <span className="block text-[11px] font-medium text-slate-500">
+                            Net likuiditas kas perusahaan
+                        </span>
                     </div>
                 </div>
 
                 {/* Main Tab Navigation Toolbar */}
-                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                        <div className="bg-slate-100 p-1 rounded-xl flex gap-1 border border-slate-200/80 w-full sm:w-auto">
+                <div className="shadow-xs space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5">
+                    <div className="flex flex-col items-center justify-between gap-4 border-b border-slate-100 pb-4 sm:flex-row">
+                        <div className="flex w-full gap-1 rounded-xl border border-slate-200/80 bg-slate-100 p-1 sm:w-auto">
                             <button
-                                onClick={() => { setActiveTab('registry'); setCurrentPage(1); }}
-                                className={`flex-1 sm:flex-initial px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                                    activeTab === 'registry' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                                onClick={() => {
+                                    setActiveTab('registry');
+                                    setCurrentPage(1);
+                                }}
+                                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-5 py-2 text-xs font-bold transition-all sm:flex-initial ${
+                                    activeTab === 'registry'
+                                        ? 'shadow-2xs bg-white text-slate-900'
+                                        : 'text-slate-600 hover:text-slate-900'
                                 }`}
                             >
-                                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <svg
+                                    className="h-4 w-4 text-blue-600"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
                                 </svg>
                                 <span>Buku Mutasi Kas & Running Balance</span>
-                                <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800">
                                     {cashflowList.length}
                                 </span>
                             </button>
 
                             <button
                                 onClick={() => setActiveTab('psak')}
-                                className={`flex-1 sm:flex-initial px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                                    activeTab === 'psak' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-5 py-2 text-xs font-bold transition-all sm:flex-initial ${
+                                    activeTab === 'psak'
+                                        ? 'shadow-2xs bg-white text-slate-900'
+                                        : 'text-slate-600 hover:text-slate-900'
                                 }`}
                             >
-                                <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <svg
+                                    className="h-4 w-4 text-purple-600"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                    />
                                 </svg>
                                 <span>Laporan Arus Kas (Format PSAK 2)</span>
                             </button>
 
                             <button
                                 onClick={() => setActiveTab('banks')}
-                                className={`flex-1 sm:flex-initial px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                                    activeTab === 'banks' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-5 py-2 text-xs font-bold transition-all sm:flex-initial ${
+                                    activeTab === 'banks'
+                                        ? 'shadow-2xs bg-white text-slate-900'
+                                        : 'text-slate-600 hover:text-slate-900'
                                 }`}
                             >
-                                <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                <svg
+                                    className="h-4 w-4 text-emerald-600"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                                    />
                                 </svg>
                                 <span>Saldo Per Rekening Bank</span>
-                                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800">
                                     {bankAccounts.length}
                                 </span>
                             </button>
                         </div>
 
-                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            {activeTab === 'registry' ? 'Daftar Mutasi Debet / Kredit Kas Running Balance' :
-                             activeTab === 'psak' ? 'Format Laporan Arus Kas 3 Aktivitas (PSAK 2 / IAS 7)' :
-                             'Rincian Saldo Riil Per Rekening Bank Perusahaan'}
+                        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                            {activeTab === 'registry'
+                                ? 'Daftar Mutasi Debet / Kredit Kas Running Balance'
+                                : activeTab === 'psak'
+                                  ? 'Format Laporan Arus Kas 3 Aktivitas (PSAK 2 / IAS 7)'
+                                  : 'Rincian Saldo Riil Per Rekening Bank Perusahaan'}
                         </div>
                     </div>
 
                     {/* Filter Panel Bar */}
                     {activeTab === 'registry' && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:items-end">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-end lg:grid-cols-5">
                             <div className="space-y-1 lg:col-span-2">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pencarian Mutasi</label>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Pencarian Mutasi
+                                </label>
                                 <div className="relative">
                                     <input
                                         type="text"
                                         value={searchQuery}
-                                        onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                        onChange={(e) => {
+                                            setSearchQuery(e.target.value);
+                                            setCurrentPage(1);
+                                        }}
                                         placeholder="Cari Ref No., Dokumen, Partner, Keterangan..."
-                                        className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-9 pr-4 py-2.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-primary transition-all placeholder-slate-400 shadow-2xs"
+                                        className="shadow-2xs w-full rounded-xl border border-slate-200/80 bg-slate-50 py-2.5 pl-9 pr-4 text-xs font-semibold text-slate-700 placeholder-slate-400 transition-all focus:border-primary focus:outline-none"
                                     />
-                                    <svg className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    <svg
+                                        className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={2.5}
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                        />
                                     </svg>
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Filter Rekening Bank</label>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Filter Rekening Bank
+                                </label>
                                 <SelectInput
                                     value={accountFilter}
-                                    onChange={(e) => { setAccountFilter(e.target.value); setCurrentPage(1); }}
+                                    onChange={(e) => {
+                                        setAccountFilter(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
                                     options={[
-                                        { value: 'all', label: 'Semua Rekening Kas/Bank' },
-                                        { value: '1111', label: '1111 - Bank Mandiri Solo Baru' },
-                                        { value: '1112', label: '1112 - Bank BCA Operasional' },
-                                        { value: '1110', label: '1110 - Kas Tunai Operasional' },
+                                        {
+                                            value: 'all',
+                                            label: 'Semua Rekening Kas/Bank',
+                                        },
+                                        {
+                                            value: '1111',
+                                            label: '1111 - Bank Mandiri Solo Baru',
+                                        },
+                                        {
+                                            value: '1112',
+                                            label: '1112 - Bank BCA Operasional',
+                                        },
+                                        {
+                                            value: '1110',
+                                            label: '1110 - Kas Tunai Operasional',
+                                        },
                                     ]}
                                 />
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Kategori Aktivitas</label>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Kategori Aktivitas
+                                </label>
                                 <SelectInput
                                     value={categoryFilter}
-                                    onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+                                    onChange={(e) => {
+                                        setCategoryFilter(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
                                     options={[
-                                        { value: 'all', label: 'Semua Aktivitas' },
-                                        { value: 'operating', label: 'Aktivitas Operasional' },
-                                        { value: 'investing', label: 'Aktivitas Investasi' },
-                                        { value: 'financing', label: 'Aktivitas Pendanaan' },
+                                        {
+                                            value: 'all',
+                                            label: 'Semua Aktivitas',
+                                        },
+                                        {
+                                            value: 'operating',
+                                            label: 'Aktivitas Operasional',
+                                        },
+                                        {
+                                            value: 'investing',
+                                            label: 'Aktivitas Investasi',
+                                        },
+                                        {
+                                            value: 'financing',
+                                            label: 'Aktivitas Pendanaan',
+                                        },
                                     ]}
                                 />
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Jenis Mutasi</label>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Jenis Mutasi
+                                </label>
                                 <SelectInput
                                     value={typeFilter}
-                                    onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
+                                    onChange={(e) => {
+                                        setTypeFilter(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
                                     options={[
-                                        { value: 'all', label: 'Semua Jenis Mutasi' },
-                                        { value: 'inflow', label: '+ Uang Masuk (Inflow)' },
-                                        { value: 'outflow', label: '- Uang Keluar (Outflow)' },
+                                        {
+                                            value: 'all',
+                                            label: 'Semua Jenis Mutasi',
+                                        },
+                                        {
+                                            value: 'inflow',
+                                            label: '+ Uang Masuk (Inflow)',
+                                        },
+                                        {
+                                            value: 'outflow',
+                                            label: '- Uang Keluar (Outflow)',
+                                        },
                                     ]}
                                 />
                             </div>
@@ -585,78 +861,132 @@ export default function CashflowReport() {
 
                 {/* TAB 1: BUKU REGISTRY MUTASI KAS */}
                 {activeTab === 'registry' && (
-                    <div className="bg-white rounded-2xl border border-slate-100/80 shadow-xs overflow-hidden">
+                    <div className="shadow-xs overflow-hidden rounded-2xl border border-slate-100/80 bg-white">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs">
+                            <table className="w-full border-collapse text-left text-xs">
                                 <thead>
-                                    <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left bg-slate-50/40 px-6 py-4">
-                                        <th className="py-4 px-6">Tanggal & Ref</th>
-                                        <th className="py-4 px-6">Dokumen & Partner</th>
-                                        <th className="py-4 px-6">Akun Kas / Bank</th>
-                                        <th className="py-4 px-6">Keterangan Mutasi</th>
-                                        <th className="py-4 px-6 text-right">Uang Masuk (+)</th>
-                                        <th className="py-4 px-6 text-right">Uang Keluar (-)</th>
-                                        <th className="py-4 px-6 text-right">Saldo Berjalan</th>
-                                        <th className="py-4 px-6 text-center">Aksi</th>
+                                    <tr className="border-b border-slate-100 bg-slate-50/40 px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                        <th className="px-6 py-4">
+                                            Tanggal & Ref
+                                        </th>
+                                        <th className="px-6 py-4">
+                                            Dokumen & Partner
+                                        </th>
+                                        <th className="px-6 py-4">
+                                            Akun Kas / Bank
+                                        </th>
+                                        <th className="px-6 py-4">
+                                            Keterangan Mutasi
+                                        </th>
+                                        <th className="px-6 py-4 text-right">
+                                            Uang Masuk (+)
+                                        </th>
+                                        <th className="px-6 py-4 text-right">
+                                            Uang Keluar (-)
+                                        </th>
+                                        <th className="px-6 py-4 text-right">
+                                            Saldo Berjalan
+                                        </th>
+                                        <th className="px-6 py-4 text-center">
+                                            Aksi
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {paginatedCashflows.map((cf) => (
-                                        <tr key={cf.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="py-4 px-6">
-                                                <div className="font-bold text-slate-900">{formatDateIndo(cf.date)}</div>
-                                                <div className="text-[10.5px] font-mono font-bold text-blue-600">{cf.refNo}</div>
+                                        <tr
+                                            key={cf.id}
+                                            className="transition-colors hover:bg-slate-50/50"
+                                        >
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-slate-900">
+                                                    {formatDateIndo(cf.date)}
+                                                </div>
+                                                <div className="font-mono text-[10.5px] font-bold text-blue-600">
+                                                    {cf.refNo}
+                                                </div>
                                             </td>
-                                            <td className="py-4 px-6">
-                                                <div className="font-mono font-bold text-slate-800">{cf.docNo}</div>
-                                                <div className="text-[10.5px] text-slate-500 font-medium">{cf.partnerName}</div>
+                                            <td className="px-6 py-4">
+                                                <div className="font-mono font-bold text-slate-800">
+                                                    {cf.docNo}
+                                                </div>
+                                                <div className="text-[10.5px] font-medium text-slate-500">
+                                                    {cf.partnerName}
+                                                </div>
                                             </td>
-                                            <td className="py-4 px-6">
-                                                <div className="font-bold text-slate-800">{cf.accountName}</div>
-                                                <div>{getActivityBadge(cf.category)}</div>
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-slate-800">
+                                                    {cf.accountName}
+                                                </div>
+                                                <div>
+                                                    {getActivityBadge(
+                                                        cf.category,
+                                                    )}
+                                                </div>
                                             </td>
-                                            <td className="py-4 px-6 font-semibold text-slate-700 max-w-[220px] truncate" title={cf.description}>
+                                            <td
+                                                className="max-w-[220px] truncate px-6 py-4 font-semibold text-slate-700"
+                                                title={cf.description}
+                                            >
                                                 {cf.description}
                                             </td>
-                                            <td className="py-4 px-6 text-right font-mono font-bold text-emerald-700">
-                                                {cf.type === 'inflow' ? fmt(cf.amount) : '—'}
+                                            <td className="px-6 py-4 text-right font-mono font-bold text-emerald-700">
+                                                {cf.type === 'inflow'
+                                                    ? fmt(cf.amount)
+                                                    : '—'}
                                             </td>
-                                            <td className="py-4 px-6 text-right font-mono font-bold text-rose-600">
-                                                {cf.type === 'outflow' ? fmt(cf.amount) : '—'}
+                                            <td className="px-6 py-4 text-right font-mono font-bold text-rose-600">
+                                                {cf.type === 'outflow'
+                                                    ? fmt(cf.amount)
+                                                    : '—'}
                                             </td>
-                                            <td className="py-4 px-6 text-right font-mono font-bold text-slate-900 bg-slate-50/40">
+                                            <td className="bg-slate-50/40 px-6 py-4 text-right font-mono font-bold text-slate-900">
                                                 {fmt(cf.runningBalance || 0)}
                                             </td>
-                                            <td className="py-4 px-6 text-center whitespace-nowrap">
-                                                <ActionDropdown items={getRowActionItems(cf)} />
+                                            <td className="whitespace-nowrap px-6 py-4 text-center">
+                                                <ActionDropdown
+                                                    items={getRowActionItems(
+                                                        cf,
+                                                    )}
+                                                />
                                             </td>
                                         </tr>
                                     ))}
 
                                     {computedCashflows.length === 0 && (
                                         <tr>
-                                            <td colSpan={8} className="py-12 text-center">
-                                                <EmptyState title="Belum Ada Mutasi Kas" message="Tidak ditemukan catatan mutasi arus kas yang sesuai dengan pencarian." />
+                                            <td
+                                                colSpan={8}
+                                                className="py-12 text-center"
+                                            >
+                                                <EmptyState
+                                                    title="Belum Ada Mutasi Kas"
+                                                    message="Tidak ditemukan catatan mutasi arus kas yang sesuai dengan pencarian."
+                                                />
                                             </td>
                                         </tr>
                                     )}
 
                                     {/* Footer Summary */}
                                     {computedCashflows.length > 0 && (
-                                        <tr className="bg-slate-100/80 border-t-2 border-slate-300 font-bold text-slate-900">
-                                            <td colSpan={4} className="py-4 px-6 text-right uppercase tracking-wider text-xs font-bold text-slate-700">
-                                                TOTAL MUTASI SELEKSI PERIODE INI:
+                                        <tr className="border-t-2 border-slate-300 bg-slate-100/80 font-bold text-slate-900">
+                                            <td
+                                                colSpan={4}
+                                                className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-700"
+                                            >
+                                                TOTAL MUTASI SELEKSI PERIODE
+                                                INI:
                                             </td>
-                                            <td className="py-4 px-6 text-right font-mono text-sm font-bold text-emerald-700">
+                                            <td className="px-6 py-4 text-right font-mono text-sm font-bold text-emerald-700">
                                                 {fmt(totalInflow)}
                                             </td>
-                                            <td className="py-4 px-6 text-right font-mono text-sm font-bold text-rose-600">
+                                            <td className="px-6 py-4 text-right font-mono text-sm font-bold text-rose-600">
                                                 {fmt(totalOutflow)}
                                             </td>
-                                            <td className="py-4 px-6 text-right font-mono text-sm font-bold text-blue-800 bg-blue-50/60">
+                                            <td className="bg-blue-50/60 px-6 py-4 text-right font-mono text-sm font-bold text-blue-800">
                                                 {fmt(endingBalance)}
                                             </td>
-                                            <td className="py-4 px-6"></td>
+                                            <td className="px-6 py-4"></td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -664,10 +994,13 @@ export default function CashflowReport() {
                         </div>
 
                         {computedCashflows.length > 0 && (
-                            <div className="p-4 border-t border-slate-100">
+                            <div className="border-t border-slate-100 p-4">
                                 <Pagination
                                     currentPage={currentPage}
-                                    totalPages={Math.ceil(computedCashflows.length / ITEMS_PER_PAGE)}
+                                    totalPages={Math.ceil(
+                                        computedCashflows.length /
+                                            ITEMS_PER_PAGE,
+                                    )}
                                     totalItems={computedCashflows.length}
                                     itemsPerPage={ITEMS_PER_PAGE}
                                     onPageChange={setCurrentPage}
@@ -679,82 +1012,138 @@ export default function CashflowReport() {
 
                 {/* TAB 2: LAPORAN ARUS KAS FORMAT PSAK 2 */}
                 {activeTab === 'psak' && (
-                    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-6">
+                    <div className="shadow-xs space-y-6 rounded-2xl border border-slate-200/80 bg-white p-6">
                         <div>
-                            <h3 className="text-sm font-bold text-slate-900 tracking-tight">Laporan Arus Kas Menurut Standar Akuntansi (PSAK 2 / IAS 7)</h3>
-                            <p className="text-xs text-slate-500 font-medium mt-0.5">
-                                Klasifikasi arus kas dari aktivitas operasional, investasi aset, dan pendanaan usaha.
+                            <h3 className="text-sm font-bold tracking-tight text-slate-900">
+                                Laporan Arus Kas Menurut Standar Akuntansi (PSAK
+                                2 / IAS 7)
+                            </h3>
+                            <p className="mt-0.5 text-xs font-medium text-slate-500">
+                                Klasifikasi arus kas dari aktivitas operasional,
+                                investasi aset, dan pendanaan usaha.
                             </p>
                         </div>
 
                         <div className="space-y-4 text-xs">
                             {/* Section 1: Operating */}
-                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-3">
-                                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                                    <h4 className="font-bold text-slate-900 uppercase">1. Arus Kas dari Aktivitas Operasional</h4>
-                                    <span className="font-mono font-bold text-sm text-slate-900">{fmt(psakBreakdown.netOperating)}</span>
+                            <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50 p-5">
+                                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                                    <h4 className="font-bold uppercase text-slate-900">
+                                        1. Arus Kas dari Aktivitas Operasional
+                                    </h4>
+                                    <span className="font-mono text-sm font-bold text-slate-900">
+                                        {fmt(psakBreakdown.netOperating)}
+                                    </span>
                                 </div>
-                                <div className="space-y-1.5 font-medium text-slate-700 pl-4">
+                                <div className="space-y-1.5 pl-4 font-medium text-slate-700">
                                     <div className="flex justify-between">
-                                        <span>Penerimaan Kas dari Pelunasan Tagihan Client (+):</span>
-                                        <span className="font-mono text-emerald-700 font-bold">{fmt(psakBreakdown.operatingIn)}</span>
+                                        <span>
+                                            Penerimaan Kas dari Pelunasan
+                                            Tagihan Client (+):
+                                        </span>
+                                        <span className="font-mono font-bold text-emerald-700">
+                                            {fmt(psakBreakdown.operatingIn)}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Pembayaran Kas untuk Biaya PO Vendor & Operasional (-):</span>
-                                        <span className="font-mono text-rose-600 font-bold">({fmt(psakBreakdown.operatingOut)})</span>
+                                        <span>
+                                            Pembayaran Kas untuk Biaya PO Vendor
+                                            & Operasional (-):
+                                        </span>
+                                        <span className="font-mono font-bold text-rose-600">
+                                            ({fmt(psakBreakdown.operatingOut)})
+                                        </span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Section 2: Investing */}
-                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-3">
-                                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                                    <h4 className="font-bold text-slate-900 uppercase">2. Arus Kas dari Aktivitas Investasi</h4>
-                                    <span className="font-mono font-bold text-sm text-slate-900">{fmt(psakBreakdown.netInvesting)}</span>
+                            <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50 p-5">
+                                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                                    <h4 className="font-bold uppercase text-slate-900">
+                                        2. Arus Kas dari Aktivitas Investasi
+                                    </h4>
+                                    <span className="font-mono text-sm font-bold text-slate-900">
+                                        {fmt(psakBreakdown.netInvesting)}
+                                    </span>
                                 </div>
-                                <div className="space-y-1.5 font-medium text-slate-700 pl-4">
+                                <div className="space-y-1.5 pl-4 font-medium text-slate-700">
                                     <div className="flex justify-between">
-                                        <span>Penerimaan dari Pelepasan Aset Tetap (+):</span>
+                                        <span>
+                                            Penerimaan dari Pelepasan Aset Tetap
+                                            (+):
+                                        </span>
                                         <span className="font-mono">Rp 0</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Pembelian & Konstruksi Aset Tetap Billboard (-):</span>
-                                        <span className="font-mono text-rose-600 font-bold">({fmt(psakBreakdown.investingOut)})</span>
+                                        <span>
+                                            Pembelian & Konstruksi Aset Tetap
+                                            Billboard (-):
+                                        </span>
+                                        <span className="font-mono font-bold text-rose-600">
+                                            ({fmt(psakBreakdown.investingOut)})
+                                        </span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Section 3: Financing */}
-                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-3">
-                                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                                    <h4 className="font-bold text-slate-900 uppercase">3. Arus Kas dari Aktivitas Pendanaan</h4>
-                                    <span className="font-mono font-bold text-sm text-slate-900">{fmt(psakBreakdown.netFinancing)}</span>
+                            <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50 p-5">
+                                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                                    <h4 className="font-bold uppercase text-slate-900">
+                                        3. Arus Kas dari Aktivitas Pendanaan
+                                    </h4>
+                                    <span className="font-mono text-sm font-bold text-slate-900">
+                                        {fmt(psakBreakdown.netFinancing)}
+                                    </span>
                                 </div>
-                                <div className="space-y-1.5 font-medium text-slate-700 pl-4">
+                                <div className="space-y-1.5 pl-4 font-medium text-slate-700">
                                     <div className="flex justify-between">
-                                        <span>Penerimaan dari Setoran Modal Pemilik (+):</span>
+                                        <span>
+                                            Penerimaan dari Setoran Modal
+                                            Pemilik (+):
+                                        </span>
                                         <span className="font-mono">Rp 0</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Pembayaran Prive / Dividen Pemilik (-):</span>
+                                        <span>
+                                            Pembayaran Prive / Dividen Pemilik
+                                            (-):
+                                        </span>
                                         <span className="font-mono">Rp 0</span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Final Reconciliation */}
-                            <div className="bg-blue-50 p-5 rounded-2xl border border-blue-200 space-y-2 font-bold text-slate-900 text-xs">
+                            <div className="space-y-2 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-xs font-bold text-slate-900">
                                 <div className="flex justify-between">
-                                    <span>Kenaikan / (Penurunan) Bersih Kas & Bank:</span>
-                                    <span className="font-mono text-blue-800">{fmt(psakBreakdown.netCashIncrease)}</span>
+                                    <span>
+                                        Kenaikan / (Penurunan) Bersih Kas &
+                                        Bank:
+                                    </span>
+                                    <span className="font-mono text-blue-800">
+                                        {fmt(psakBreakdown.netCashIncrease)}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span>Saldo Kas & Bank Pada Awal Periode:</span>
-                                    <span className="font-mono">{fmt(initialBeginningBalance)}</span>
+                                    <span>
+                                        Saldo Kas & Bank Pada Awal Periode:
+                                    </span>
+                                    <span className="font-mono">
+                                        {fmt(initialBeginningBalance)}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between border-t border-blue-200 pt-2 text-sm text-blue-900">
-                                    <span>Saldo Kas & Bank Pada Akhir Periode:</span>
-                                    <span className="font-mono text-base">{fmt(initialBeginningBalance + psakBreakdown.netCashIncrease)}</span>
+                                    <span>
+                                        Saldo Kas & Bank Pada Akhir Periode:
+                                    </span>
+                                    <span className="font-mono text-base">
+                                        {fmt(
+                                            initialBeginningBalance +
+                                                psakBreakdown.netCashIncrease,
+                                        )}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -763,37 +1152,54 @@ export default function CashflowReport() {
 
                 {/* TAB 3: SALDO PER REKENING BANK */}
                 {activeTab === 'banks' && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                         {bankAccounts.map((bank) => (
-                            <div key={bank.code} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4 hover:shadow-md transition-all">
-                                <div className="flex justify-between items-start">
+                            <div
+                                key={bank.code}
+                                className="shadow-xs space-y-4 rounded-2xl border border-slate-200/80 bg-white p-6 transition-all hover:shadow-md"
+                            >
+                                <div className="flex items-start justify-between">
                                     <div>
-                                        <h4 className="font-bold text-sm text-slate-900">{bank.bankName}</h4>
-                                        <div className="text-xs font-mono font-bold text-blue-600 mt-0.5">{bank.accountNumber}</div>
+                                        <h4 className="text-sm font-bold text-slate-900">
+                                            {bank.bankName}
+                                        </h4>
+                                        <div className="mt-0.5 font-mono text-xs font-bold text-blue-600">
+                                            {bank.accountNumber}
+                                        </div>
                                     </div>
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700">
                                         {bank.code}
                                     </span>
                                 </div>
 
-                                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 text-xs space-y-1.5 font-medium">
+                                <div className="space-y-1.5 rounded-xl border border-slate-200/60 bg-slate-50 p-3.5 text-xs font-medium">
                                     <div className="flex justify-between text-slate-500">
                                         <span>Saldo Awal:</span>
-                                        <span className="font-mono font-bold text-slate-800">{fmt(bank.beginningBalance)}</span>
+                                        <span className="font-mono font-bold text-slate-800">
+                                            {fmt(bank.beginningBalance)}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between text-emerald-700">
                                         <span>Mutasi Masuk (+):</span>
-                                        <span className="font-mono font-bold">{fmt(bank.inflowTotal)}</span>
+                                        <span className="font-mono font-bold">
+                                            {fmt(bank.inflowTotal)}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between text-rose-600">
                                         <span>Mutasi Keluar (-):</span>
-                                        <span className="font-mono font-bold">{fmt(bank.outflowTotal)}</span>
+                                        <span className="font-mono font-bold">
+                                            {fmt(bank.outflowTotal)}
+                                        </span>
                                     </div>
                                 </div>
 
-                                <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
-                                    <span className="text-xs font-bold text-slate-500 uppercase">Saldo Berjalan</span>
-                                    <span className="text-lg font-mono font-bold text-blue-800">{fmt(bank.currentBalance)}</span>
+                                <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+                                    <span className="text-xs font-bold uppercase text-slate-500">
+                                        Saldo Berjalan
+                                    </span>
+                                    <span className="font-mono text-lg font-bold text-blue-800">
+                                        {fmt(bank.currentBalance)}
+                                    </span>
                                 </div>
                             </div>
                         ))}
@@ -804,113 +1210,178 @@ export default function CashflowReport() {
             {/* MODAL: TAMBAH MUTASI KAS MANUAL */}
             {addCashflowModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs" onClick={() => setAddCashflowModal(false)} />
-                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden relative z-10 animate-fade-in border border-slate-100">
-                        <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+                    <div
+                        className="backdrop-blur-xs absolute inset-0 bg-slate-950/60"
+                        onClick={() => setAddCashflowModal(false)}
+                    />
+                    <div className="animate-fade-in relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
+                        <div className="flex items-center justify-between bg-slate-900 px-6 py-4 text-white">
                             <div>
-                                <h3 className="font-bold text-sm">Catat Mutasi Kas / Bank Baru</h3>
-                                <p className="text-xs text-slate-400 font-medium mt-0.5">Pencatatan penerimaan / pengeluaran kas operasional</p>
+                                <h3 className="text-sm font-bold">
+                                    Catat Mutasi Kas / Bank Baru
+                                </h3>
+                                <p className="mt-0.5 text-xs font-medium text-slate-400">
+                                    Pencatatan penerimaan / pengeluaran kas
+                                    operasional
+                                </p>
                             </div>
-                            <button onClick={() => setAddCashflowModal(false)} className="text-slate-400 hover:text-white text-xs font-bold transition-all cursor-pointer">✕</button>
+                            <button
+                                onClick={() => setAddCashflowModal(false)}
+                                className="cursor-pointer text-xs font-bold text-slate-400 transition-all hover:text-white"
+                            >
+                                ✕
+                            </button>
                         </div>
 
-                        <form onSubmit={handleSaveNewCashflow} className="p-6 space-y-4 text-xs">
+                        <form
+                            onSubmit={handleSaveNewCashflow}
+                            className="space-y-4 p-6 text-xs"
+                        >
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-700 block">Jenis Mutasi Kas</label>
+                                    <label className="block text-xs font-bold text-slate-700">
+                                        Jenis Mutasi Kas
+                                    </label>
                                     <SelectInput
                                         value={newType}
-                                        onChange={(e) => setNewType(e.target.value as CashflowType)}
+                                        onChange={(e) =>
+                                            setNewType(
+                                                e.target.value as CashflowType,
+                                            )
+                                        }
                                         options={[
-                                            { value: 'outflow', label: '- Uang Keluar (Outflow)' },
-                                            { value: 'inflow', label: '+ Uang Masuk (Inflow)' },
+                                            {
+                                                value: 'outflow',
+                                                label: '- Uang Keluar (Outflow)',
+                                            },
+                                            {
+                                                value: 'inflow',
+                                                label: '+ Uang Masuk (Inflow)',
+                                            },
                                         ]}
                                     />
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-700 block">Kategori Aktivitas</label>
+                                    <label className="block text-xs font-bold text-slate-700">
+                                        Kategori Aktivitas
+                                    </label>
                                     <SelectInput
                                         value={newCategory}
-                                        onChange={(e) => setNewCategory(e.target.value as ActivityCategory)}
+                                        onChange={(e) =>
+                                            setNewCategory(
+                                                e.target
+                                                    .value as ActivityCategory,
+                                            )
+                                        }
                                         options={[
-                                            { value: 'operating', label: 'Operasional' },
-                                            { value: 'investing', label: 'Investasi Aset' },
-                                            { value: 'financing', label: 'Pendanaan Usaha' },
+                                            {
+                                                value: 'operating',
+                                                label: 'Operasional',
+                                            },
+                                            {
+                                                value: 'investing',
+                                                label: 'Investasi Aset',
+                                            },
+                                            {
+                                                value: 'financing',
+                                                label: 'Pendanaan Usaha',
+                                            },
                                         ]}
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-700 block">Pilih Akun Kas / Bank (COA)</label>
+                                <label className="block text-xs font-bold text-slate-700">
+                                    Pilih Akun Kas / Bank (COA)
+                                </label>
                                 <SelectInput
                                     value={newAccountCode}
-                                    onChange={(e) => setNewAccountCode(e.target.value)}
-                                    options={bankAccounts.map(b => ({ value: b.code, label: `${b.code} - ${b.bankName}` }))}
+                                    onChange={(e) =>
+                                        setNewAccountCode(e.target.value)
+                                    }
+                                    options={bankAccounts.map((b) => ({
+                                        value: b.code,
+                                        label: `${b.code} - ${b.bankName}`,
+                                    }))}
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-700 block">Nominal Mutasi (IDR)</label>
+                                    <label className="block text-xs font-bold text-slate-700">
+                                        Nominal Mutasi (IDR)
+                                    </label>
                                     <input
                                         type="number"
                                         required
                                         min="1"
                                         placeholder="Contoh: 1500000"
                                         value={newAmount}
-                                        onChange={(e) => setNewAmount(e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-primary transition-all"
+                                        onChange={(e) =>
+                                            setNewAmount(e.target.value)
+                                        }
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 font-mono text-xs font-bold text-slate-900 transition-all focus:border-primary focus:outline-none"
                                     />
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-700 block">No. Referensi / Bukti Bank</label>
+                                    <label className="block text-xs font-bold text-slate-700">
+                                        No. Referensi / Bukti Bank
+                                    </label>
                                     <input
                                         type="text"
                                         placeholder="No. Ref Bank..."
                                         value={newRefNo}
-                                        onChange={(e) => setNewRefNo(e.target.value)}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-primary transition-all"
+                                        onChange={(e) =>
+                                            setNewRefNo(e.target.value)
+                                        }
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 font-mono text-xs font-bold text-slate-900 transition-all focus:border-primary focus:outline-none"
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-700 block">Mitra Partner / Pihak Terkait</label>
+                                <label className="block text-xs font-bold text-slate-700">
+                                    Mitra Partner / Pihak Terkait
+                                </label>
                                 <input
                                     type="text"
                                     placeholder="Nama Client, Vendor, atau Supplier..."
                                     value={newPartner}
-                                    onChange={(e) => setNewPartner(e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-primary transition-all"
+                                    onChange={(e) =>
+                                        setNewPartner(e.target.value)
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-900 transition-all focus:border-primary focus:outline-none"
                                 />
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-700 block">Keterangan / Deskripsi Transaksi</label>
+                                <label className="block text-xs font-bold text-slate-700">
+                                    Keterangan / Deskripsi Transaksi
+                                </label>
                                 <input
                                     type="text"
                                     required
                                     placeholder="Deskripsi pengeluaran / penerimaan..."
                                     value={newDesc}
                                     onChange={(e) => setNewDesc(e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-primary transition-all"
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-900 transition-all focus:border-primary focus:outline-none"
                                 />
                             </div>
 
-                            <div className="pt-4 border-t border-slate-100 flex gap-3">
+                            <div className="flex gap-3 border-t border-slate-100 pt-4">
                                 <button
                                     type="button"
                                     onClick={() => setAddCashflowModal(false)}
-                                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                    className="flex-1 cursor-pointer rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-700 transition-all hover:bg-slate-200"
                                 >
                                     Batal
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 bg-primary hover:bg-primary-700 text-white py-2.5 rounded-xl text-xs font-bold shadow-neon-primary transition-all cursor-pointer"
+                                    className="flex-1 cursor-pointer rounded-xl bg-primary py-2.5 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700"
                                 >
                                     Simpan Mutasi Kas
                                 </button>

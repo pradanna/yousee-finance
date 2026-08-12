@@ -93,3 +93,10 @@ This design system must be strictly followed to ensure consistency across the Yo
 - **Strict Flat / 2D Vector Icons**: Whenever icons are added to buttons, navigation elements, badges, filter chips, or cards, ONLY clean **Flat / 2D monochrome vector icons** (SVG line or fill icons, e.g. Heroicons style) MUST be used.
 - **NO Emojis or 3D Icons**: Do NOT use emojis (e.g., ⚡, 📝, ⚠️, 💰, 📈) or 3D skeuomorphic icons in UI components, filter pills, or status labels to maintain a sleek, professional financial dashboard aesthetic.
 
+## 16. Round Icon Button Consistency
+- **Round Icon Buttons**: Whenever creating circular icon buttons (e.g., action buttons, toggle buttons, or close buttons), ALWAYS use consistent styling and avoid arbitrary variations.
+- **Standard Sizing**: 
+  - *Small (Table actions, sub-headers)*: `w-8 h-8 rounded-full`
+  - *Medium (Default toggles, close buttons)*: `w-10 h-10 rounded-full`
+- **Standard Styling**: Combine with flex centering and subtle hover states: `flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-all border border-transparent hover:border-slate-200`.
+

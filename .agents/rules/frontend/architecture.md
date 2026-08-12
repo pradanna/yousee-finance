@@ -31,3 +31,15 @@ To mirror our backend's Lite DDD architecture, the frontend MUST use a Feature-B
 - Use Tailwind CSS utility classes for styling.
 - Do not create custom `.css` files unless absolutely necessary for complex animations or global base variables.
 - Extract highly reused combinations of utility classes into base React components (e.g., creating a `<PrimaryButton>` component instead of repeating standard button classes).
+
+## 4. Code Formatting & Linter Strictness
+- **Prettier Standard**: All generated code MUST strictly follow the project's Prettier configuration. Pay close attention to indentation, trailing commas, quote styles, and line length.
+- **Tailwind CSS Best Practices**: 
+  - ALWAYS use the official Tailwind CSS class sorting order (e.g., layout -> spacing -> typography -> visual -> modifiers).
+  - Use established project design tokens and utility classes over raw CSS or inline styles.
+- **Zero Linter Warnings Policy**: 
+  - You are FORBIDDEN from generating code that produces ESLint, Prettier, or TypeScript compilation errors/warnings.
+  - Pay close attention to React hook dependency arrays (`eslint-plugin-react-hooks`), unused variables, and `any` types.
+  - If a linter error is unavoidable, you MUST explicitly provide a valid bypass comment (e.g., `// eslint-disable-next-line`) along with a short justification, though this should be a last resort.
+- **Line Endings (LF)**: All files MUST use Unix-style line endings (`LF` / `\n`). Windows line endings (`CRLF` / `\r\n`) are strictly forbidden as they trigger Prettier `Delete ␍` lint warnings. Always ensure files are saved with LF line endings or formatted via Prettier (`npx prettier --write`).
+- **Verification**: Double-check for missing imports, incorrect prop types, and potentially null variables (e.g., always use type guards or optional chaining `?.`) before outputting code.

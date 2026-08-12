@@ -1,5 +1,3 @@
-import React from 'react';
-
 export interface ReceivableItem {
     id: string;
     actualId: string;
@@ -31,68 +29,103 @@ export default function UpcomingReceivablesWidget({
     const unpaidCount = receivables.filter((r) => r.status === 'unpaid').length;
 
     return (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col justify-between">
+        <div className="shadow-xs flex flex-col justify-between overflow-hidden rounded-3xl border border-slate-200/80 bg-white">
             <div>
-                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50/20">
+                <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/20 px-6 py-5">
                     <div>
                         <div className="flex items-center gap-2">
-                            <h2 className="text-sm font-bold text-slate-800 tracking-tight">Piutang Jatuh Tempo ≤ 7 Hari</h2>
-                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black px-2 py-0.5 rounded-full">
+                            <h2 className="text-sm font-bold tracking-tight text-slate-800">
+                                Piutang Jatuh Tempo ≤ 7 Hari
+                            </h2>
+                            <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">
                                 {unpaidCount} Antrean
                             </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5">Penagihan Client Mendatang (Inflow)</p>
+                        <p className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
+                            Penagihan Client Mendatang (Inflow)
+                        </p>
                     </div>
                 </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
                         <thead>
-                            <tr className="border-b border-slate-100 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-left bg-slate-50/10">
-                                <th className="px-4 py-3">No. Invoice / Client</th>
+                            <tr className="border-b border-slate-100 bg-slate-50/10 text-left text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                <th className="px-4 py-3">
+                                    No. Invoice / Client
+                                </th>
                                 <th className="px-4 py-3">Deskripsi Proyek</th>
                                 <th className="px-4 py-3">Jatuh Tempo</th>
-                                <th className="px-4 py-3 text-right">Nominal</th>
+                                <th className="px-4 py-3 text-right">
+                                    Nominal
+                                </th>
                                 <th className="px-4 py-3 text-center">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
+                        <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                             {receivables.map((rec) => {
                                 const isPaid = rec.status === 'paid';
-                                const currentSimulatedDate = new Date(`${selectedYear}-${selectedMonth}-27`);
+                                const currentSimulatedDate = new Date(
+                                    `${selectedYear}-${selectedMonth}-27`,
+                                );
                                 const dueDate = new Date(rec.dueDate);
-                                const diffTime = dueDate.getTime() - currentSimulatedDate.getTime();
-                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                const diffTime =
+                                    dueDate.getTime() -
+                                    currentSimulatedDate.getTime();
+                                const diffDays = Math.ceil(
+                                    diffTime / (1000 * 60 * 60 * 24),
+                                );
 
                                 return (
-                                    <tr key={rec.id} className="hover:bg-slate-50/30 transition-colors">
+                                    <tr
+                                        key={rec.id}
+                                        className="transition-colors hover:bg-slate-50/30"
+                                    >
                                         <td className="px-4 py-3.5">
-                                            <div className="font-mono font-bold text-slate-900 text-[11px]">{rec.actualId}</div>
-                                            <div className="font-bold text-slate-800 text-[10px] mt-0.5">{rec.client}</div>
+                                            <div className="font-mono text-[11px] font-bold text-slate-900">
+                                                {rec.actualId}
+                                            </div>
+                                            <div className="mt-0.5 text-[10px] font-bold text-slate-800">
+                                                {rec.client}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3.5">
-                                            <div className="font-semibold text-slate-500 max-w-[130px] truncate">{rec.project}</div>
-                                            <div className="text-[9px] text-slate-400 font-normal italic mt-0.5">{rec.notes}</div>
+                                            <div className="max-w-[130px] truncate font-semibold text-slate-500">
+                                                {rec.project}
+                                            </div>
+                                            <div className="mt-0.5 text-[9px] font-normal italic text-slate-400">
+                                                {rec.notes}
+                                            </div>
                                         </td>
-                                        <td className="px-4 py-3.5 whitespace-nowrap">
-                                            <div className="font-semibold text-slate-700 text-[11px]">{formatDateIndo(rec.dueDate)}</div>
+                                        <td className="whitespace-nowrap px-4 py-3.5">
+                                            <div className="text-[11px] font-semibold text-slate-700">
+                                                {formatDateIndo(rec.dueDate)}
+                                            </div>
                                             {!isPaid && (
-                                                <div className="text-[9px] text-emerald-600 font-bold mt-0.5 flex items-center gap-1">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                                <div className="mt-0.5 flex items-center gap-1 text-[9px] font-bold text-emerald-600">
+                                                    <span className="h-1.5 w-1.5 animate-ping rounded-full bg-emerald-500"></span>
                                                     {diffDays} Hari Lagi
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                                        <td className="whitespace-nowrap px-4 py-3.5 text-right font-mono font-bold text-slate-900">
                                             {formatRupiah(rec.actualAmount)}
                                         </td>
-                                        <td className="px-4 py-3.5 whitespace-nowrap text-center">
+                                        <td className="whitespace-nowrap px-4 py-3.5 text-center">
                                             {isPaid ? (
-                                                <span className="text-[10px] font-bold text-emerald-600">Diterima</span>
+                                                <span className="text-[10px] font-bold text-emerald-600">
+                                                    Diterima
+                                                </span>
                                             ) : (
                                                 <button
-                                                    onClick={() => onReceivePayment(rec.id, rec.actualAmount, rec.client)}
-                                                    className="px-2.5 py-1 rounded-lg text-[9px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-all cursor-pointer"
+                                                    onClick={() =>
+                                                        onReceivePayment(
+                                                            rec.id,
+                                                            rec.actualAmount,
+                                                            rec.client,
+                                                        )
+                                                    }
+                                                    className="shadow-2xs cursor-pointer rounded-lg bg-emerald-600 px-2.5 py-1 text-[9px] font-bold text-white transition-all hover:bg-emerald-700"
                                                 >
                                                     Catat Terima
                                                 </button>

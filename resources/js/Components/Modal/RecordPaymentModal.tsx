@@ -1,6 +1,8 @@
-import React, { useState } from "react";
-import { fmt } from "@/Pages/Purchases/purchasesTypes";
-import type { VendorPO } from "@/Pages/Purchases/purchasesTypes";
+import PrimaryButton from '@/Components/Button/PrimaryButton';
+import SecondaryButton from '@/Components/Button/SecondaryButton';
+import type { VendorPO } from '@/Pages/Purchases/purchasesTypes';
+import { fmt } from '@/Pages/Purchases/purchasesTypes';
+import React, { useState } from 'react';
 
 export interface RecordPaymentModalSubmitData {
     poNumber: string;
@@ -27,14 +29,16 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     onClose,
     onSubmit,
 }) => {
-    if (!isOpen || !po) return null;
-
-    const [termLabel, setTermLabel] = useState("Pelunasan / Pembayaran");
+    const [termLabel, setTermLabel] = useState('Pelunasan / Pembayaran');
     const [amount, setAmount] = useState<number>(remainingAmount);
-    const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-    const [method, setMethod] = useState("Transfer Bank BCA");
-    const [referenceNo, setReferenceNo] = useState(`PAY-PO-${Math.floor(100000 + Math.random() * 900000)}`);
-    const [notes, setNotes] = useState("");
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [method, setMethod] = useState('Transfer Bank BCA');
+    const [referenceNo, setReferenceNo] = useState(
+        `PAY-PO-${Math.floor(100000 + Math.random() * 900000)}`,
+    );
+    const [notes, setNotes] = useState('');
+
+    if (!isOpen || !po) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -51,37 +55,43 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm duration-200">
+            <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
                 {/* Modal Header */}
-                <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex justify-between items-center">
+                <div className="flex items-center justify-between bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 text-white">
                     <div>
-                        <h3 className="font-bold text-lg">Catat Pembayaran PO</h3>
-                        <p className="text-xs text-blue-100 font-mono">
+                        <h3 className="text-lg font-bold">
+                            Catat Pembayaran PO
+                        </h3>
+                        <p className="font-mono text-xs text-blue-100">
                             {po.poNumber} — {po.vendorName}
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-blue-100 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-lg transition"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-transparent bg-white/10 text-blue-100 transition-all hover:bg-white/20 hover:text-white"
                     >
                         ✕
                     </button>
                 </div>
 
                 {/* Modal Form */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4 p-6">
                     {/* Summary Info */}
-                    <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs">
+                    <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs dark:border-slate-700 dark:bg-slate-800/60">
                         <div>
-                            <div className="text-slate-500 dark:text-slate-400">Total PO</div>
-                            <div className="font-bold text-slate-900 dark:text-white text-sm font-mono">
+                            <div className="text-slate-500 dark:text-slate-400">
+                                Total PO
+                            </div>
+                            <div className="font-mono text-sm font-bold text-slate-900 dark:text-white">
                                 {fmt(po.totalAmount)}
                             </div>
                         </div>
                         <div className="text-right">
-                            <div className="text-slate-500 dark:text-slate-400">Sisa Tagihan PO</div>
-                            <div className="font-bold text-amber-600 dark:text-amber-400 text-sm font-mono">
+                            <div className="text-slate-500 dark:text-slate-400">
+                                Sisa Tagihan PO
+                            </div>
+                            <div className="font-mono text-sm font-bold text-amber-600 dark:text-amber-400">
                                 {fmt(remainingAmount)}
                             </div>
                         </div>
@@ -89,13 +99,13 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
 
                     {/* Skema / Label Pembayaran */}
                     <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                             Label / Peruntukan Pembayaran
                         </label>
                         <select
                             value={termLabel}
                             onChange={(e) => setTermLabel(e.target.value)}
-                            className="w-full text-xs rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 py-2.5 px-3"
+                            className="w-full rounded-xl border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                         >
                             <option value="DP 30%">DP 30%</option>
                             <option value="DP 50%">DP 50%</option>
@@ -103,20 +113,22 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                             <option value="Termin 2">Termin 2</option>
                             <option value="Pelunasan">Pelunasan</option>
                             <option value="Full Payment">Full Payment</option>
-                            <option value="Pembayaran Cicilan">Pembayaran Cicilan</option>
+                            <option value="Pembayaran Cicilan">
+                                Pembayaran Cicilan
+                            </option>
                         </select>
                     </div>
 
                     {/* Nominal Pembayaran */}
                     <div>
-                        <div className="flex justify-between items-center mb-1">
+                        <div className="mb-1 flex items-center justify-between">
                             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                                 Nominal Dibayarkan (Rp)
                             </label>
                             <button
                                 type="button"
                                 onClick={() => setAmount(remainingAmount)}
-                                className="text-[11px] text-blue-600 hover:underline font-medium"
+                                className="text-[11px] font-medium text-blue-600 hover:underline"
                             >
                                 Bayar Pelunasan ({fmt(remainingAmount)})
                             </button>
@@ -125,17 +137,17 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                             type="number"
                             min={1}
                             max={remainingAmount}
-                            value={amount || ""}
+                            value={amount || ''}
                             onChange={(e) => setAmount(Number(e.target.value))}
                             required
-                            className="w-full text-sm font-mono font-semibold text-blue-700 dark:text-blue-400 rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 py-2.5 px-3"
+                            className="w-full rounded-xl border-slate-300 bg-white px-3 py-2.5 font-mono text-sm font-semibold text-blue-700 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-blue-400"
                         />
                     </div>
 
                     {/* Grid: Tanggal & Metode */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                                 Tanggal Bayar
                             </label>
                             <input
@@ -143,22 +155,30 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
                                 required
-                                className="w-full text-xs rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 py-2 px-3"
+                                className="w-full rounded-xl border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                                 Sumber Kas / Bank
                             </label>
                             <select
                                 value={method}
                                 onChange={(e) => setMethod(e.target.value)}
-                                className="w-full text-xs rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 py-2 px-3"
+                                className="w-full rounded-xl border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                             >
-                                <option value="Transfer Bank BCA">Transfer Bank BCA</option>
-                                <option value="Transfer Bank Mandiri">Transfer Bank Mandiri</option>
-                                <option value="Transfer Bank BRI">Transfer Bank BRI</option>
-                                <option value="Kas Kecil">Kas Kecil (Operational)</option>
+                                <option value="Transfer Bank BCA">
+                                    Transfer Bank BCA
+                                </option>
+                                <option value="Transfer Bank Mandiri">
+                                    Transfer Bank Mandiri
+                                </option>
+                                <option value="Transfer Bank BRI">
+                                    Transfer Bank BRI
+                                </option>
+                                <option value="Kas Kecil">
+                                    Kas Kecil (Operational)
+                                </option>
                                 <option value="Kas Utama">Kas Utama</option>
                             </select>
                         </div>
@@ -166,7 +186,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
 
                     {/* Nomor Referensi / Bukti Kas */}
                     <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                             No. Referensi / Bukti Kas Keluar
                         </label>
                         <input
@@ -175,13 +195,13 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                             onChange={(e) => setReferenceNo(e.target.value)}
                             placeholder="Misal: BKK-2026-0810 / Ref BCA"
                             required
-                            className="w-full text-xs font-mono rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 py-2 px-3"
+                            className="w-full rounded-xl border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                         />
                     </div>
 
                     {/* Catatan / Keterangan */}
                     <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                             Catatan / Keterangan (Opsional)
                         </label>
                         <textarea
@@ -189,25 +209,18 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="Catatan tambahan pembayaran..."
-                            className="w-full text-xs rounded-xl border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 py-2 px-3"
+                            className="w-full rounded-xl border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                         />
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="pt-2 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
-                        >
+                    <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+                        <SecondaryButton type="button" onClick={onClose}>
                             Batal
-                        </button>
-                        <button
-                            type="submit"
-                            className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition"
-                        >
+                        </SecondaryButton>
+                        <PrimaryButton type="submit">
                             Simpan Catatan Pembayaran
-                        </button>
+                        </PrimaryButton>
                     </div>
                 </form>
             </div>

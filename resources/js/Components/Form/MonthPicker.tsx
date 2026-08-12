@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface MonthPickerProps {
     value: string; // Format: "YYYY-MM" e.g. "2026-06"
@@ -7,16 +7,40 @@ interface MonthPickerProps {
 }
 
 const MONTH_NAMES = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
 ];
 
 const MONTH_SHORT_NAMES = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-    'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'Mei',
+    'Jun',
+    'Jul',
+    'Ags',
+    'Sep',
+    'Okt',
+    'Nov',
+    'Des',
 ];
 
-export default function MonthPicker({ value, onChange, className = '' }: MonthPickerProps) {
+export default function MonthPicker({
+    value,
+    onChange,
+    className = '',
+}: MonthPickerProps) {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -26,8 +50,12 @@ export default function MonthPicker({ value, onChange, className = '' }: MonthPi
 
     // Parse current value
     const [selectedYearStr, selectedMonthStr] = value ? value.split('-') : [];
-    const currentYear = selectedYearStr ? (parseInt(selectedYearStr, 10) || defaultYear) : defaultYear;
-    const currentMonthIndex = selectedMonthStr ? ((parseInt(selectedMonthStr, 10) || (defaultMonthIndex + 1)) - 1) : defaultMonthIndex;
+    const currentYear = selectedYearStr
+        ? parseInt(selectedYearStr, 10) || defaultYear
+        : defaultYear;
+    const currentMonthIndex = selectedMonthStr
+        ? (parseInt(selectedMonthStr, 10) || defaultMonthIndex + 1) - 1
+        : defaultMonthIndex;
 
     // View year state inside picker
     const [viewYear, setViewYear] = useState(currentYear);
@@ -42,7 +70,10 @@ export default function MonthPicker({ value, onChange, className = '' }: MonthPi
     // Close on outside click
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            if (
+                containerRef.current &&
+                !containerRef.current.contains(event.target as Node)
+            ) {
                 setIsOpen(false);
             }
         };
@@ -66,50 +97,89 @@ export default function MonthPicker({ value, onChange, className = '' }: MonthPi
     const displayText = `${MONTH_NAMES[currentMonthIndex] || 'Juni'} ${currentYear}`;
 
     return (
-        <div ref={containerRef} className={`relative inline-block ${className}`}>
+        <div
+            ref={containerRef}
+            className={`relative inline-block ${className}`}
+        >
             {/* Clickable Main Box */}
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold py-2 px-3.5 rounded-xl shadow-2xs hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all cursor-pointer select-none"
+                className="shadow-2xs focus:ring-primary/20 flex cursor-pointer select-none items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-800 transition-all hover:border-slate-300 hover:bg-slate-50 focus:border-primary focus:outline-none focus:ring-2"
             >
-                <svg className="w-4 h-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <svg
+                    className="h-4 w-4 shrink-0 text-primary"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
                 </svg>
                 <span>{displayText}</span>
                 <svg
-                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary' : ''}`}
+                    className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary' : ''}`}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
                     strokeWidth={2.5}
                 >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M19 9l-7 7-7-7"
+                    />
                 </svg>
             </button>
 
             {/* Interactive Popover */}
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl border border-slate-100 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="animate-in fade-in zoom-in-95 absolute right-0 z-50 mt-2 w-64 rounded-2xl border border-slate-100 bg-white p-4 shadow-2xl duration-150">
                     {/* Header: Year Selector */}
-                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                    <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-3">
                         <button
                             type="button"
                             onClick={() => setViewYear(viewYear - 1)}
-                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                            className="cursor-pointer rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
                         >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.5}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M15 19l-7-7 7-7"
+                                />
                             </svg>
                         </button>
-                        <span className="text-sm font-bold text-slate-800 tracking-tight">{viewYear}</span>
+                        <span className="text-sm font-bold tracking-tight text-slate-800">
+                            {viewYear}
+                        </span>
                         <button
                             type="button"
                             onClick={() => setViewYear(viewYear + 1)}
-                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                            className="cursor-pointer rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
                         >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.5}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M9 5l7 7-7 7"
+                                />
                             </svg>
                         </button>
                     </div>
@@ -117,13 +187,15 @@ export default function MonthPicker({ value, onChange, className = '' }: MonthPi
                     {/* Month Grid */}
                     <div className="grid grid-cols-3 gap-2">
                         {MONTH_SHORT_NAMES.map((shortName, idx) => {
-                            const isSelected = viewYear === currentYear && idx === currentMonthIndex;
+                            const isSelected =
+                                viewYear === currentYear &&
+                                idx === currentMonthIndex;
                             return (
                                 <button
                                     key={shortName}
                                     type="button"
                                     onClick={() => handleSelectMonth(idx)}
-                                    className={`py-2 px-1 text-xs font-bold rounded-xl transition-all text-center cursor-pointer ${
+                                    className={`cursor-pointer rounded-xl px-1 py-2 text-center text-xs font-bold transition-all ${
                                         isSelected
                                             ? 'bg-primary text-white shadow-neon-primary shadow-sm'
                                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'

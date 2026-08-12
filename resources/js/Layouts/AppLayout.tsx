@@ -1,8 +1,10 @@
-import React, { useState, useEffect, createContext } from 'react';
-import Sidebar from '@/Components/Layout/Sidebar';
 import Header from '@/Components/Layout/Header';
+import Sidebar from '@/Components/Layout/Sidebar';
+import React, { createContext, useEffect, useState } from 'react';
 
-export const FiscalContext = createContext<{ fiscalMode: 'ppn' | 'non-ppn' }>({ fiscalMode: 'ppn' });
+export const FiscalContext = createContext<{ fiscalMode: 'ppn' | 'non-ppn' }>({
+    fiscalMode: 'ppn',
+});
 
 // Backwards compatibility alias
 export const DemoContext = FiscalContext;
@@ -11,7 +13,7 @@ export function useFiscalMode() {
     const [fiscalMode, setFiscalMode] = useState<'ppn' | 'non-ppn'>(() => {
         if (typeof window === 'undefined') return 'ppn';
         const saved = localStorage.getItem('app_fiscal_mode');
-        return (saved === 'ppn' || saved === 'non-ppn') ? saved : 'ppn';
+        return saved === 'ppn' || saved === 'non-ppn' ? saved : 'ppn';
     });
 
     useEffect(() => {
@@ -21,8 +23,15 @@ export function useFiscalMode() {
                 setFiscalMode(saved);
             }
         };
-        window.addEventListener('storage_fiscal_mode_changed', handleModeChange);
-        return () => window.removeEventListener('storage_fiscal_mode_changed', handleModeChange);
+        window.addEventListener(
+            'storage_fiscal_mode_changed',
+            handleModeChange,
+        );
+        return () =>
+            window.removeEventListener(
+                'storage_fiscal_mode_changed',
+                handleModeChange,
+            );
     }, []);
 
     return fiscalMode;
@@ -33,12 +42,32 @@ export const useDemoFiscalMode = useFiscalMode;
 
 interface AppLayoutProps {
     children: React.ReactNode;
-    activePage: 'overview' | 'vendors' | 'clients' | 'sales' | 'projects' | 'debt-receivable' | 'invoice-po' | 'purchases' | 'cash-out' | 'sales-transactions' | 'journal' | 'ppn' | 'cashflow';
+    activePage:
+        | 'overview'
+        | 'vendors'
+        | 'clients'
+        | 'sales'
+        | 'projects'
+        | 'debt-receivable'
+        | 'invoice-po'
+        | 'purchases'
+        | 'cash-out'
+        | 'sales-transactions'
+        | 'coa'
+        | 'accounting-settings'
+        | 'journal'
+        | 'ppn'
+        | 'cashflow';
     title: string;
     breadcrumbs: Array<{ label: string; href?: string }>;
 }
 
-export default function AppLayout({ children, activePage, title, breadcrumbs }: AppLayoutProps) {
+export default function AppLayout({
+    children,
+    activePage,
+    title,
+    breadcrumbs,
+}: AppLayoutProps) {
     const [fiscalMode, setFiscalMode] = useState<'ppn' | 'non-ppn'>('ppn');
     const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
@@ -55,7 +84,10 @@ export default function AppLayout({ children, activePage, title, breadcrumbs }: 
 
     useEffect(() => {
         if (typeof document !== 'undefined') {
-            document.documentElement.setAttribute('data-fiscal-mode', fiscalMode);
+            document.documentElement.setAttribute(
+                'data-fiscal-mode',
+                fiscalMode,
+            );
         }
     }, [fiscalMode]);
 
@@ -76,26 +108,27 @@ export default function AppLayout({ children, activePage, title, breadcrumbs }: 
 
     return (
         <FiscalContext.Provider value={{ fiscalMode }}>
-            <div className="min-h-screen bg-slate-100 flex font-sans">
+            <div className="flex min-h-screen bg-slate-100 font-sans">
                 {/* Left Sidebar */}
                 <Sidebar
                     activePage={activePage}
-                    fiscalMode={fiscalMode}
-                    onFiscalModeToggle={handleFiscalModeToggle}
                     isCollapsed={isCollapsed}
                 />
 
                 {/* Main Content Area */}
-                <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isCollapsed ? 'pl-20' : 'pl-72'}`}>
+                <div
+                    className={`flex min-w-0 flex-1 flex-col transition-all duration-300 ${isCollapsed ? 'pl-20' : 'pl-72'}`}
+                >
                     <Header
                         title={title}
                         breadcrumbs={breadcrumbs}
                         fiscalMode={fiscalMode}
                         isCollapsed={isCollapsed}
                         onToggleCollapse={handleToggleCollapse}
+                        onFiscalModeToggle={handleFiscalModeToggle}
                     />
 
-                    <main className="flex-1 p-6 md:p-8 overflow-y-auto w-full">
+                    <main className="w-full flex-1 overflow-y-auto p-6 md:p-8">
                         {children}
                     </main>
                 </div>

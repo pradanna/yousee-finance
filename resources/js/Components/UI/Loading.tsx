@@ -69,7 +69,7 @@ export function LoadingOverlay({
                 blur ? 'backdrop-blur-sm' : ''
             } transition-opacity duration-200`}
         >
-            <div className="flex flex-col items-center gap-3 p-5 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 max-w-xs text-center">
+            <div className="flex max-w-xs flex-col items-center gap-3 rounded-2xl border border-slate-100 bg-white p-5 text-center shadow-xl dark:border-slate-700 dark:bg-slate-800">
                 <LoadingSpinner size="lg" color="primary" />
                 {label && (
                     <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -93,7 +93,7 @@ export function LoadingOverlay({
                         blur ? 'backdrop-blur-[2px]' : ''
                     } rounded-lg transition-all duration-200`}
                 >
-                    <div className="flex flex-col items-center gap-2 p-3 bg-white/90 dark:bg-slate-800/90 rounded-xl shadow-md border border-slate-100 dark:border-slate-700">
+                    <div className="flex flex-col items-center gap-2 rounded-xl border border-slate-100 bg-white/90 p-3 shadow-md dark:border-slate-700 dark:bg-slate-800/90">
                         <LoadingSpinner size="md" color="primary" />
                         {label && (
                             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -114,7 +114,7 @@ interface SkeletonProps {
 export function Skeleton({ className = '' }: SkeletonProps) {
     return (
         <div
-            className={`animate-pulse bg-slate-200 dark:bg-slate-700/60 rounded ${className}`}
+            className={`animate-pulse rounded bg-slate-200 dark:bg-slate-700/60 ${className}`}
         />
     );
 }
@@ -126,14 +126,14 @@ interface TableSkeletonProps {
 
 export function TableSkeleton({ rows = 5, cols = 5 }: TableSkeletonProps) {
     return (
-        <div className="w-full space-y-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700">
+        <div className="w-full space-y-3 rounded-xl border border-slate-200/80 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
             {/* Header skeleton */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-700">
                 <Skeleton className="h-6 w-36" />
                 <Skeleton className="h-9 w-24 rounded-lg" />
             </div>
             {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 py-2 border-b border-slate-100 dark:border-slate-700/50">
+            <div className="grid grid-cols-12 gap-4 border-b border-slate-100 py-2 dark:border-slate-700/50">
                 {Array.from({ length: cols }).map((_, colIdx) => (
                     <div
                         key={colIdx}
@@ -147,7 +147,7 @@ export function TableSkeleton({ rows = 5, cols = 5 }: TableSkeletonProps) {
             {Array.from({ length: rows }).map((_, rowIdx) => (
                 <div
                     key={rowIdx}
-                    className="grid grid-cols-12 gap-4 py-3 border-b border-slate-50 dark:border-slate-700/30 items-center"
+                    className="grid grid-cols-12 items-center gap-4 border-b border-slate-50 py-3 dark:border-slate-700/30"
                 >
                     {Array.from({ length: cols }).map((_, colIdx) => (
                         <div
@@ -175,13 +175,13 @@ interface CardSkeletonProps {
 
 export function CardSkeleton({ count = 3 }: CardSkeletonProps) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {Array.from({ length: count }).map((_, idx) => (
                 <div
                     key={idx}
-                    className="p-5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-3"
+                    className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-5 dark:border-slate-700 dark:bg-slate-800"
                 >
-                    <div className="flex justify-between items-center">
+                    <div className="flex items-center justify-between">
                         <Skeleton className="h-4 w-24" />
                         <Skeleton className="h-8 w-8 rounded-full" />
                     </div>

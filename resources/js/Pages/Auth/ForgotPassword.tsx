@@ -1,5 +1,5 @@
-import InputError from '@/Components/Form/InputError';
 import PrimaryButton from '@/Components/Button/PrimaryButton';
+import InputError from '@/Components/Form/InputError';
 import TextInput from '@/Components/Form/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, useForm } from '@inertiajs/react';

@@ -71,14 +71,20 @@ export default function Welcome({
 
                         <main className="mt-6">
                             {/* Demo Banner Card */}
-                            <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl mb-8">
+                            <div className="mb-8 flex flex-col items-center justify-between gap-6 rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl md:flex-row">
                                 <div className="space-y-1.5 text-center md:text-left">
-                                    <h2 className="text-xl font-bold text-white tracking-tight">Interactive Finance Dashboard Demo</h2>
-                                    <p className="text-slate-400 text-sm font-semibold">Lihat demo Frontend FintechLedger dengan visualisasi Mode PPN / Non-PPN interaktif.</p>
+                                    <h2 className="text-xl font-bold tracking-tight text-white">
+                                        Interactive Finance Dashboard Demo
+                                    </h2>
+                                    <p className="text-sm font-semibold text-slate-400">
+                                        Lihat demo Frontend FintechLedger dengan
+                                        visualisasi Mode PPN / Non-PPN
+                                        interaktif.
+                                    </p>
                                 </div>
                                 <Link
                                     href="/overview"
-                                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-blue-600/25 transition-all text-sm shrink-0"
+                                    className="shrink-0 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition-all hover:bg-blue-700"
                                 >
                                     Masuk ke Demo Dashboard &rarr;
                                 </Link>
