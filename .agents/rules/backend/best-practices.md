@@ -37,6 +37,11 @@ As a financial application, strict adherence to security, data integrity, and st
 
 
 ## 5. Database & Migration Specifics
+- **Primary Keys (CRITICAL)**: ALL tables MUST use UUID as primary key, never auto-increment integers.
+  - Migration: `$table->uuid('id')->primary();` (NOT `$table->id()`).
+  - Model: use the `HasUuids` trait (`Illuminate\Database\Eloquent\Concerns\HasUuids`) so IDs are generated on creation.
+  - Foreign keys referencing another table MUST be `$table->foreignUuid('x_id')->constrained(...)`, matching the UUID type of the referenced table's `id`.
+  - Rationale: avoids sequential ID enumeration/IDOR exposure on a financial system and keeps ID generation consistent across all domains (already the pattern used by `users`).
 - **Table Names**: `snake_case` plural.
 - **Fiscal Mode**: Column type must be `string` ('ppn' or 'non-ppn').
 - **Soft Deletes**: All major Aggregates (Vendor, Client) MUST use `softDeletes()`. Hard deletes are forbidden if transaction relations exist.
