@@ -1,5 +1,5 @@
 Table clients {
-  id          bigint       [pk, increment]
+  id          uuid         [pk, default: `gen_random_uuid()`]
   name        varchar(255) [not null]
   email       varchar(255) [null]
   phone       varchar(255) [null]

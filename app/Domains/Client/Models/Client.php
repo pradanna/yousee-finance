@@ -3,6 +3,8 @@
 namespace App\Domains\Client\Models;
 
 use App\Domains\Billing\Models\Invoice;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,7 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Client extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -57,5 +59,13 @@ class Client extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    /**
+     * Scope a query to only include active (non-archived) clients.
+     */
+    public function scopeActive(Builder $query): void
+    {
+        $query->where('is_archived', false);
     }
 }
