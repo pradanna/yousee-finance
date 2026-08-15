@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/sync-agents.sh\"",
+            "timeout": 15,
+            "statusMessage": "Syncing .claude from .agents..."
+          }
+        ]
+      }
+    ]
+  }
+}
