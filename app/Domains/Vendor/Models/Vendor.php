@@ -3,13 +3,14 @@
 namespace App\Domains\Vendor\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Vendor extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, HasUuids, SoftDeletes;
 
     protected static function newFactory()
     {

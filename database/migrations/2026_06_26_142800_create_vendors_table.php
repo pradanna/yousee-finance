@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('vendors', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
             $table->string('name');
             $table->string('npwp')->nullable();
             $table->boolean('is_archived')->default(false);
