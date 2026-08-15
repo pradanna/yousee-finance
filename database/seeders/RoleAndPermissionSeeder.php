@@ -5,8 +5,6 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
-use App\Domains\Identity\Models\User;
-use App\Domains\Identity\Enums\UserRole;
 
 class RoleAndPermissionSeeder extends Seeder
 {
@@ -34,25 +32,5 @@ class RoleAndPermissionSeeder extends Seeder
         $rolePimpinan->syncPermissions(Permission::whereIn('name', ['unlock-closing-period', 'approve-po'])->get());
         $roleAdmin->syncPermissions(Permission::where('name', 'manage-users')->get());
         $roleAkuntan->syncPermissions(Permission::where('name', 'create-invoice')->get());
-
-        // Create a default admin user for testing
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@yousee.test'],
-            [
-                'name' => 'Super Admin',
-                'password' => bcrypt('password'),
-            ]
-        );
-        $admin->assignRole('admin');
-        
-        // Create a pimpinan
-        $pimpinan = User::firstOrCreate(
-            ['email' => 'pimpinan@yousee.test'],
-            [
-                'name' => 'Pimpinan',
-                'password' => bcrypt('password'),
-            ]
-        );
-        $pimpinan->assignRole('pimpinan');
     }
 }
