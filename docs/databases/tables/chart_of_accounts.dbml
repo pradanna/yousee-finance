@@ -1,0 +1,46 @@
+Table chart_of_accounts {
+  id             bigint       [pk, increment]
+  parent_id      bigint       [null, note: 'Self-reference. NULL = top-level header']
+  code           varchar(20)  [not null, unique, note: 'e.g. 1121, 2110, 4100, 5100']
+  name           varchar(255) [not null]
+  type           varchar(255) [not null, note: 'asset | liability | equity | revenue | expense — IMMUTABLE']
+  normal_balance varchar(255) [not null, note: 'debit | credit — IMMUTABLE']
+  is_active      boolean      [not null, default: true]
+  description    text         [null]
+  created_at     timestamp    [null]
+  updated_at     timestamp    [null]
+
+  Indexes {
+    parent_id
+    (type, code)
+  }
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\ChartOfAccount
+
+  Single master COA shared across BOTH fiscal modes. Tax-specific accounts
+  (PPN Masukan 1141, PPN Keluaran 2121) are activated dynamically by the
+  transaction fiscal_mode, not by maintaining two separate charts.
+
+  STRICT LEAF NODE RULE
+    is_leaf is DERIVED (children_count === 0), never a column.
+    - Leaf accounts   : the ONLY accounts postable to journal_entry_items,
+                        invoices, purchase orders, or cash transactions.
+    - Header accounts : aggregation only, for Balance Sheet and P&L rollups.
+                        Selecting one in a transaction form must be rejected.
+
+  IMMUTABILITY
+    type and normal_balance can never change after creation — the ledger
+    history depends on them. code should be treated the same way: journal
+    lines point at account_id, so a renamed code would silently rewrite the
+    meaning of every past entry that references it.
+
+  PROJECTS MUST NOT CREATE ACCOUNTS
+    No per-project revenue accounts (no "4111 Pendapatan Project A").
+    Per-project reporting is done purely through
+    journal_entry_items.project_id tagging.
+  '''
+}
+
+Ref: chart_of_accounts.parent_id > chart_of_accounts.id

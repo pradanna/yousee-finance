@@ -16,3 +16,10 @@ Whenever FE needs data from BE, or BE provides new functionality to FE, a writte
    - The Backend team is then responsible for fulfilling this contract exactly as specified.
 
 By strictly adhering to these contract locations, both teams and AI Agents can easily discover integration requirements by reading the markdown files in `docs/contracts/`.
+
+## Database Schema Contract
+
+`docs/contracts/` describes the HTTP/Props surface (endpoints, payloads, response shapes). It does NOT restate the database schema — that lives separately in `docs/databases/` (one DBML file per table, see `docs/databases/README.md`).
+
+- When a feature contract in `docs/contracts/` needs new or changed tables, it should describe the schema decisions and rationale, then LINK to the relevant file(s) in `docs/databases/tables/` rather than duplicating column lists. Duplicated schema definitions drift out of sync with each other.
+- `docs/databases/` is the single source of truth for table shape. `backend/architecture.md` §0 requires checking it before any migration.

@@ -1,0 +1,25 @@
+Table purchase_order_items {
+  id                  bigint        [pk, increment]
+  purchase_order_id   bigint        [not null, note: 'cascadeOnDelete']
+  project_location_id bigint        [null, note: 'nullOnDelete — traceability back to the billboard point']
+  name                varchar(255)  [not null]
+  quantity            integer       [not null]
+  price               decimal(15,2) [not null, note: 'DPP per unit']
+  created_at          timestamp     [null]
+  updated_at          timestamp     [null]
+
+  Indexes {
+    purchase_order_id
+    project_location_id
+  }
+
+  Note: '''
+  Domain: Procurement
+  PO subtotal is recalculated as SUM(quantity * price).
+  project_location_id makes each PO line traceable to the exact billboard
+  point it pays for, which is what the PO print-out needs.
+  '''
+}
+
+Ref: purchase_order_items.purchase_order_id   > purchase_orders.id   [delete: cascade]
+Ref: purchase_order_items.project_location_id > project_locations.id [delete: set null]

@@ -1,0 +1,41 @@
+Table project_locations {
+  id                bigint        [pk, increment]
+  project_id        bigint        [not null, note: 'cascadeOnDelete']
+  vendor_id         bigint        [null]
+  purchase_order_id bigint        [null, note: 'nullOnDelete — po_issued is derived from this']
+  code              varchar(50)   [not null, note: 'LOC-001, unique within the project']
+  area              varchar(255)  [not null, note: 'e.g. Semarang, Solo, Yogyakarta']
+  description       varchar(255)  [not null, note: 'e.g. Billboard Jl. Pandanaran KM 3']
+  type              varchar(255)  [not null, note: 'Billboard | Videotron | Baliho | Neonbox']
+  size              varchar(50)   [not null, note: 'e.g. 4x8m']
+  orientation       varchar(10)   [null, note: 'V | H']
+  lighting          varchar(50)   [null, note: 'Berlampu | Tidak Berlampu']
+  qty               smallint      [not null, default: 1]
+  vendor_cost       decimal(15,2) [not null, note: 'DPP per unit. Line subtotal = vendor_cost * qty']
+  top_notes         varchar(255)  [null, note: 'Terms-of-payment note printed on the PO']
+  created_at        timestamp     [null]
+  updated_at        timestamp     [null]
+
+  Indexes {
+    (project_id, code) [unique]
+    (project_id, vendor_id)
+    purchase_order_id
+  }
+
+  Note: '''
+  Domain: Project
+  A single billboard / media point inside a campaign.
+
+  po_issued and po_number are NOT columns — both are derived from the
+  purchaseOrder relation and appended by the Resource. Storing them lets them
+  drift out of sync with the PO they describe.
+
+  INVARIANT: a location cannot be edited or deleted once purchase_order_id is
+  set. The UI groups locations by vendor, so one PO can cover several points
+  from the same vendor in a single bulk issuance.
+  '''
+}
+
+Ref: project_locations.project_id        > projects.id        [delete: cascade]
+Ref: project_locations.vendor_id         > vendors.id
+Ref: project_locations.purchase_order_id > purchase_orders.id [delete: set null]
