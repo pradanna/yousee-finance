@@ -1,0 +1,20 @@
+Table sales {
+  id         bigint       [pk, increment]
+  name       varchar(255) [not null]
+  email      varchar(255) [not null, unique]
+  is_active  boolean      [not null, default: true]
+  created_at timestamp    [null]
+  updated_at timestamp    [null]
+  deleted_at timestamp    [null]
+
+  Note: '''
+  Domain: Sales
+  Model: App\Domains\Sales\Models\Sales
+
+  Sales PIC master. The Projects UI currently picks a PIC from a hardcoded
+  string list — it must bind to sales.id instead.
+
+  is_active and deleted_at are additions: the existing migration has neither,
+  which leaves no way to retire a PIC without breaking historical projects.
+  '''
+}

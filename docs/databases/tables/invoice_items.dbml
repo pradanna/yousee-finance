@@ -1,0 +1,23 @@
+Table invoice_items {
+  id                  bigint        [pk, increment]
+  invoice_id          bigint        [not null, note: 'cascadeOnDelete']
+  project_location_id bigint        [null, note: 'nullOnDelete — which billboard point is being billed']
+  name                varchar(255)  [not null]
+  quantity            integer       [not null]
+  price               decimal(15,2) [not null, note: 'DPP per unit']
+  created_at          timestamp     [null]
+  updated_at          timestamp     [null]
+
+  Indexes {
+    invoice_id
+    project_location_id
+  }
+
+  Note: '''
+  Domain: Billing
+  Invoice subtotal is recalculated as SUM(quantity * price).
+  '''
+}
+
+Ref: invoice_items.invoice_id          > invoices.id          [delete: cascade]
+Ref: invoice_items.project_location_id > project_locations.id [delete: set null]

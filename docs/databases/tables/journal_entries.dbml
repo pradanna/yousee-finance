@@ -1,0 +1,40 @@
+Table journal_entries {
+  id                  bigint       [pk, increment]
+  number              varchar(50)  [not null, unique, note: 'JE-{YYYYMM}-{NNNN}']
+  source_type         varchar(255) [null, note: 'Morph: Invoice | PurchaseOrder | PaymentSettlement | CashExpense']
+  source_id           bigint       [null]
+  project_id          bigint       [null, note: 'Header-level convenience tag; the authoritative tag is per item']
+  fiscal_mode         varchar(255) [not null, note: 'ppn | non-ppn']
+  transaction_date    date         [not null]
+  description         varchar(255) [null]
+  is_reversal         boolean      [not null, default: false]
+  reverses_journal_id bigint       [null, note: 'The entry this one reverses']
+  posted_by           char(36)     [null, note: 'users.id — NULL for system-generated entries']
+  created_at          timestamp    [null]
+  updated_at          timestamp    [null]
+
+  Indexes {
+    (source_type, source_id)
+    (fiscal_mode, transaction_date)
+    project_id
+  }
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\JournalEntry
+
+  Polymorphic source — no database-level FK. A NULL source means a manual or
+  adjustment entry.
+
+  INVARIANTS
+  - SUM(items.debit) must equal SUM(items.credit). Assert before commit.
+  - Entries are NEVER deleted or edited. A correction creates a new entry with
+    is_reversal = true pointing at reverses_journal_id, which is exactly why
+    those two columns exist rather than relying on convention.
+  - Posting into a closed (month, year, fiscal_mode) is blocked.
+  '''
+}
+
+Ref: journal_entries.project_id          > projects.id
+Ref: journal_entries.reverses_journal_id > journal_entries.id
+Ref: journal_entries.posted_by           > users.id

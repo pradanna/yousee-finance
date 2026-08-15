@@ -1,0 +1,26 @@
+Table attachments {
+  id              bigint       [pk, increment]
+  attachable_type varchar(255) [not null, note: 'Morph: PurchaseOrder | Invoice | PaymentSettlement']
+  attachable_id   bigint       [not null]
+  file_path       varchar(255) [not null]
+  file_name       varchar(255) [not null]
+  mime_type       varchar(100) [null]
+  size_bytes      bigint       [null]
+  uploaded_by     char(36)     [null, note: 'users.id']
+  created_at      timestamp    [null]
+  updated_at      timestamp    [null]
+
+  Indexes {
+    (attachable_type, attachable_id)
+  }
+
+  Note: '''
+  Domain: Shared
+
+  Polymorphic — no database-level FK to the owner. The previous schema bound
+  attachments to purchase_orders only, which left no way to attach a signed
+  contract to an invoice or a transfer receipt to a payment settlement.
+  '''
+}
+
+Ref: attachments.uploaded_by > users.id

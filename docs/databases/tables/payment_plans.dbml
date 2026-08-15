@@ -1,0 +1,26 @@
+Table payment_plans {
+  id           bigint        [pk, increment]
+  payable_type varchar(255)  [not null, note: 'Morph: Invoice | PurchaseOrder']
+  payable_id   bigint        [not null]
+  scheme       varchar(255)  [not null, note: 'full | dp | termin | installment']
+  total_amount decimal(15,2) [not null, note: 'PPN-inclusive when fiscal_mode = ppn']
+  notes        text          [null]
+  created_at   timestamp     [null]
+  updated_at   timestamp     [null]
+
+  Indexes {
+    (payable_type, payable_id) [unique, note: 'One plan per document']
+  }
+
+  Note: '''
+  Domain: Billing
+  Model: App\Domains\Billing\Models\PaymentPlan
+
+  Deliberately polymorphic. The client payment plan on an Invoice and the
+  vendor terms-of-payment on a PurchaseOrder are the same structure with
+  mirrored journal direction — one table, one set of Actions, one UI shape.
+  Two near-identical tables would guarantee the two drift apart.
+
+  Polymorphic — no database-level FK to invoices / purchase_orders.
+  '''
+}

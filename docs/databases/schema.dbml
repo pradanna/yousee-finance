@@ -1,0 +1,978 @@
+// =============================================================================
+// YouSee Finance — Database Schema
+// GENERATED FILE — do not edit.
+// Edit tables/<table>.dbml, then run ./build.sh
+// =============================================================================
+
+// ---- tables/_enums.dbml ----
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums — mirrors app/Domains/**/Enums/*.php
+//
+// Every one of these is stored as VARCHAR in MySQL (best-practices.md §5) and
+// cast to a PHP backed enum in the model. The DBML Enum blocks exist purely to
+// make the rendered diagram readable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Enum fiscal_mode {
+  ppn       [note: 'PKP context — PPN 11% applies']
+  "non-ppn" [note: 'Non-PKP context — PPN fields disabled but still visible in the UI']
+}
+
+Enum user_status {
+  active
+  inactive
+  suspended
+}
+
+Enum account_type {
+  asset
+  liability
+  equity
+  revenue
+  expense
+}
+
+Enum normal_balance {
+  debit
+  credit
+}
+
+Enum project_status {
+  draft     [note: 'Created, not yet invoiced']
+  active    [note: 'Invoice issued, campaign running']
+  completed [note: 'All payment terms settled AND end_date passed']
+  cancelled
+}
+
+Enum location_type {
+  Billboard
+  Videotron
+  Baliho
+  Neonbox
+}
+
+Enum location_orientation {
+  V [note: 'Vertical']
+  H [note: 'Horizontal']
+}
+
+Enum location_lighting {
+  Berlampu
+  "Tidak Berlampu"
+}
+
+Enum purchase_order_status {
+  draft
+  issued [note: 'Payable journal posted']
+  paid   [note: 'Fully settled']
+}
+
+Enum invoice_status {
+  draft
+  issued [note: 'Receivable journal posted']
+  paid   [note: 'TERMINAL — draft -> issued -> paid, no skipping, no going back']
+}
+
+Enum payment_scheme {
+  full        [note: 'Lunas Sekaligus']
+  dp          [note: 'DP + Pelunasan']
+  termin      [note: 'Termin / Milestone']
+  installment [note: 'Cicilan Berkala']
+}
+
+Enum payment_term_status {
+  unpaid
+  partial [note: 'Settlements recorded but not yet covering the full term amount']
+  paid
+}
+
+// ---- tables/_spatie_permission.dbml ----
+// ─────────────────────────────────────────────────────────────────────────────
+// Spatie laravel-permission (vendor package, default schema).
+// Kept in one file: these five tables are a single vendor unit and are never
+// hand-edited.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table permissions {
+  id         bigint       [pk, increment]
+  name       varchar(255) [not null]
+  guard_name varchar(255) [not null]
+  created_at timestamp    [null]
+  updated_at timestamp    [null]
+
+  Indexes {
+    (name, guard_name) [unique]
+  }
+}
+
+Table roles {
+  id         bigint       [pk, increment]
+  name       varchar(255) [not null]
+  guard_name varchar(255) [not null]
+  created_at timestamp    [null]
+  updated_at timestamp    [null]
+
+  Indexes {
+    (name, guard_name) [unique]
+  }
+
+  Note: 'Seeded with UserRole values: admin, pimpinan.'
+}
+
+Table model_has_permissions {
+  permission_id bigint       [not null]
+  model_type    varchar(255) [not null]
+  model_id      char(36)     [not null, note: 'users.id is a UUID']
+
+  Indexes {
+    (permission_id, model_id, model_type) [pk]
+    (model_id, model_type)
+  }
+}
+
+Table model_has_roles {
+  role_id    bigint       [not null]
+  model_type varchar(255) [not null]
+  model_id   char(36)     [not null, note: 'users.id is a UUID']
+
+  Indexes {
+    (role_id, model_id, model_type) [pk]
+    (model_id, model_type)
+  }
+}
+
+Table role_has_permissions {
+  permission_id bigint [not null]
+  role_id       bigint [not null]
+
+  Indexes {
+    (permission_id, role_id) [pk]
+  }
+}
+
+Ref: model_has_permissions.permission_id > permissions.id [delete: cascade]
+Ref: model_has_roles.role_id             > roles.id       [delete: cascade]
+Ref: role_has_permissions.permission_id  > permissions.id [delete: cascade]
+Ref: role_has_permissions.role_id        > roles.id       [delete: cascade]
+
+// ---- tables/accounting_settings.dbml ----
+Table accounting_settings {
+  id          bigint       [pk, increment]
+  key         varchar(255) [not null, unique]
+  account_id  bigint       [not null]
+  description varchar(255) [null]
+  created_at  timestamp    [null]
+  updated_at  timestamp    [null]
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\AccountingSetting
+
+  Global default COA mappings that drive transaction automation. Key/value
+  rather than a one-row-many-columns table so a new mapping is a seeder row,
+  not a migration.
+
+  SEEDED KEYS
+    default_receivable      -> 1121 Piutang Dagang Client
+    default_payable         -> 2110 Hutang Dagang Vendor
+    default_vat_input       -> 1141 PPN Masukan
+    default_vat_output      -> 2121 PPN Keluaran
+    default_income_tax      -> 2122 Hutang PPh Pemotongan
+    default_sales_revenue   -> 4100 Pendapatan Sewa Media Iklan
+    default_project_expense -> 5100 Beban HPP Sewa Billboard Vendor
+    opening_balance_equity  -> 3900 Opening Balance Equity
+
+  Global, NOT per fiscal mode — there is one master COA.
+
+  Changing a mapping only affects transactions created afterwards. Journal
+  entries already posted keep pointing at the account they were posted to,
+  because they store account_id directly rather than resolving the setting
+  at read time. Closed periods therefore never move.
+
+  account_id must reference a LEAF account.
+  '''
+}
+
+Ref: accounting_settings.account_id > chart_of_accounts.id
+
+// ---- tables/attachments.dbml ----
+Table attachments {
+  id              bigint       [pk, increment]
+  attachable_type varchar(255) [not null, note: 'Morph: PurchaseOrder | Invoice | PaymentSettlement']
+  attachable_id   bigint       [not null]
+  file_path       varchar(255) [not null]
+  file_name       varchar(255) [not null]
+  mime_type       varchar(100) [null]
+  size_bytes      bigint       [null]
+  uploaded_by     char(36)     [null, note: 'users.id']
+  created_at      timestamp    [null]
+  updated_at      timestamp    [null]
+
+  Indexes {
+    (attachable_type, attachable_id)
+  }
+
+  Note: '''
+  Domain: Shared
+
+  Polymorphic — no database-level FK to the owner. The previous schema bound
+  attachments to purchase_orders only, which left no way to attach a signed
+  contract to an invoice or a transfer receipt to a payment settlement.
+  '''
+}
+
+Ref: attachments.uploaded_by > users.id
+
+// ---- tables/audit_logs.dbml ----
+Table audit_logs {
+  id          bigint       [pk, increment]
+  user_id     char(36)     [not null]
+  action      varchar(255) [not null, note: 'e.g. closing_period.unlock']
+  auditable_type varchar(255) [null, note: 'Morph — the record acted upon']
+  auditable_id   bigint    [null]
+  details     text         [not null, note: 'JSON payload of the change']
+  ip_address  varchar(45)  [null]
+  created_at  timestamp    [null]
+  updated_at  timestamp    [null]
+
+  Indexes {
+    user_id
+    (auditable_type, auditable_id)
+    action
+  }
+
+  Note: '''
+  Domain: Accounting
+  Audit trail for privileged operations — above all the PIMPINAN unlock of a
+  closed period, which is the one action that can rewrite settled history.
+  '''
+}
+
+Ref: audit_logs.user_id > users.id
+
+// ---- tables/cash_expenses.dbml ----
+Table cash_expenses {
+  id                 bigint        [pk, increment]
+  expense_account_id bigint        [not null, note: 'Debited — leaf expense account']
+  payment_account_id bigint        [not null, note: 'Credited — leaf cash/bank account']
+  project_id         bigint        [null, note: 'Optional analytical tag']
+  amount             decimal(15,2) [not null]
+  transaction_date   date          [not null]
+  description        varchar(255)  [null]
+  fiscal_mode        varchar(255)  [not null, note: 'ppn | non-ppn']
+  created_at         timestamp     [null]
+  updated_at         timestamp     [null]
+
+  Indexes {
+    (fiscal_mode, transaction_date)
+    project_id
+  }
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\CashExpense
+
+  Direct operational cash disbursement (Flow C):
+    Dr expense_account_id / Cr payment_account_id
+
+  Both columns are now foreign keys into chart_of_accounts rather than the
+  loose *_account_code strings of the previous schema.
+  '''
+}
+
+Ref: cash_expenses.expense_account_id > chart_of_accounts.id
+Ref: cash_expenses.payment_account_id > chart_of_accounts.id
+Ref: cash_expenses.project_id         > projects.id
+
+// ---- tables/chart_of_accounts.dbml ----
+Table chart_of_accounts {
+  id             bigint       [pk, increment]
+  parent_id      bigint       [null, note: 'Self-reference. NULL = top-level header']
+  code           varchar(20)  [not null, unique, note: 'e.g. 1121, 2110, 4100, 5100']
+  name           varchar(255) [not null]
+  type           varchar(255) [not null, note: 'asset | liability | equity | revenue | expense — IMMUTABLE']
+  normal_balance varchar(255) [not null, note: 'debit | credit — IMMUTABLE']
+  is_active      boolean      [not null, default: true]
+  description    text         [null]
+  created_at     timestamp    [null]
+  updated_at     timestamp    [null]
+
+  Indexes {
+    parent_id
+    (type, code)
+  }
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\ChartOfAccount
+
+  Single master COA shared across BOTH fiscal modes. Tax-specific accounts
+  (PPN Masukan 1141, PPN Keluaran 2121) are activated dynamically by the
+  transaction fiscal_mode, not by maintaining two separate charts.
+
+  STRICT LEAF NODE RULE
+    is_leaf is DERIVED (children_count === 0), never a column.
+    - Leaf accounts   : the ONLY accounts postable to journal_entry_items,
+                        invoices, purchase orders, or cash transactions.
+    - Header accounts : aggregation only, for Balance Sheet and P&L rollups.
+                        Selecting one in a transaction form must be rejected.
+
+  IMMUTABILITY
+    type and normal_balance can never change after creation — the ledger
+    history depends on them. code should be treated the same way: journal
+    lines point at account_id, so a renamed code would silently rewrite the
+    meaning of every past entry that references it.
+
+  PROJECTS MUST NOT CREATE ACCOUNTS
+    No per-project revenue accounts (no "4111 Pendapatan Project A").
+    Per-project reporting is done purely through
+    journal_entry_items.project_id tagging.
+  '''
+}
+
+Ref: chart_of_accounts.parent_id > chart_of_accounts.id
+
+// ---- tables/clients.dbml ----
+Table clients {
+  id          bigint       [pk, increment]
+  name        varchar(255) [not null]
+  email       varchar(255) [null]
+  phone       varchar(255) [null]
+  address     text         [null]
+  npwp        varchar(255) [null]
+  is_archived boolean      [not null, default: false]
+  created_at  timestamp    [null]
+  updated_at  timestamp    [null]
+  deleted_at  timestamp    [null]
+
+  Note: '''
+  Domain: Client
+  Model: App\Domains\Client\Models\Client
+
+  Hard delete forbidden once invoices or projects reference the client.
+  '''
+}
+
+// ---- tables/closing_periods.dbml ----
+Table closing_periods {
+  id          bigint       [pk, increment]
+  month       tinyint      [not null, note: '1..12']
+  year        smallint     [not null]
+  fiscal_mode varchar(255) [not null, note: 'ppn | non-ppn']
+  is_closed   boolean      [not null, default: false]
+  closed_at   timestamp    [null]
+  closed_by   char(36)     [null, note: 'users.id']
+  created_at  timestamp    [null]
+  updated_at  timestamp    [null]
+
+  Indexes {
+    (month, year, fiscal_mode) [unique]
+  }
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\ClosingPeriod
+
+  Locks a financial period. Every saving() on Invoice, PurchaseOrder,
+  PaymentSettlement, CashExpense and JournalEntry calls
+  ClosingPeriod::isClosed(month, year, fiscal_mode) and throws a
+  DomainException when the period is closed.
+
+  Only UserRole::PIMPINAN may unlock, and every unlock MUST be written to
+  audit_logs.
+  '''
+}
+
+Ref: closing_periods.closed_by > users.id
+
+// ---- tables/invoice_items.dbml ----
+Table invoice_items {
+  id                  bigint        [pk, increment]
+  invoice_id          bigint        [not null, note: 'cascadeOnDelete']
+  project_location_id bigint        [null, note: 'nullOnDelete — which billboard point is being billed']
+  name                varchar(255)  [not null]
+  quantity            integer       [not null]
+  price               decimal(15,2) [not null, note: 'DPP per unit']
+  created_at          timestamp     [null]
+  updated_at          timestamp     [null]
+
+  Indexes {
+    invoice_id
+    project_location_id
+  }
+
+  Note: '''
+  Domain: Billing
+  Invoice subtotal is recalculated as SUM(quantity * price).
+  '''
+}
+
+Ref: invoice_items.invoice_id          > invoices.id          [delete: cascade]
+Ref: invoice_items.project_location_id > project_locations.id [delete: set null]
+
+// ---- tables/invoices.dbml ----
+Table invoices {
+  id               bigint        [pk, increment]
+  invoice_number   varchar(50)   [null, unique, note: 'INV-PTSSI/{MM}/{YYYY}/{NNN} — assigned on issue, NULL while draft']
+  client_id        bigint        [not null]
+  project_id       bigint        [null]
+  sales_id         bigint        [null]
+  revenue_account_id bigint      [null, note: 'Credited account. Defaults from accounting_settings.default_sales_revenue']
+  fiscal_mode      varchar(255)  [not null, note: 'ppn | non-ppn']
+  transaction_date date          [not null]
+  due_date         date          [null, note: 'Defaults to transaction_date + 7 days']
+  subtotal         decimal(15,2) [not null, default: 0, note: 'DPP']
+  ppn              decimal(15,2) [not null, default: 0, note: 'subtotal * 0.11 when fiscal_mode = ppn, else 0']
+  total            decimal(15,2) [not null, default: 0, note: 'subtotal + ppn']
+  status           varchar(255)  [not null, default: 'draft', note: 'draft | issued | paid']
+  notes            text          [null]
+  created_at       timestamp     [null]
+  updated_at       timestamp     [null]
+
+  Indexes {
+    (fiscal_mode, status)
+    client_id
+    project_id
+  }
+
+  Note: '''
+  Domain: Billing
+  Model: App\Domains\Billing\Models\Invoice
+
+  INVARIANTS
+  - client_id required.
+  - Status flow draft -> issued -> paid. Cannot skip straight to paid.
+    paid is terminal and cannot be reverted.
+  - ClosingPeriod guard on saving().
+  - draft -> issued posts the receivable journal (Flow A.1).
+  - paid is reached only when every payment term is settled; that transition
+    generates the Kwitansi and posts NO journal of its own, because each
+    settlement already posted one.
+
+  The status hook must not read from request() — an Action passes what it
+  needs. HTTP concerns do not belong inside a Model.
+  '''
+}
+
+Ref: invoices.client_id          > clients.id
+Ref: invoices.project_id         > projects.id
+Ref: invoices.sales_id           > sales.id
+Ref: invoices.revenue_account_id > chart_of_accounts.id
+
+// ---- tables/journal_entries.dbml ----
+Table journal_entries {
+  id                  bigint       [pk, increment]
+  number              varchar(50)  [not null, unique, note: 'JE-{YYYYMM}-{NNNN}']
+  source_type         varchar(255) [null, note: 'Morph: Invoice | PurchaseOrder | PaymentSettlement | CashExpense']
+  source_id           bigint       [null]
+  project_id          bigint       [null, note: 'Header-level convenience tag; the authoritative tag is per item']
+  fiscal_mode         varchar(255) [not null, note: 'ppn | non-ppn']
+  transaction_date    date         [not null]
+  description         varchar(255) [null]
+  is_reversal         boolean      [not null, default: false]
+  reverses_journal_id bigint       [null, note: 'The entry this one reverses']
+  posted_by           char(36)     [null, note: 'users.id — NULL for system-generated entries']
+  created_at          timestamp    [null]
+  updated_at          timestamp    [null]
+
+  Indexes {
+    (source_type, source_id)
+    (fiscal_mode, transaction_date)
+    project_id
+  }
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\JournalEntry
+
+  Polymorphic source — no database-level FK. A NULL source means a manual or
+  adjustment entry.
+
+  INVARIANTS
+  - SUM(items.debit) must equal SUM(items.credit). Assert before commit.
+  - Entries are NEVER deleted or edited. A correction creates a new entry with
+    is_reversal = true pointing at reverses_journal_id, which is exactly why
+    those two columns exist rather than relying on convention.
+  - Posting into a closed (month, year, fiscal_mode) is blocked.
+  '''
+}
+
+Ref: journal_entries.project_id          > projects.id
+Ref: journal_entries.reverses_journal_id > journal_entries.id
+Ref: journal_entries.posted_by           > users.id
+
+// ---- tables/journal_entry_items.dbml ----
+Table journal_entry_items {
+  id               bigint        [pk, increment]
+  journal_entry_id bigint        [not null, note: 'cascadeOnDelete']
+  account_id       bigint        [not null, note: 'MUST be a leaf account']
+  project_id       bigint        [null, note: 'Analytical tagging — see note']
+  debit            decimal(15,2) [not null, default: 0]
+  credit           decimal(15,2) [not null, default: 0]
+  memo             varchar(255)  [null]
+  created_at       timestamp     [null]
+  updated_at       timestamp     [null]
+
+  Indexes {
+    journal_entry_id
+    account_id
+    project_id
+  }
+
+  Note: '''
+  Domain: Accounting
+
+  account_id is a real foreign key into chart_of_accounts. It replaces the
+  free-text account_name string used by the previous schema, which made
+  trial balances and P&L rollups impossible to compute reliably.
+
+  ANALYTICAL PROJECT TAGGING
+    project_id lives HERE, on the line, not on the account. This is what makes
+    per-project profit and loss reporting possible without polluting the COA
+    with per-project accounts.
+
+  INVARIANTS
+  - Exactly one of debit / credit is non-zero on any given line.
+  - account_id must point at a leaf account (children_count === 0).
+  '''
+}
+
+Ref: journal_entry_items.journal_entry_id > journal_entries.id   [delete: cascade]
+Ref: journal_entry_items.account_id       > chart_of_accounts.id
+Ref: journal_entry_items.project_id       > projects.id
+
+// ---- tables/kwitansis.dbml ----
+Table kwitansis {
+  id             bigint        [pk, increment]
+  invoice_id     bigint        [not null, unique, note: 'cascadeOnDelete']
+  receipt_number varchar(50)   [not null, unique, note: 'KW-{YYYYMM}-{NNNN}']
+  amount         decimal(15,2) [not null]
+  paid_at        timestamp     [not null]
+  created_at     timestamp     [null]
+  updated_at     timestamp     [null]
+
+  Note: '''
+  Domain: Billing
+  Official receipt of FULL payment.
+
+  INVARIANT: exactly one per invoice — enforced by the unique invoice_id —
+  generated automatically when the invoice reaches paid. Strictly immutable
+  once created.
+
+  It carries no payment_account column: an invoice settled across several
+  terms was received into potentially several different bank accounts, and
+  that detail belongs on payment_settlements, one row per actual transfer.
+  '''
+}
+
+Ref: kwitansis.invoice_id - invoices.id [delete: cascade]
+
+// ---- tables/password_reset_tokens.dbml ----
+Table password_reset_tokens {
+  email      varchar(255) [pk]
+  token      varchar(255) [not null]
+  created_at timestamp    [null]
+
+  Note: 'Laravel framework table. Matched by email — no FK to users.'
+}
+
+// ---- tables/payment_plans.dbml ----
+Table payment_plans {
+  id           bigint        [pk, increment]
+  payable_type varchar(255)  [not null, note: 'Morph: Invoice | PurchaseOrder']
+  payable_id   bigint        [not null]
+  scheme       varchar(255)  [not null, note: 'full | dp | termin | installment']
+  total_amount decimal(15,2) [not null, note: 'PPN-inclusive when fiscal_mode = ppn']
+  notes        text          [null]
+  created_at   timestamp     [null]
+  updated_at   timestamp     [null]
+
+  Indexes {
+    (payable_type, payable_id) [unique, note: 'One plan per document']
+  }
+
+  Note: '''
+  Domain: Billing
+  Model: App\Domains\Billing\Models\PaymentPlan
+
+  Deliberately polymorphic. The client payment plan on an Invoice and the
+  vendor terms-of-payment on a PurchaseOrder are the same structure with
+  mirrored journal direction — one table, one set of Actions, one UI shape.
+  Two near-identical tables would guarantee the two drift apart.
+
+  Polymorphic — no database-level FK to invoices / purchase_orders.
+  '''
+}
+
+// ---- tables/payment_settlements.dbml ----
+Table payment_settlements {
+  id                 bigint        [pk, increment]
+  payment_term_id    bigint        [not null, note: 'cascadeOnDelete']
+  payment_account_id bigint        [not null, note: 'Leaf cash/bank account that received or sent the money']
+  journal_entry_id   bigint        [null, note: 'The journal this settlement posted']
+  amount             decimal(15,2) [not null]
+  paid_at            date          [not null]
+  payment_method     varchar(255)  [not null, note: 'e.g. Transfer Bank BCA']
+  payment_ref        varchar(255)  [null, note: 'Transfer proof / reference number']
+  notes              text          [null]
+  created_at         timestamp     [null]
+  updated_at         timestamp     [null]
+
+  Indexes {
+    payment_term_id
+    paid_at
+    payment_account_id
+  }
+
+  Note: '''
+  Domain: Billing
+  One row per actual money movement.
+
+  A separate table is required because the UI supports partially paying a
+  single term, so one term accumulates several settlements over time.
+  Collapsing this into a paid_amount column on payment_terms would destroy
+  the payment history and leave each journal entry with nothing to point back
+  at when an auditor asks which transfer produced it.
+
+  Each settlement posts its own journal inside the same DB::transaction():
+    Client invoice -> Dr payment_account_id      / Cr default_receivable
+    Vendor PO      -> Dr default_payable         / Cr payment_account_id
+  '''
+}
+
+Ref: payment_settlements.payment_term_id    > payment_terms.id     [delete: cascade]
+Ref: payment_settlements.payment_account_id > chart_of_accounts.id
+Ref: payment_settlements.journal_entry_id   > journal_entries.id
+
+// ---- tables/payment_terms.dbml ----
+Table payment_terms {
+  id              bigint        [pk, increment]
+  payment_plan_id bigint        [not null, note: 'cascadeOnDelete']
+  sort_order      tinyint       [not null]
+  label           varchar(255)  [not null, note: 'DP 30% | Termin 2 | Cicilan 1 dari 3 | Pelunasan']
+  amount          decimal(15,2) [not null]
+  percent         decimal(5,2)  [not null, note: 'Percent of the plan total, 0..100']
+  due_date        date          [not null]
+  status          varchar(255)  [not null, default: 'unpaid', note: 'unpaid | partial | paid']
+  notes           text          [null]
+  created_at      timestamp     [null]
+  updated_at      timestamp     [null]
+
+  Indexes {
+    (payment_plan_id, sort_order) [unique]
+    (status, due_date)
+  }
+
+  Note: '''
+  Domain: Billing
+
+  NOT STORED, ON PURPOSE
+    paid_amount -> SUM(payment_settlements.amount), exposed via withSum().
+      A stored copy is a second source of truth for money and will drift away
+      from the settlements that back it.
+    is_overdue  -> status != paid AND due_date < today, computed in the
+      Resource. A stored flag would need a nightly cron just to stay honest.
+
+  INVARIANTS
+  - SUM(percent) across a plan is exactly 100; the last term absorbs the
+    rounding remainder.
+  - SUM(settlement amounts) for a term must never exceed amount.
+  - amount is derived from percent at generation time, and the final term
+    takes the remainder so the terms always add up to total_amount exactly.
+  '''
+}
+
+Ref: payment_terms.payment_plan_id > payment_plans.id [delete: cascade]
+
+// ---- tables/pph_adjustments.dbml ----
+Table pph_adjustments {
+  id          bigint        [pk, increment]
+  source_type varchar(255)  [not null, note: 'Morph: PurchaseOrder | Invoice']
+  source_id   bigint        [not null]
+  account_id  bigint        [not null, note: 'Withholding liability account, e.g. 2122']
+  amount      decimal(15,2) [not null]
+  rate        decimal(5,4)  [not null, default: 0, note: 'e.g. 0.0200 = PPh 2%']
+  description varchar(255)  [null]
+  created_at  timestamp     [null]
+  updated_at  timestamp     [null]
+
+  Indexes {
+    (source_type, source_id)
+  }
+
+  Note: '''
+  Domain: Accounting
+  Income tax withholding attached to a PO or an Invoice.
+  Polymorphic source — no database-level FK.
+  '''
+}
+
+Ref: pph_adjustments.account_id > chart_of_accounts.id
+
+// ---- tables/project_locations.dbml ----
+Table project_locations {
+  id                bigint        [pk, increment]
+  project_id        bigint        [not null, note: 'cascadeOnDelete']
+  vendor_id         bigint        [null]
+  purchase_order_id bigint        [null, note: 'nullOnDelete — po_issued is derived from this']
+  code              varchar(50)   [not null, note: 'LOC-001, unique within the project']
+  area              varchar(255)  [not null, note: 'e.g. Semarang, Solo, Yogyakarta']
+  description       varchar(255)  [not null, note: 'e.g. Billboard Jl. Pandanaran KM 3']
+  type              varchar(255)  [not null, note: 'Billboard | Videotron | Baliho | Neonbox']
+  size              varchar(50)   [not null, note: 'e.g. 4x8m']
+  orientation       varchar(10)   [null, note: 'V | H']
+  lighting          varchar(50)   [null, note: 'Berlampu | Tidak Berlampu']
+  qty               smallint      [not null, default: 1]
+  vendor_cost       decimal(15,2) [not null, note: 'DPP per unit. Line subtotal = vendor_cost * qty']
+  top_notes         varchar(255)  [null, note: 'Terms-of-payment note printed on the PO']
+  created_at        timestamp     [null]
+  updated_at        timestamp     [null]
+
+  Indexes {
+    (project_id, code) [unique]
+    (project_id, vendor_id)
+    purchase_order_id
+  }
+
+  Note: '''
+  Domain: Project
+  A single billboard / media point inside a campaign.
+
+  po_issued and po_number are NOT columns — both are derived from the
+  purchaseOrder relation and appended by the Resource. Storing them lets them
+  drift out of sync with the PO they describe.
+
+  INVARIANT: a location cannot be edited or deleted once purchase_order_id is
+  set. The UI groups locations by vendor, so one PO can cover several points
+  from the same vendor in a single bulk issuance.
+  '''
+}
+
+Ref: project_locations.project_id        > projects.id        [delete: cascade]
+Ref: project_locations.vendor_id         > vendors.id
+Ref: project_locations.purchase_order_id > purchase_orders.id [delete: set null]
+
+// ---- tables/projects.dbml ----
+Table projects {
+  id             bigint        [pk, increment]
+  code           varchar(50)   [not null, unique, note: 'PRJ-{YYYY}-{PPN|NON}{NN} — server-generated']
+  name           varchar(255)  [not null]
+  client_id      bigint        [not null]
+  sales_id       bigint        [null, note: 'Sales PIC']
+  fiscal_mode    varchar(255)  [not null, note: 'ppn | non-ppn — IMMUTABLE after create']
+  start_date     date          [not null, note: 'Campaign start (mulai tayang)']
+  end_date       date          [not null, note: 'Campaign end (selesai tayang)']
+  contract_value decimal(15,2) [not null, note: 'ALWAYS pure DPP, never PPN-inclusive']
+  target_qty     smallint      [not null, default: 1, note: 'Planned billboard point count']
+  status         varchar(255)  [not null, default: 'draft', note: 'draft | active | completed | cancelled']
+  notes          text          [null]
+  created_at     timestamp     [null]
+  updated_at     timestamp     [null]
+  deleted_at     timestamp     [null]
+
+  Indexes {
+    (fiscal_mode, status)
+    (start_date, end_date)
+    client_id
+  }
+
+  Note: '''
+  Domain: Project
+  Model: App\Domains\Project\Models\Project
+
+  A billboard advertising campaign sold to a client, delivered across one or
+  more billboard points rented from vendors.
+
+  CONTRACT VALUE IS ALWAYS DPP
+    The create form offers a "Belum PPN (DPP)" / "Sudah Inc. PPN" toggle. The
+    SERVER recomputes and never stores the client-side figure:
+      non-ppn         -> dpp = input
+      ppn + tax dpp   -> dpp = input
+      ppn + tax inc   -> dpp = round(input / 1.11, 2)
+
+  INVARIANTS
+  - fiscal_mode immutable after create (guard in saving(), DomainException).
+  - status transitions: draft -> active on invoice issuance;
+    -> completed once every payment term is paid AND end_date has passed.
+
+  DERIVED, NEVER STORED — computed by CalculateProjectFinancials:
+    ppn_keluaran   = is_ppn ? contract_value * 0.11 : 0
+    total_invoice  = contract_value + ppn_keluaran
+    total_dpp_vendor = SUM(locations.vendor_cost * locations.qty)
+    ppn_masukan    = is_ppn ? total_dpp_vendor * 0.11 : 0
+    total_po       = total_dpp_vendor + ppn_masukan
+    net_profit     = contract_value - total_dpp_vendor
+    ppn_net        = ppn_keluaran - ppn_masukan
+    margin         = contract_value > 0 ? net_profit / contract_value * 100 : 0
+  Also derived: invoice_issued, invoice_number, location_count,
+  po_issued_count, the period label, and masa-tayang progress.
+  '''
+}
+
+Ref: projects.client_id > clients.id
+Ref: projects.sales_id  > sales.id
+
+// ---- tables/purchase_order_items.dbml ----
+Table purchase_order_items {
+  id                  bigint        [pk, increment]
+  purchase_order_id   bigint        [not null, note: 'cascadeOnDelete']
+  project_location_id bigint        [null, note: 'nullOnDelete — traceability back to the billboard point']
+  name                varchar(255)  [not null]
+  quantity            integer       [not null]
+  price               decimal(15,2) [not null, note: 'DPP per unit']
+  created_at          timestamp     [null]
+  updated_at          timestamp     [null]
+
+  Indexes {
+    purchase_order_id
+    project_location_id
+  }
+
+  Note: '''
+  Domain: Procurement
+  PO subtotal is recalculated as SUM(quantity * price).
+  project_location_id makes each PO line traceable to the exact billboard
+  point it pays for, which is what the PO print-out needs.
+  '''
+}
+
+Ref: purchase_order_items.purchase_order_id   > purchase_orders.id   [delete: cascade]
+Ref: purchase_order_items.project_location_id > project_locations.id [delete: set null]
+
+// ---- tables/purchase_orders.dbml ----
+Table purchase_orders {
+  id               bigint        [pk, increment]
+  po_number        varchar(50)   [not null, unique, note: '{NNN}/PTSSI-PO/{MM}/{YY}']
+  vendor_id        bigint        [not null]
+  project_id       bigint        [null]
+  expense_account_id bigint      [null, note: 'Debited account. Defaults from accounting_settings.default_project_expense']
+  fiscal_mode      varchar(255)  [not null, note: 'ppn | non-ppn']
+  transaction_date date          [not null]
+  issued_at        date          [null]
+  subtotal         decimal(15,2) [not null, default: 0, note: 'DPP, SUM(items.quantity * items.price)']
+  ppn              decimal(15,2) [not null, default: 0, note: 'subtotal * 0.11 when fiscal_mode = ppn, else 0']
+  total            decimal(15,2) [not null, default: 0, note: 'subtotal + ppn']
+  status           varchar(255)  [not null, default: 'draft', note: 'draft | issued | paid']
+  notes            text          [null]
+  created_at       timestamp     [null]
+  updated_at       timestamp     [null]
+
+  Indexes {
+    (fiscal_mode, status)
+    vendor_id
+    project_id
+  }
+
+  Note: '''
+  Domain: Procurement
+  Model: App\Domains\Procurement\Models\PurchaseOrder
+
+  subtotal / ppn / total mirror the invoices table exactly. The previous
+  schema stored a single `total` plus a has_ppn boolean and recomputed tax at
+  journal time, which meant the tax figure was never actually persisted and
+  two code paths could disagree about it.
+
+  INVARIANTS
+  - Must have at least one item.
+  - ClosingPeriod guard on saving().
+  - status draft -> issued posts the payable journal (Flow B.1).
+  - Settlement is per payment term, not a single paid_at flag — see
+    payment_plans / payment_terms / payment_settlements.
+  '''
+}
+
+Ref: purchase_orders.vendor_id          > vendors.id
+Ref: purchase_orders.project_id         > projects.id
+Ref: purchase_orders.expense_account_id > chart_of_accounts.id
+
+// ---- tables/sales.dbml ----
+Table sales {
+  id         bigint       [pk, increment]
+  name       varchar(255) [not null]
+  email      varchar(255) [not null, unique]
+  is_active  boolean      [not null, default: true]
+  created_at timestamp    [null]
+  updated_at timestamp    [null]
+  deleted_at timestamp    [null]
+
+  Note: '''
+  Domain: Sales
+  Model: App\Domains\Sales\Models\Sales
+
+  Sales PIC master. The Projects UI currently picks a PIC from a hardcoded
+  string list — it must bind to sales.id instead.
+
+  is_active and deleted_at are additions: the existing migration has neither,
+  which leaves no way to retire a PIC without breaking historical projects.
+  '''
+}
+
+// ---- tables/sessions.dbml ----
+Table sessions {
+  id            varchar(255) [pk]
+  user_id       char(36)     [null]
+  ip_address    varchar(45)  [null]
+  user_agent    text         [null]
+  payload       longtext     [not null]
+  last_activity integer      [not null]
+
+  Indexes {
+    user_id
+    last_activity
+  }
+
+  Note: '''
+  Laravel framework table. Indexed on user_id, no foreign key constraint.
+
+  The active fiscal mode lives in this payload. It must NOT live in browser
+  localStorage: the backend has to stamp fiscal_mode onto every project,
+  invoice, PO and journal entry, and a client-controlled tax context on a
+  financial ledger is not trustworthy.
+  '''
+}
+
+Ref: sessions.user_id > users.id
+
+// ---- tables/users.dbml ----
+Table users {
+  id                char(36)     [pk, note: 'UUID primary key']
+  name              varchar(255) [not null]
+  email             varchar(255) [not null, unique]
+  email_verified_at timestamp    [null]
+  password          varchar(255) [not null]
+  status            varchar(255) [not null, default: 'active', note: 'UserStatus: active | inactive | suspended']
+  last_login_at     timestamp    [null]
+  last_login_ip     varchar(255) [null]
+  remember_token    varchar(100) [null]
+  created_at        timestamp    [null]
+  updated_at        timestamp    [null]
+  deleted_at        timestamp    [null]
+
+  Note: '''
+  Domain: Identity
+  Model: App\Domains\Identity\Models\User
+
+  Roles are NOT a column — they live in the Spatie tables (model_has_roles).
+  UserRole values: admin, pimpinan. Only PIMPINAN may unlock a closed period.
+  '''
+}
+
+// ---- tables/vendors.dbml ----
+Table vendors {
+  id          bigint       [pk, increment]
+  name        varchar(255) [not null]
+  npwp        varchar(255) [null]
+  is_archived boolean      [not null, default: false]
+  created_at  timestamp    [null]
+  updated_at  timestamp    [null]
+  deleted_at  timestamp    [null]
+
+  Note: '''
+  Domain: Vendor
+  Model: App\Domains\Vendor\Models\Vendor
+
+  Soft deletes are mandatory on major aggregates. A hard delete is forbidden
+  once purchase orders reference the vendor.
+  '''
+}
+

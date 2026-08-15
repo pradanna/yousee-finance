@@ -1,0 +1,80 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums — mirrors app/Domains/**/Enums/*.php
+//
+// Every one of these is stored as VARCHAR in MySQL (best-practices.md §5) and
+// cast to a PHP backed enum in the model. The DBML Enum blocks exist purely to
+// make the rendered diagram readable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Enum fiscal_mode {
+  ppn       [note: 'PKP context — PPN 11% applies']
+  "non-ppn" [note: 'Non-PKP context — PPN fields disabled but still visible in the UI']
+}
+
+Enum user_status {
+  active
+  inactive
+  suspended
+}
+
+Enum account_type {
+  asset
+  liability
+  equity
+  revenue
+  expense
+}
+
+Enum normal_balance {
+  debit
+  credit
+}
+
+Enum project_status {
+  draft     [note: 'Created, not yet invoiced']
+  active    [note: 'Invoice issued, campaign running']
+  completed [note: 'All payment terms settled AND end_date passed']
+  cancelled
+}
+
+Enum location_type {
+  Billboard
+  Videotron
+  Baliho
+  Neonbox
+}
+
+Enum location_orientation {
+  V [note: 'Vertical']
+  H [note: 'Horizontal']
+}
+
+Enum location_lighting {
+  Berlampu
+  "Tidak Berlampu"
+}
+
+Enum purchase_order_status {
+  draft
+  issued [note: 'Payable journal posted']
+  paid   [note: 'Fully settled']
+}
+
+Enum invoice_status {
+  draft
+  issued [note: 'Receivable journal posted']
+  paid   [note: 'TERMINAL — draft -> issued -> paid, no skipping, no going back']
+}
+
+Enum payment_scheme {
+  full        [note: 'Lunas Sekaligus']
+  dp          [note: 'DP + Pelunasan']
+  termin      [note: 'Termin / Milestone']
+  installment [note: 'Cicilan Berkala']
+}
+
+Enum payment_term_status {
+  unpaid
+  partial [note: 'Settlements recorded but not yet covering the full term amount']
+  paid
+}

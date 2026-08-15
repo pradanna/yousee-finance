@@ -1,0 +1,47 @@
+Table invoices {
+  id               bigint        [pk, increment]
+  invoice_number   varchar(50)   [null, unique, note: 'INV-PTSSI/{MM}/{YYYY}/{NNN} — assigned on issue, NULL while draft']
+  client_id        bigint        [not null]
+  project_id       bigint        [null]
+  sales_id         bigint        [null]
+  revenue_account_id bigint      [null, note: 'Credited account. Defaults from accounting_settings.default_sales_revenue']
+  fiscal_mode      varchar(255)  [not null, note: 'ppn | non-ppn']
+  transaction_date date          [not null]
+  due_date         date          [null, note: 'Defaults to transaction_date + 7 days']
+  subtotal         decimal(15,2) [not null, default: 0, note: 'DPP']
+  ppn              decimal(15,2) [not null, default: 0, note: 'subtotal * 0.11 when fiscal_mode = ppn, else 0']
+  total            decimal(15,2) [not null, default: 0, note: 'subtotal + ppn']
+  status           varchar(255)  [not null, default: 'draft', note: 'draft | issued | paid']
+  notes            text          [null]
+  created_at       timestamp     [null]
+  updated_at       timestamp     [null]
+
+  Indexes {
+    (fiscal_mode, status)
+    client_id
+    project_id
+  }
+
+  Note: '''
+  Domain: Billing
+  Model: App\Domains\Billing\Models\Invoice
+
+  INVARIANTS
+  - client_id required.
+  - Status flow draft -> issued -> paid. Cannot skip straight to paid.
+    paid is terminal and cannot be reverted.
+  - ClosingPeriod guard on saving().
+  - draft -> issued posts the receivable journal (Flow A.1).
+  - paid is reached only when every payment term is settled; that transition
+    generates the Kwitansi and posts NO journal of its own, because each
+    settlement already posted one.
+
+  The status hook must not read from request() — an Action passes what it
+  needs. HTTP concerns do not belong inside a Model.
+  '''
+}
+
+Ref: invoices.client_id          > clients.id
+Ref: invoices.project_id         > projects.id
+Ref: invoices.sales_id           > sales.id
+Ref: invoices.revenue_account_id > chart_of_accounts.id

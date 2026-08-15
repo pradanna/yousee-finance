@@ -1,0 +1,24 @@
+Table kwitansis {
+  id             bigint        [pk, increment]
+  invoice_id     bigint        [not null, unique, note: 'cascadeOnDelete']
+  receipt_number varchar(50)   [not null, unique, note: 'KW-{YYYYMM}-{NNNN}']
+  amount         decimal(15,2) [not null]
+  paid_at        timestamp     [not null]
+  created_at     timestamp     [null]
+  updated_at     timestamp     [null]
+
+  Note: '''
+  Domain: Billing
+  Official receipt of FULL payment.
+
+  INVARIANT: exactly one per invoice — enforced by the unique invoice_id —
+  generated automatically when the invoice reaches paid. Strictly immutable
+  once created.
+
+  It carries no payment_account column: an invoice settled across several
+  terms was received into potentially several different bank accounts, and
+  that detail belongs on payment_settlements, one row per actual transfer.
+  '''
+}
+
+Ref: kwitansis.invoice_id - invoices.id [delete: cascade]

@@ -1,0 +1,44 @@
+Table purchase_orders {
+  id               bigint        [pk, increment]
+  po_number        varchar(50)   [not null, unique, note: '{NNN}/PTSSI-PO/{MM}/{YY}']
+  vendor_id        bigint        [not null]
+  project_id       bigint        [null]
+  expense_account_id bigint      [null, note: 'Debited account. Defaults from accounting_settings.default_project_expense']
+  fiscal_mode      varchar(255)  [not null, note: 'ppn | non-ppn']
+  transaction_date date          [not null]
+  issued_at        date          [null]
+  subtotal         decimal(15,2) [not null, default: 0, note: 'DPP, SUM(items.quantity * items.price)']
+  ppn              decimal(15,2) [not null, default: 0, note: 'subtotal * 0.11 when fiscal_mode = ppn, else 0']
+  total            decimal(15,2) [not null, default: 0, note: 'subtotal + ppn']
+  status           varchar(255)  [not null, default: 'draft', note: 'draft | issued | paid']
+  notes            text          [null]
+  created_at       timestamp     [null]
+  updated_at       timestamp     [null]
+
+  Indexes {
+    (fiscal_mode, status)
+    vendor_id
+    project_id
+  }
+
+  Note: '''
+  Domain: Procurement
+  Model: App\Domains\Procurement\Models\PurchaseOrder
+
+  subtotal / ppn / total mirror the invoices table exactly. The previous
+  schema stored a single `total` plus a has_ppn boolean and recomputed tax at
+  journal time, which meant the tax figure was never actually persisted and
+  two code paths could disagree about it.
+
+  INVARIANTS
+  - Must have at least one item.
+  - ClosingPeriod guard on saving().
+  - status draft -> issued posts the payable journal (Flow B.1).
+  - Settlement is per payment term, not a single paid_at flag — see
+    payment_plans / payment_terms / payment_settlements.
+  '''
+}
+
+Ref: purchase_orders.vendor_id          > vendors.id
+Ref: purchase_orders.project_id         > projects.id
+Ref: purchase_orders.expense_account_id > chart_of_accounts.id
