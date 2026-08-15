@@ -4,9 +4,9 @@ namespace App\Domains\Billing\Models;
 
 use App\Domains\Accounting\Models\ClosingPeriod;
 use App\Domains\Accounting\Models\JournalEntry;
-use App\Domains\Master\Models\Client;
-use App\Domains\Master\Models\Project;
-use App\Domains\Master\Models\Sales;
+use App\Domains\Client\Models\Client;
+use App\Domains\Project\Models\Project;
+use App\Domains\Sales\Models\Sales;
 use App\Domains\Shared\Enums\FiscalMode;
 use App\Domains\Shared\Traits\HasFiscalMode;
 use Illuminate\Database\Eloquent\Model;

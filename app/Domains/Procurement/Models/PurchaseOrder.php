@@ -4,8 +4,8 @@ namespace App\Domains\Procurement\Models;
 
 use App\Domains\Accounting\Models\ClosingPeriod;
 use App\Domains\Accounting\Models\JournalEntry;
-use App\Domains\Master\Models\Project;
-use App\Domains\Master\Models\Vendor;
+use App\Domains\Project\Models\Project;
+use App\Domains\Vendor\Models\Vendor;
 use App\Domains\Shared\Traits\HasFiscalMode;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
