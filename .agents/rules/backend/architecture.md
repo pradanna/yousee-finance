@@ -2,6 +2,12 @@
 
 This project uses a "Lite DDD" (Action-Based) architecture to maintain a clean, scalable, and maintainable codebase, which is especially important for a financial system.
 
+## 0. Database Schema Source of Truth
+- **CONDITIONAL TRIGGER**: BEFORE writing or modifying any migration, you MUST use `view_file` to check `docs/databases/tables/<table_name>.dbml` if it exists.
+- `docs/databases/` (one DBML file per table, see its `README.md`) is the authoritative design for the schema — table shape, columns, indexes, and the invariants behind them live in each table's `Note:` block.
+- If a migration needs to diverge from its `.dbml` file, update the `.dbml` file in the SAME commit and re-run `docs/databases/build.sh`. A migration and its DBML file must never drift apart.
+- If you are designing a NEW table that has no `.dbml` file yet, write the `.dbml` file first, then the migration.
+
 ## 1. Controllers (HTTP Entry Point)
 - **Core Rule**: Controllers MUST be "Thin".
 - **Responsibility**: Receive HTTP requests, validate input using Form Requests, call the appropriate Action class, and return a response (Inertia View or Redirect).
