@@ -390,21 +390,11 @@ export default function Vendors({
     const itemsPerPage = vendors?.per_page ?? 10;
 
     // Metrics calculations
-    const activeVendorsCount =
-        metrics?.activeVendors ??
-        (vendorList.length > 0
-            ? vendorList.filter((v) => v.status === 'active').length
-            : 0);
-
-    const pkpVendorsCount =
-        metrics?.pkpCount ??
-        (vendorList.length > 0
-            ? vendorList.filter((v) => v.pkp && v.status === 'active').length
-            : 0);
-
-    const nonPkpVendorsCount =
-        metrics?.nonPkpCount ??
-        Math.max(0, activeVendorsCount - pkpVendorsCount);
+    const activeVendorsCount = metrics?.activeVendors ?? 0;
+    const archivedVendorsCount = metrics?.archivedVendors ?? 0;
+    const totalVendorsCount = metrics?.totalVendors ?? 0;
+    const pkpVendorsCount = metrics?.pkpCount ?? 0;
+    const nonPkpVendorsCount = metrics?.nonPkpCount ?? 0;
 
     return (
         <AppLayout
@@ -532,14 +522,11 @@ export default function Vendors({
                 </div>
 
                 {/* Search & Filter Bar */}
-                <div className="shadow-xs flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="shadow-xs flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
                     {/* Search Input */}
-                    <div className="max-w-md flex-1 space-y-1">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                            Pencarian Vendor
-                        </label>
+                    <div className="max-w-md flex-1">
                         <div className="relative">
-                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
                                 <svg
                                     className="h-4 w-4"
                                     fill="none"
@@ -561,43 +548,61 @@ export default function Vendors({
                                 onChange={(e) =>
                                     handleSearchChange(e.target.value)
                                 }
-                                className="block w-full pl-9 text-xs"
+                                className="block w-full rounded-2xl border-slate-200 bg-slate-50/50 py-2.5 pr-4 pl-10 text-xs text-slate-800 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
                             />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSearchChange('')}
+                                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+                                >
+                                    ✕
+                                </button>
+                            )}
                         </div>
                     </div>
 
-                    {/* Filters */}
+                    {/* Status Tabs & PKP Filter */}
                     <div className="flex flex-wrap items-center gap-3">
-                        {/* Status Vendor Filter */}
-                        <div className="space-y-1">
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Status Vendor
-                            </label>
-                            <SelectInput
-                                value={statusTab}
-                                onChange={(e) =>
-                                    handleStatusChange(
-                                        e.target.value as
-                                            | 'active'
-                                            | 'archived'
-                                            | 'all',
-                                    )
-                                }
-                                className="w-44 text-xs"
+                        {/* Filter Status: Active / Archived / All */}
+                        <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                            <button
+                                type="button"
+                                onClick={() => handleStatusChange('active')}
+                                className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+                                    statusTab === 'active'
+                                        ? 'bg-white text-blue-600 shadow-xs'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
                             >
-                                <option value="active">Vendor Aktif</option>
-                                <option value="archived">
-                                    Vendor Diarsipkan
-                                </option>
-                                <option value="all">Semua Vendor</option>
-                            </SelectInput>
+                                Aktif ({activeVendorsCount})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleStatusChange('archived')}
+                                className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+                                    statusTab === 'archived'
+                                        ? 'bg-white text-blue-600 shadow-xs'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                Diarsipkan ({archivedVendorsCount})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleStatusChange('all')}
+                                className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+                                    statusTab === 'all'
+                                        ? 'bg-white text-blue-600 shadow-xs'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                Semua ({totalVendorsCount})
+                            </button>
                         </div>
 
-                        {/* Status PKP Filter */}
-                        <div className="space-y-1">
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Status PKP
-                            </label>
+                        {/* Dropdown Filter PKP */}
+                        <div className="w-36">
                             <SelectInput
                                 value={pkpFilter}
                                 onChange={(e) =>
@@ -608,12 +613,16 @@ export default function Vendors({
                                             | 'non-pkp',
                                     )
                                 }
-                                className="w-44 text-xs"
-                            >
-                                <option value="all">Semua Status PKP</option>
-                                <option value="pkp">PKP (Bisa PPN)</option>
-                                <option value="non-pkp">Non-PKP</option>
-                            </SelectInput>
+                                options={[
+                                    { label: 'Semua PKP', value: 'all' },
+                                    { label: 'Hanya PKP', value: 'pkp' },
+                                    {
+                                        label: 'Hanya Non-PKP',
+                                        value: 'non-pkp',
+                                    },
+                                ]}
+                                className="block w-full rounded-2xl border-slate-200 bg-slate-50/50 text-xs font-bold text-slate-700"
+                            />
                         </div>
                     </div>
                 </div>
