@@ -78,6 +78,11 @@ class Project extends Model
         return $this->hasMany(PurchaseOrder::class);
     }
 
+    public function locations(): HasMany
+    {
+        return $this->hasMany(ProjectLocation::class);
+    }
+
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
