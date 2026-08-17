@@ -1,8 +1,8 @@
 Table project_locations {
-  id                bigint        [pk, increment]
-  project_id        bigint        [not null, note: 'cascadeOnDelete']
-  vendor_id         bigint        [null]
-  purchase_order_id bigint        [null, note: 'nullOnDelete — po_issued is derived from this']
+  id                uuid          [pk, default: `gen_random_uuid()`]
+  project_id        uuid          [not null, note: 'cascadeOnDelete']
+  vendor_id         uuid          [null]
+  purchase_order_id uuid          [null, note: 'nullOnDelete — po_issued is derived from this']
   code              varchar(50)   [not null, note: 'LOC-001, unique within the project']
   area              varchar(255)  [not null, note: 'e.g. Semarang, Solo, Yogyakarta']
   description       varchar(255)  [not null, note: 'e.g. Billboard Jl. Pandanaran KM 3']

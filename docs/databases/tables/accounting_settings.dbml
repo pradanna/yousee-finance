@@ -1,7 +1,7 @@
 Table accounting_settings {
-  id          bigint       [pk, increment]
+  id          uuid         [pk, default: `gen_random_uuid()`]
   key         varchar(255) [not null, unique]
-  account_id  bigint       [not null]
+  account_id  uuid         [not null]
   description varchar(255) [null]
   created_at  timestamp    [null]
   updated_at  timestamp    [null]

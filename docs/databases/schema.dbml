@@ -157,9 +157,9 @@ Ref: role_has_permissions.role_id        > roles.id       [delete: cascade]
 
 // ---- tables/accounting_settings.dbml ----
 Table accounting_settings {
-  id          bigint       [pk, increment]
+  id          uuid         [pk, default: `gen_random_uuid()`]
   key         varchar(255) [not null, unique]
-  account_id  bigint       [not null]
+  account_id  uuid         [not null]
   description varchar(255) [null]
   created_at  timestamp    [null]
   updated_at  timestamp    [null]
@@ -197,9 +197,9 @@ Ref: accounting_settings.account_id > chart_of_accounts.id
 
 // ---- tables/attachments.dbml ----
 Table attachments {
-  id              bigint       [pk, increment]
+  id              uuid         [pk, default: `gen_random_uuid()`]
   attachable_type varchar(255) [not null, note: 'Morph: PurchaseOrder | Invoice | PaymentSettlement']
-  attachable_id   bigint       [not null]
+  attachable_id   uuid         [not null]
   file_path       varchar(255) [not null]
   file_name       varchar(255) [not null]
   mime_type       varchar(100) [null]
@@ -225,11 +225,11 @@ Ref: attachments.uploaded_by > users.id
 
 // ---- tables/audit_logs.dbml ----
 Table audit_logs {
-  id          bigint       [pk, increment]
+  id          uuid         [pk, default: `gen_random_uuid()`]
   user_id     char(36)     [not null]
   action      varchar(255) [not null, note: 'e.g. closing_period.unlock']
   auditable_type varchar(255) [null, note: 'Morph — the record acted upon']
-  auditable_id   bigint    [null]
+  auditable_id   uuid      [null]
   details     text         [not null, note: 'JSON payload of the change']
   ip_address  varchar(45)  [null]
   created_at  timestamp    [null]
@@ -252,10 +252,10 @@ Ref: audit_logs.user_id > users.id
 
 // ---- tables/cash_expenses.dbml ----
 Table cash_expenses {
-  id                 bigint        [pk, increment]
-  expense_account_id bigint        [not null, note: 'Debited — leaf expense account']
-  payment_account_id bigint        [not null, note: 'Credited — leaf cash/bank account']
-  project_id         bigint        [null, note: 'Optional analytical tag']
+  id                 uuid          [pk, default: `gen_random_uuid()`]
+  expense_account_id uuid          [not null, note: 'Debited — leaf expense account']
+  payment_account_id uuid          [not null, note: 'Credited — leaf cash/bank account']
+  project_id         uuid          [null, note: 'Optional analytical tag']
   amount             decimal(15,2) [not null]
   transaction_date   date          [not null]
   description        varchar(255)  [null]
@@ -286,8 +286,8 @@ Ref: cash_expenses.project_id         > projects.id
 
 // ---- tables/chart_of_accounts.dbml ----
 Table chart_of_accounts {
-  id             bigint       [pk, increment]
-  parent_id      bigint       [null, note: 'Self-reference. NULL = top-level header']
+  id             uuid         [pk, default: `gen_random_uuid()`]
+  parent_id      uuid         [null, note: 'Self-reference. NULL = top-level header']
   code           varchar(20)  [not null, unique, note: 'e.g. 1121, 2110, 4100, 5100']
   name           varchar(255) [not null]
   type           varchar(255) [not null, note: 'asset | liability | equity | revenue | expense — IMMUTABLE']
@@ -334,7 +334,7 @@ Ref: chart_of_accounts.parent_id > chart_of_accounts.id
 
 // ---- tables/clients.dbml ----
 Table clients {
-  id          bigint       [pk, increment]
+  id          uuid         [pk, default: `gen_random_uuid()`]
   name        varchar(255) [not null]
   email       varchar(255) [null]
   phone       varchar(255) [null]
@@ -355,7 +355,7 @@ Table clients {
 
 // ---- tables/closing_periods.dbml ----
 Table closing_periods {
-  id          bigint       [pk, increment]
+  id          uuid         [pk, default: `gen_random_uuid()`]
   month       tinyint      [not null, note: '1..12']
   year        smallint     [not null]
   fiscal_mode varchar(255) [not null, note: 'ppn | non-ppn']
@@ -387,9 +387,9 @@ Ref: closing_periods.closed_by > users.id
 
 // ---- tables/invoice_items.dbml ----
 Table invoice_items {
-  id                  bigint        [pk, increment]
-  invoice_id          bigint        [not null, note: 'cascadeOnDelete']
-  project_location_id bigint        [null, note: 'nullOnDelete — which billboard point is being billed']
+  id                  uuid          [pk, default: `gen_random_uuid()`]
+  invoice_id          uuid          [not null, note: 'cascadeOnDelete']
+  project_location_id uuid          [null, note: 'nullOnDelete — which billboard point is being billed']
   name                varchar(255)  [not null]
   quantity            integer       [not null]
   price               decimal(15,2) [not null, note: 'DPP per unit']
@@ -412,12 +412,12 @@ Ref: invoice_items.project_location_id > project_locations.id [delete: set null]
 
 // ---- tables/invoices.dbml ----
 Table invoices {
-  id               bigint        [pk, increment]
+  id               uuid          [pk, default: `gen_random_uuid()`]
   invoice_number   varchar(50)   [null, unique, note: 'INV-PTSSI/{MM}/{YYYY}/{NNN} — assigned on issue, NULL while draft']
-  client_id        bigint        [not null]
-  project_id       bigint        [null]
-  sales_id         bigint        [null]
-  revenue_account_id bigint      [null, note: 'Credited account. Defaults from accounting_settings.default_sales_revenue']
+  client_id        uuid          [not null]
+  project_id       uuid          [null]
+  sales_id         uuid          [null]
+  revenue_account_id uuid        [null, note: 'Credited account. Defaults from accounting_settings.default_sales_revenue']
   fiscal_mode      varchar(255)  [not null, note: 'ppn | non-ppn']
   transaction_date date          [not null]
   due_date         date          [null, note: 'Defaults to transaction_date + 7 days']
@@ -461,16 +461,16 @@ Ref: invoices.revenue_account_id > chart_of_accounts.id
 
 // ---- tables/journal_entries.dbml ----
 Table journal_entries {
-  id                  bigint       [pk, increment]
+  id                  uuid         [pk, default: `gen_random_uuid()`]
   number              varchar(50)  [not null, unique, note: 'JE-{YYYYMM}-{NNNN}']
   source_type         varchar(255) [null, note: 'Morph: Invoice | PurchaseOrder | PaymentSettlement | CashExpense']
-  source_id           bigint       [null]
-  project_id          bigint       [null, note: 'Header-level convenience tag; the authoritative tag is per item']
+  source_id           uuid         [null]
+  project_id          uuid         [null, note: 'Header-level convenience tag; the authoritative tag is per item']
   fiscal_mode         varchar(255) [not null, note: 'ppn | non-ppn']
   transaction_date    date         [not null]
   description         varchar(255) [null]
   is_reversal         boolean      [not null, default: false]
-  reverses_journal_id bigint       [null, note: 'The entry this one reverses']
+  reverses_journal_id uuid         [null, note: 'The entry this one reverses']
   posted_by           char(36)     [null, note: 'users.id — NULL for system-generated entries']
   created_at          timestamp    [null]
   updated_at          timestamp    [null]
@@ -503,10 +503,10 @@ Ref: journal_entries.posted_by           > users.id
 
 // ---- tables/journal_entry_items.dbml ----
 Table journal_entry_items {
-  id               bigint        [pk, increment]
-  journal_entry_id bigint        [not null, note: 'cascadeOnDelete']
-  account_id       bigint        [not null, note: 'MUST be a leaf account']
-  project_id       bigint        [null, note: 'Analytical tagging — see note']
+  id               uuid          [pk, default: `gen_random_uuid()`]
+  journal_entry_id uuid          [not null, note: 'cascadeOnDelete']
+  account_id       uuid          [not null, note: 'MUST be a leaf account']
+  project_id       uuid          [null, note: 'Analytical tagging — see note']
   debit            decimal(15,2) [not null, default: 0]
   credit           decimal(15,2) [not null, default: 0]
   memo             varchar(255)  [null]
@@ -543,8 +543,8 @@ Ref: journal_entry_items.project_id       > projects.id
 
 // ---- tables/kwitansis.dbml ----
 Table kwitansis {
-  id             bigint        [pk, increment]
-  invoice_id     bigint        [not null, unique, note: 'cascadeOnDelete']
+  id             uuid          [pk, default: `gen_random_uuid()`]
+  invoice_id     uuid          [not null, unique, note: 'cascadeOnDelete']
   receipt_number varchar(50)   [not null, unique, note: 'KW-{YYYYMM}-{NNNN}']
   amount         decimal(15,2) [not null]
   paid_at        timestamp     [not null]
@@ -578,9 +578,9 @@ Table password_reset_tokens {
 
 // ---- tables/payment_plans.dbml ----
 Table payment_plans {
-  id           bigint        [pk, increment]
+  id           uuid          [pk, default: `gen_random_uuid()`]
   payable_type varchar(255)  [not null, note: 'Morph: Invoice | PurchaseOrder']
-  payable_id   bigint        [not null]
+  payable_id   uuid          [not null]
   scheme       varchar(255)  [not null, note: 'full | dp | termin | installment']
   total_amount decimal(15,2) [not null, note: 'PPN-inclusive when fiscal_mode = ppn']
   notes        text          [null]
@@ -606,10 +606,10 @@ Table payment_plans {
 
 // ---- tables/payment_settlements.dbml ----
 Table payment_settlements {
-  id                 bigint        [pk, increment]
-  payment_term_id    bigint        [not null, note: 'cascadeOnDelete']
-  payment_account_id bigint        [not null, note: 'Leaf cash/bank account that received or sent the money']
-  journal_entry_id   bigint        [null, note: 'The journal this settlement posted']
+  id                 uuid          [pk, default: `gen_random_uuid()`]
+  payment_term_id    uuid          [not null, note: 'cascadeOnDelete']
+  payment_account_id uuid          [not null, note: 'Leaf cash/bank account that received or sent the money']
+  journal_entry_id   uuid          [null, note: 'The journal this settlement posted']
   amount             decimal(15,2) [not null]
   paid_at            date          [not null]
   payment_method     varchar(255)  [not null, note: 'e.g. Transfer Bank BCA']
@@ -646,8 +646,8 @@ Ref: payment_settlements.journal_entry_id   > journal_entries.id
 
 // ---- tables/payment_terms.dbml ----
 Table payment_terms {
-  id              bigint        [pk, increment]
-  payment_plan_id bigint        [not null, note: 'cascadeOnDelete']
+  id              uuid          [pk, default: `gen_random_uuid()`]
+  payment_plan_id uuid          [not null, note: 'cascadeOnDelete']
   sort_order      tinyint       [not null]
   label           varchar(255)  [not null, note: 'DP 30% | Termin 2 | Cicilan 1 dari 3 | Pelunasan']
   amount          decimal(15,2) [not null]
@@ -686,10 +686,10 @@ Ref: payment_terms.payment_plan_id > payment_plans.id [delete: cascade]
 
 // ---- tables/pph_adjustments.dbml ----
 Table pph_adjustments {
-  id          bigint        [pk, increment]
+  id          uuid          [pk, default: `gen_random_uuid()`]
   source_type varchar(255)  [not null, note: 'Morph: PurchaseOrder | Invoice']
-  source_id   bigint        [not null]
-  account_id  bigint        [not null, note: 'Withholding liability account, e.g. 2122']
+  source_id   uuid          [not null]
+  account_id  uuid          [not null, note: 'Withholding liability account, e.g. 2122']
   amount      decimal(15,2) [not null]
   rate        decimal(5,4)  [not null, default: 0, note: 'e.g. 0.0200 = PPh 2%']
   description varchar(255)  [null]
@@ -711,10 +711,10 @@ Ref: pph_adjustments.account_id > chart_of_accounts.id
 
 // ---- tables/project_locations.dbml ----
 Table project_locations {
-  id                bigint        [pk, increment]
-  project_id        bigint        [not null, note: 'cascadeOnDelete']
-  vendor_id         bigint        [null]
-  purchase_order_id bigint        [null, note: 'nullOnDelete — po_issued is derived from this']
+  id                uuid          [pk, default: `gen_random_uuid()`]
+  project_id        uuid          [not null, note: 'cascadeOnDelete']
+  vendor_id         uuid          [null]
+  purchase_order_id uuid          [null, note: 'nullOnDelete — po_issued is derived from this']
   code              varchar(50)   [not null, note: 'LOC-001, unique within the project']
   area              varchar(255)  [not null, note: 'e.g. Semarang, Solo, Yogyakarta']
   description       varchar(255)  [not null, note: 'e.g. Billboard Jl. Pandanaran KM 3']
@@ -754,11 +754,11 @@ Ref: project_locations.purchase_order_id > purchase_orders.id [delete: set null]
 
 // ---- tables/projects.dbml ----
 Table projects {
-  id             bigint        [pk, increment]
+  id             uuid          [pk, default: `gen_random_uuid()`]
   code           varchar(50)   [not null, unique, note: 'PRJ-{YYYY}-{PPN|NON}{NN} — server-generated']
   name           varchar(255)  [not null]
-  client_id      bigint        [not null]
-  sales_id       bigint        [null, note: 'Sales PIC']
+  client_id      uuid          [not null]
+  sales_id       uuid          [null, note: 'Sales PIC']
   fiscal_mode    varchar(255)  [not null, note: 'ppn | non-ppn — IMMUTABLE after create']
   start_date     date          [not null, note: 'Campaign start (mulai tayang)']
   end_date       date          [not null, note: 'Campaign end (selesai tayang)']
@@ -814,9 +814,9 @@ Ref: projects.sales_id  > sales.id
 
 // ---- tables/purchase_order_items.dbml ----
 Table purchase_order_items {
-  id                  bigint        [pk, increment]
-  purchase_order_id   bigint        [not null, note: 'cascadeOnDelete']
-  project_location_id bigint        [null, note: 'nullOnDelete — traceability back to the billboard point']
+  id                  uuid          [pk, default: `gen_random_uuid()`]
+  purchase_order_id   uuid          [not null, note: 'cascadeOnDelete']
+  project_location_id uuid          [null, note: 'nullOnDelete — traceability back to the billboard point']
   name                varchar(255)  [not null]
   quantity            integer       [not null]
   price               decimal(15,2) [not null, note: 'DPP per unit']
@@ -841,11 +841,11 @@ Ref: purchase_order_items.project_location_id > project_locations.id [delete: se
 
 // ---- tables/purchase_orders.dbml ----
 Table purchase_orders {
-  id               bigint        [pk, increment]
+  id               uuid          [pk, default: `gen_random_uuid()`]
   po_number        varchar(50)   [not null, unique, note: '{NNN}/PTSSI-PO/{MM}/{YY}']
-  vendor_id        bigint        [not null]
-  project_id       bigint        [null]
-  expense_account_id bigint      [null, note: 'Debited account. Defaults from accounting_settings.default_project_expense']
+  vendor_id        uuid          [not null]
+  project_id       uuid          [null]
+  expense_account_id uuid        [null, note: 'Debited account. Defaults from accounting_settings.default_project_expense']
   fiscal_mode      varchar(255)  [not null, note: 'ppn | non-ppn']
   transaction_date date          [not null]
   issued_at        date          [null]
@@ -887,7 +887,7 @@ Ref: purchase_orders.expense_account_id > chart_of_accounts.id
 
 // ---- tables/sales.dbml ----
 Table sales {
-  id         bigint       [pk, increment]
+  id         uuid         [pk, default: `gen_random_uuid()`]
   name       varchar(255) [not null]
   email      varchar(255) [not null, unique]
   is_active  boolean      [not null, default: true]
@@ -959,7 +959,7 @@ Table users {
 
 // ---- tables/vendors.dbml ----
 Table vendors {
-  id          bigint       [pk, increment]
+  id          uuid         [pk, default: `gen_random_uuid()`]
   name        varchar(255) [not null]
   npwp        varchar(255) [null]
   is_archived boolean      [not null, default: false]

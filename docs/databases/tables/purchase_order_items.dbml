@@ -1,7 +1,7 @@
 Table purchase_order_items {
-  id                  bigint        [pk, increment]
-  purchase_order_id   bigint        [not null, note: 'cascadeOnDelete']
-  project_location_id bigint        [null, note: 'nullOnDelete — traceability back to the billboard point']
+  id                  uuid          [pk, default: `gen_random_uuid()`]
+  purchase_order_id   uuid          [not null, note: 'cascadeOnDelete']
+  project_location_id uuid          [null, note: 'nullOnDelete — traceability back to the billboard point']
   name                varchar(255)  [not null]
   quantity            integer       [not null]
   price               decimal(15,2) [not null, note: 'DPP per unit']
