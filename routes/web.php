@@ -32,10 +32,11 @@ Route::middleware('auth')->group(function () {
     Route::post('vendors/{vendor}/archive', [\App\Http\Controllers\Vendor\VendorController::class, 'archive'])->name('vendors.archive');
     Route::post('vendors/{vendor}/unarchive', [\App\Http\Controllers\Vendor\VendorController::class, 'unarchive'])->name('vendors.unarchive');
 
-    Route::get('/clients', function () {
-        return Inertia::render('Clients');
-    })->name('clients');
-    Route::resource('clients', \App\Http\Controllers\Client\ClientController::class)->only(['store', 'update', 'destroy']);
+    Route::resource('clients', \App\Http\Controllers\Client\ClientController::class)->except(['create', 'edit', 'show'])->names([
+        'index' => 'clients',
+    ]);
+    Route::get('/clients-list', [\App\Http\Controllers\Client\ClientController::class, 'index'])->name('clients.index');
+    Route::get('clients/{client}/transactions', [\App\Http\Controllers\Client\ClientController::class, 'transactions'])->name('clients.transactions');
     Route::post('clients/{client}/archive', [\App\Http\Controllers\Client\ClientController::class, 'archive'])->name('clients.archive');
     Route::post('clients/{client}/unarchive', [\App\Http\Controllers\Client\ClientController::class, 'unarchive'])->name('clients.unarchive');
 

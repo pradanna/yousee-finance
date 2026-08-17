@@ -5,7 +5,8 @@ import InputError from '@/Components/Form/InputError';
 import InputLabel from '@/Components/Form/InputLabel';
 import TextInput from '@/Components/Form/TextInput';
 import Modal from '@/Components/UI/Modal';
-import React, { useState } from 'react';
+import { formatNpwp } from '@/Utils/formatters';
+import React, { useEffect, useState } from 'react';
 
 export interface ClientFormData {
     name: string;
@@ -37,6 +38,20 @@ export default function ClientFormModal({
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (isOpen) {
+            setForm({
+                name: '',
+                npwp: '',
+                email: '',
+                phone: '',
+                address: '',
+                pkp: false,
+            });
+            setErrors({});
+        }
+    }, [isOpen]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -120,11 +135,11 @@ export default function ClientFormModal({
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
+                            strokeWidth={2}
                         >
                             <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                strokeWidth={2}
                                 d="M6 18L18 6M6 6l12 12"
                             />
                         </svg>
@@ -148,7 +163,7 @@ export default function ClientFormModal({
                                     setForm({ ...form, name: e.target.value })
                                 }
                                 className="mt-1 block w-full text-xs font-semibold"
-                                placeholder="Contoh: PT. Gojek Tokopedia"
+                                placeholder="cth: PT Gojek Tokopedia Tbk"
                                 required
                             />
                             <InputError
@@ -160,15 +175,20 @@ export default function ClientFormModal({
                         <div>
                             <InputLabel
                                 htmlFor="client-npwp"
-                                value="NPWP Resmi Client"
+                                value="NPWP Resmi Client (Opsional)"
                             />
                             <TextInput
                                 id="client-npwp"
                                 type="text"
                                 value={form.npwp}
-                                onChange={(e) =>
-                                    setForm({ ...form, npwp: e.target.value })
-                                }
+                                onChange={(e) => {
+                                    const formatted = formatNpwp(e.target.value);
+                                    setForm({
+                                        ...form,
+                                        npwp: formatted,
+                                        pkp: formatted.trim().length > 0,
+                                    });
+                                }}
                                 className="mt-1 block w-full font-mono text-xs"
                                 placeholder="01.234.567.8-901.000"
                             />
@@ -179,12 +199,12 @@ export default function ClientFormModal({
                         </div>
                     </div>
 
-                    {/* Grid: Email & Telepon */}
+                    {/* Grid: Email & No Telp */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <InputLabel
                                 htmlFor="client-email"
-                                value="Email Kontak Finance"
+                                value="Alamat Email PIC / Finance (Opsional)"
                             />
                             <TextInput
                                 id="client-email"
@@ -205,7 +225,7 @@ export default function ClientFormModal({
                         <div>
                             <InputLabel
                                 htmlFor="client-phone"
-                                value="Telepon / WhatsApp"
+                                value="No. Telepon / WhatsApp (Opsional)"
                             />
                             <TextInput
                                 id="client-phone"
@@ -215,60 +235,70 @@ export default function ClientFormModal({
                                     setForm({ ...form, phone: e.target.value })
                                 }
                                 className="mt-1 block w-full text-xs"
-                                placeholder="021-xxxx-xxxx"
+                                placeholder="081234567890"
                             />
                         </div>
                     </div>
 
-                    {/* Alamat Lengkap */}
+                    {/* Alamat Kantor */}
                     <div>
                         <InputLabel
                             htmlFor="client-address"
-                            value="Alamat Kantor Client"
+                            value="Alamat Kantor / Domisili Pajak (Opsional)"
                         />
                         <textarea
                             id="client-address"
+                            rows={3}
                             value={form.address}
                             onChange={(e) =>
                                 setForm({ ...form, address: e.target.value })
                             }
-                            className="focus:ring-primary/20 mt-1 block h-20 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition-all focus:border-primary focus:outline-none focus:ring-2"
-                            placeholder="Masukkan alamat lengkap kantor client..."
+                            className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-800 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            placeholder="Jl. Jend. Sudirman Kav. 52-53, SCBD, Jakarta Selatan"
                         />
                     </div>
 
-                    {/* PKP Checkbox Card */}
-                    <div className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                        <Checkbox
-                            id="client-pkp-checkbox"
-                            checked={form.pkp}
-                            onChange={(e) =>
-                                setForm({ ...form, pkp: e.target.checked })
-                            }
-                            className="mt-0.5"
-                        />
-                        <div className="space-y-0.5">
-                            <label
-                                htmlFor="client-pkp-checkbox"
-                                className="block cursor-pointer text-xs font-bold text-slate-700"
-                            >
-                                Status Wajib PPN (PKP)
-                            </label>
-                            <span className="block text-[10px] font-semibold leading-tight text-slate-400">
-                                Centang jika client menghendaki Faktur Pajak PPN
-                                Keluaran (11%) resmi.
-                            </span>
-                        </div>
+                    {/* Checkbox PKP */}
+                    <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+                        <label className="flex cursor-pointer items-start gap-3">
+                            <Checkbox
+                                name="pkp"
+                                checked={form.pkp}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        pkp: e.target.checked,
+                                    })
+                                }
+                                className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+                            />
+                            <div>
+                                <span className="text-xs font-bold text-slate-800">
+                                    Status Pengusaha Kena Pajak (PKP)
+                                </span>
+                                <p className="mt-0.5 text-[11px] text-slate-500">
+                                    Centang jika client berstatus PKP dan berhak
+                                    diterbitkan Faktur Pajak Keluaran (PPN).
+                                </p>
+                            </div>
+                        </label>
                     </div>
                 </div>
 
-                {/* Footer Action Buttons */}
+                {/* Footer Buttons */}
                 <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-                    <SecondaryButton type="button" onClick={onClose}>
+                    <SecondaryButton
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-xl px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                    >
                         Batal
                     </SecondaryButton>
-                    <PrimaryButton type="submit">
-                        Simpan Data Client
+                    <PrimaryButton
+                        type="submit"
+                        className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold tracking-wider text-white uppercase shadow-md shadow-blue-600/20 hover:bg-blue-700"
+                    >
+                        Simpan Client
                     </PrimaryButton>
                 </div>
             </form>
