@@ -1,8 +1,8 @@
 Table cash_expenses {
-  id                 bigint        [pk, increment]
-  expense_account_id bigint        [not null, note: 'Debited — leaf expense account']
-  payment_account_id bigint        [not null, note: 'Credited — leaf cash/bank account']
-  project_id         bigint        [null, note: 'Optional analytical tag']
+  id                 uuid          [pk, default: `gen_random_uuid()`]
+  expense_account_id uuid          [not null, note: 'Debited — leaf expense account']
+  payment_account_id uuid          [not null, note: 'Credited — leaf cash/bank account']
+  project_id         uuid          [null, note: 'Optional analytical tag']
   amount             decimal(15,2) [not null]
   transaction_date   date          [not null]
   description        varchar(255)  [null]

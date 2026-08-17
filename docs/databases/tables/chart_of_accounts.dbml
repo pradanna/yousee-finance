@@ -1,6 +1,6 @@
 Table chart_of_accounts {
-  id             bigint       [pk, increment]
-  parent_id      bigint       [null, note: 'Self-reference. NULL = top-level header']
+  id             uuid         [pk, default: `gen_random_uuid()`]
+  parent_id      uuid         [null, note: 'Self-reference. NULL = top-level header']
   code           varchar(20)  [not null, unique, note: 'e.g. 1121, 2110, 4100, 5100']
   name           varchar(255) [not null]
   type           varchar(255) [not null, note: 'asset | liability | equity | revenue | expense — IMMUTABLE']

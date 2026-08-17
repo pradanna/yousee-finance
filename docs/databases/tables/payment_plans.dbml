@@ -1,7 +1,7 @@
 Table payment_plans {
-  id           bigint        [pk, increment]
+  id           uuid          [pk, default: `gen_random_uuid()`]
   payable_type varchar(255)  [not null, note: 'Morph: Invoice | PurchaseOrder']
-  payable_id   bigint        [not null]
+  payable_id   uuid          [not null]
   scheme       varchar(255)  [not null, note: 'full | dp | termin | installment']
   total_amount decimal(15,2) [not null, note: 'PPN-inclusive when fiscal_mode = ppn']
   notes        text          [null]

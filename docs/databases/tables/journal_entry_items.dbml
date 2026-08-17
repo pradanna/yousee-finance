@@ -1,8 +1,8 @@
 Table journal_entry_items {
-  id               bigint        [pk, increment]
-  journal_entry_id bigint        [not null, note: 'cascadeOnDelete']
-  account_id       bigint        [not null, note: 'MUST be a leaf account']
-  project_id       bigint        [null, note: 'Analytical tagging — see note']
+  id               uuid          [pk, default: `gen_random_uuid()`]
+  journal_entry_id uuid          [not null, note: 'cascadeOnDelete']
+  account_id       uuid          [not null, note: 'MUST be a leaf account']
+  project_id       uuid          [null, note: 'Analytical tagging — see note']
   debit            decimal(15,2) [not null, default: 0]
   credit           decimal(15,2) [not null, default: 0]
   memo             varchar(255)  [null]

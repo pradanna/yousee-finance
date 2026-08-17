@@ -1,6 +1,6 @@
 Table kwitansis {
-  id             bigint        [pk, increment]
-  invoice_id     bigint        [not null, unique, note: 'cascadeOnDelete']
+  id             uuid          [pk, default: `gen_random_uuid()`]
+  invoice_id     uuid          [not null, unique, note: 'cascadeOnDelete']
   receipt_number varchar(50)   [not null, unique, note: 'KW-{YYYYMM}-{NNNN}']
   amount         decimal(15,2) [not null]
   paid_at        timestamp     [not null]

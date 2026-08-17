@@ -1,5 +1,5 @@
 Table closing_periods {
-  id          bigint       [pk, increment]
+  id          uuid         [pk, default: `gen_random_uuid()`]
   month       tinyint      [not null, note: '1..12']
   year        smallint     [not null]
   fiscal_mode varchar(255) [not null, note: 'ppn | non-ppn']
