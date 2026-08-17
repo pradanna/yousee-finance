@@ -1,0 +1,38 @@
+Table payment_terms {
+  id              uuid          [pk, default: `gen_random_uuid()`]
+  payment_plan_id uuid          [not null, note: 'cascadeOnDelete']
+  sort_order      tinyint       [not null]
+  label           varchar(255)  [not null, note: 'DP 30% | Termin 2 | Cicilan 1 dari 3 | Pelunasan']
+  amount          decimal(15,2) [not null]
+  percent         decimal(5,2)  [not null, note: 'Percent of the plan total, 0..100']
+  due_date        date          [not null]
+  status          varchar(255)  [not null, default: 'unpaid', note: 'unpaid | partial | paid']
+  notes           text          [null]
+  created_at      timestamp     [null]
+  updated_at      timestamp     [null]
+
+  Indexes {
+    (payment_plan_id, sort_order) [unique]
+    (status, due_date)
+  }
+
+  Note: '''
+  Domain: Billing
+
+  NOT STORED, ON PURPOSE
+    paid_amount -> SUM(payment_settlements.amount), exposed via withSum().
+      A stored copy is a second source of truth for money and will drift away
+      from the settlements that back it.
+    is_overdue  -> status != paid AND due_date < today, computed in the
+      Resource. A stored flag would need a nightly cron just to stay honest.
+
+  INVARIANTS
+  - SUM(percent) across a plan is exactly 100; the last term absorbs the
+    rounding remainder.
+  - SUM(settlement amounts) for a term must never exceed amount.
+  - amount is derived from percent at generation time, and the final term
+    takes the remainder so the terms always add up to total_amount exactly.
+  '''
+}
+
+Ref: payment_terms.payment_plan_id > payment_plans.id [delete: cascade]

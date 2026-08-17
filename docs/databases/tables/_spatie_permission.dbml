@@ -1,0 +1,67 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Spatie laravel-permission (vendor package, default schema).
+// Kept in one file: these five tables are a single vendor unit and are never
+// hand-edited.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table permissions {
+  id         bigint       [pk, increment]
+  name       varchar(255) [not null]
+  guard_name varchar(255) [not null]
+  created_at timestamp    [null]
+  updated_at timestamp    [null]
+
+  Indexes {
+    (name, guard_name) [unique]
+  }
+}
+
+Table roles {
+  id         bigint       [pk, increment]
+  name       varchar(255) [not null]
+  guard_name varchar(255) [not null]
+  created_at timestamp    [null]
+  updated_at timestamp    [null]
+
+  Indexes {
+    (name, guard_name) [unique]
+  }
+
+  Note: 'Seeded with UserRole values: admin, pimpinan.'
+}
+
+Table model_has_permissions {
+  permission_id bigint       [not null]
+  model_type    varchar(255) [not null]
+  model_id      char(36)     [not null, note: 'users.id is a UUID']
+
+  Indexes {
+    (permission_id, model_id, model_type) [pk]
+    (model_id, model_type)
+  }
+}
+
+Table model_has_roles {
+  role_id    bigint       [not null]
+  model_type varchar(255) [not null]
+  model_id   char(36)     [not null, note: 'users.id is a UUID']
+
+  Indexes {
+    (role_id, model_id, model_type) [pk]
+    (model_id, model_type)
+  }
+}
+
+Table role_has_permissions {
+  permission_id bigint [not null]
+  role_id       bigint [not null]
+
+  Indexes {
+    (permission_id, role_id) [pk]
+  }
+}
+
+Ref: model_has_permissions.permission_id > permissions.id [delete: cascade]
+Ref: model_has_roles.role_id             > roles.id       [delete: cascade]
+Ref: role_has_permissions.permission_id  > permissions.id [delete: cascade]
+Ref: role_has_permissions.role_id        > roles.id       [delete: cascade]

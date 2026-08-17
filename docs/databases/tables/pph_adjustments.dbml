@@ -1,0 +1,23 @@
+Table pph_adjustments {
+  id          uuid          [pk, default: `gen_random_uuid()`]
+  source_type varchar(255)  [not null, note: 'Morph: PurchaseOrder | Invoice']
+  source_id   uuid          [not null]
+  account_id  uuid          [not null, note: 'Withholding liability account, e.g. 2122']
+  amount      decimal(15,2) [not null]
+  rate        decimal(5,4)  [not null, default: 0, note: 'e.g. 0.0200 = PPh 2%']
+  description varchar(255)  [null]
+  created_at  timestamp     [null]
+  updated_at  timestamp     [null]
+
+  Indexes {
+    (source_type, source_id)
+  }
+
+  Note: '''
+  Domain: Accounting
+  Income tax withholding attached to a PO or an Invoice.
+  Polymorphic source — no database-level FK.
+  '''
+}
+
+Ref: pph_adjustments.account_id > chart_of_accounts.id

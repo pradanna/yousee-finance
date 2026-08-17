@@ -1,0 +1,58 @@
+Table projects {
+  id             uuid          [pk, default: `gen_random_uuid()`]
+  code           varchar(50)   [not null, unique, note: 'PRJ-{YYYY}-{PPN|NON}{NN} — server-generated']
+  name           varchar(255)  [not null]
+  client_id      uuid          [not null]
+  sales_id       uuid          [null, note: 'Sales PIC']
+  fiscal_mode    varchar(255)  [not null, note: 'ppn | non-ppn — IMMUTABLE after create']
+  start_date     date          [not null, note: 'Campaign start (mulai tayang)']
+  end_date       date          [not null, note: 'Campaign end (selesai tayang)']
+  contract_value decimal(15,2) [not null, note: 'ALWAYS pure DPP, never PPN-inclusive']
+  target_qty     smallint      [not null, default: 1, note: 'Planned billboard point count']
+  status         varchar(255)  [not null, default: 'draft', note: 'draft | active | completed | cancelled']
+  notes          text          [null]
+  created_at     timestamp     [null]
+  updated_at     timestamp     [null]
+  deleted_at     timestamp     [null]
+
+  Indexes {
+    (fiscal_mode, status)
+    (start_date, end_date)
+    client_id
+  }
+
+  Note: '''
+  Domain: Project
+  Model: App\Domains\Project\Models\Project
+
+  A billboard advertising campaign sold to a client, delivered across one or
+  more billboard points rented from vendors.
+
+  CONTRACT VALUE IS ALWAYS DPP
+    The create form offers a "Belum PPN (DPP)" / "Sudah Inc. PPN" toggle. The
+    SERVER recomputes and never stores the client-side figure:
+      non-ppn         -> dpp = input
+      ppn + tax dpp   -> dpp = input
+      ppn + tax inc   -> dpp = round(input / 1.11, 2)
+
+  INVARIANTS
+  - fiscal_mode immutable after create (guard in saving(), DomainException).
+  - status transitions: draft -> active on invoice issuance;
+    -> completed once every payment term is paid AND end_date has passed.
+
+  DERIVED, NEVER STORED — computed by CalculateProjectFinancials:
+    ppn_keluaran   = is_ppn ? contract_value * 0.11 : 0
+    total_invoice  = contract_value + ppn_keluaran
+    total_dpp_vendor = SUM(locations.vendor_cost * locations.qty)
+    ppn_masukan    = is_ppn ? total_dpp_vendor * 0.11 : 0
+    total_po       = total_dpp_vendor + ppn_masukan
+    net_profit     = contract_value - total_dpp_vendor
+    ppn_net        = ppn_keluaran - ppn_masukan
+    margin         = contract_value > 0 ? net_profit / contract_value * 100 : 0
+  Also derived: invoice_issued, invoice_number, location_count,
+  po_issued_count, the period label, and masa-tayang progress.
+  '''
+}
+
+Ref: projects.client_id > clients.id
+Ref: projects.sales_id  > sales.id

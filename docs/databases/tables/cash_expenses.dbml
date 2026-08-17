@@ -1,0 +1,32 @@
+Table cash_expenses {
+  id                 uuid          [pk, default: `gen_random_uuid()`]
+  expense_account_id uuid          [not null, note: 'Debited — leaf expense account']
+  payment_account_id uuid          [not null, note: 'Credited — leaf cash/bank account']
+  project_id         uuid          [null, note: 'Optional analytical tag']
+  amount             decimal(15,2) [not null]
+  transaction_date   date          [not null]
+  description        varchar(255)  [null]
+  fiscal_mode        varchar(255)  [not null, note: 'ppn | non-ppn']
+  created_at         timestamp     [null]
+  updated_at         timestamp     [null]
+
+  Indexes {
+    (fiscal_mode, transaction_date)
+    project_id
+  }
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\CashExpense
+
+  Direct operational cash disbursement (Flow C):
+    Dr expense_account_id / Cr payment_account_id
+
+  Both columns are now foreign keys into chart_of_accounts rather than the
+  loose *_account_code strings of the previous schema.
+  '''
+}
+
+Ref: cash_expenses.expense_account_id > chart_of_accounts.id
+Ref: cash_expenses.payment_account_id > chart_of_accounts.id
+Ref: cash_expenses.project_id         > projects.id

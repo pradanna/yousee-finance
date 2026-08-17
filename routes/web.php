@@ -17,17 +17,35 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     
     // Vendor Domain
-    Route::resource('vendors', \App\Http\Controllers\Vendor\VendorController::class)->only(['index', 'store', 'update', 'destroy']);
+    // NOTE: 'index' sengaja tidak diregister di sini — GET /vendors masih dilayani
+    // closure di bawah (Inertia::render('Vendors'), halaman FE mock). Registrasi
+    // resource 'index' di sini akan collide URI+method dengan closure itu; Laravel
+    // menimpa lookup route dengan yang didaftarkan belakangan (closure), jadi
+    // VendorController::index() jadi unreachable. Aktifkan lagi 'index' saat FE
+    // sudah dikonek ke Resource-nya, DAN hapus/rename closure duplikatnya.
+    Route::resource('vendors', \App\Http\Controllers\Vendor\VendorController::class)->only(['store', 'update', 'destroy']);
     Route::post('vendors/{vendor}/archive', [\App\Http\Controllers\Vendor\VendorController::class, 'archive'])->name('vendors.archive');
     Route::post('vendors/{vendor}/unarchive', [\App\Http\Controllers\Vendor\VendorController::class, 'unarchive'])->name('vendors.unarchive');
 
-    // Client Domain
-    Route::resource('clients', \App\Http\Controllers\Client\ClientController::class)->only(['index', 'store', 'update', 'destroy']);
+    // Client Domain (lihat catatan 'index' di atas)
+    Route::resource('clients', \App\Http\Controllers\Client\ClientController::class)->only(['store', 'update', 'destroy']);
     Route::post('clients/{client}/archive', [\App\Http\Controllers\Client\ClientController::class, 'archive'])->name('clients.archive');
     Route::post('clients/{client}/unarchive', [\App\Http\Controllers\Client\ClientController::class, 'unarchive'])->name('clients.unarchive');
 
-    // Sales Domain
-    Route::resource('sales', \App\Http\Controllers\Sales\SalesController::class)->only(['index', 'store', 'update', 'destroy']);
+    // Sales Domain (lihat catatan 'index' di atas)
+    Route::resource('sales', \App\Http\Controllers\Sales\SalesController::class)->only(['store', 'update', 'destroy']);
+
+    // Project Domain ('index' di-handle terpisah di luar grup auth, lihat bawah —
+    // halaman /projects publik seperti vendors/clients/sales)
+    Route::resource('projects', \App\Http\Controllers\Project\ProjectController::class)->only(['store', 'update', 'destroy']);
+    Route::post('projects/{project}/locations', [\App\Http\Controllers\Project\ProjectLocationController::class, 'store'])->name('projects.locations.store');
+    Route::put('projects/{project}/locations/{location}', [\App\Http\Controllers\Project\ProjectLocationController::class, 'update'])->name('projects.locations.update');
+    Route::delete('projects/{project}/locations/{location}', [\App\Http\Controllers\Project\ProjectLocationController::class, 'destroy'])->name('projects.locations.destroy');
+
+    Route::post('projects/{project}/purchase-orders', [\App\Http\Controllers\Procurement\ProjectPurchaseOrderController::class, 'store'])->name('projects.purchase-orders.store');
+
+    Route::post('projects/{project}/payment-plan', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'storePaymentPlan'])->name('projects.payment-plan.store');
+    Route::post('projects/{project}/invoice/issue', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'issue'])->name('projects.invoice.issue');
 });
 
 // Accounting Domain — Master COA & Settings (Mock View Mode - Unauthenticated / Public access for testing)
@@ -58,9 +76,7 @@ Route::get('/sales', function () {
     return Inertia::render('Sales');
 })->name('sales');
 
-Route::get('/projects', function () {
-    return Inertia::render('Projects');
-})->name('projects');
+Route::get('/projects', [\App\Http\Controllers\Project\ProjectController::class, 'index'])->name('projects');
 
 Route::get('/debt-receivable', function () {
     return Inertia::render('DebtReceivable');

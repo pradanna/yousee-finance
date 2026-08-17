@@ -1,0 +1,22 @@
+Table users {
+  id                char(36)     [pk, note: 'UUID primary key']
+  name              varchar(255) [not null]
+  email             varchar(255) [not null, unique]
+  email_verified_at timestamp    [null]
+  password          varchar(255) [not null]
+  status            varchar(255) [not null, default: 'active', note: 'UserStatus: active | inactive | suspended']
+  last_login_at     timestamp    [null]
+  last_login_ip     varchar(255) [null]
+  remember_token    varchar(100) [null]
+  created_at        timestamp    [null]
+  updated_at        timestamp    [null]
+  deleted_at        timestamp    [null]
+
+  Note: '''
+  Domain: Identity
+  Model: App\Domains\Identity\Models\User
+
+  Roles are NOT a column — they live in the Spatie tables (model_has_roles).
+  UserRole values: admin, pimpinan. Only PIMPINAN may unlock a closed period.
+  '''
+}

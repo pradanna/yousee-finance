@@ -1,0 +1,38 @@
+Table accounting_settings {
+  id          uuid         [pk, default: `gen_random_uuid()`]
+  key         varchar(255) [not null, unique]
+  account_id  uuid         [not null]
+  description varchar(255) [null]
+  created_at  timestamp    [null]
+  updated_at  timestamp    [null]
+
+  Note: '''
+  Domain: Accounting
+  Model: App\Domains\Accounting\Models\AccountingSetting
+
+  Global default COA mappings that drive transaction automation. Key/value
+  rather than a one-row-many-columns table so a new mapping is a seeder row,
+  not a migration.
+
+  SEEDED KEYS
+    default_receivable      -> 1121 Piutang Dagang Client
+    default_payable         -> 2110 Hutang Dagang Vendor
+    default_vat_input       -> 1141 PPN Masukan
+    default_vat_output      -> 2121 PPN Keluaran
+    default_income_tax      -> 2122 Hutang PPh Pemotongan
+    default_sales_revenue   -> 4100 Pendapatan Sewa Media Iklan
+    default_project_expense -> 5100 Beban HPP Sewa Billboard Vendor
+    opening_balance_equity  -> 3900 Opening Balance Equity
+
+  Global, NOT per fiscal mode — there is one master COA.
+
+  Changing a mapping only affects transactions created afterwards. Journal
+  entries already posted keep pointing at the account they were posted to,
+  because they store account_id directly rather than resolving the setting
+  at read time. Closed periods therefore never move.
+
+  account_id must reference a LEAF account.
+  '''
+}
+
+Ref: accounting_settings.account_id > chart_of_accounts.id

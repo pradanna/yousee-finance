@@ -1,0 +1,38 @@
+Table payment_settlements {
+  id                 uuid          [pk, default: `gen_random_uuid()`]
+  payment_term_id    uuid          [not null, note: 'cascadeOnDelete']
+  payment_account_id uuid          [not null, note: 'Leaf cash/bank account that received or sent the money']
+  journal_entry_id   uuid          [null, note: 'The journal this settlement posted']
+  amount             decimal(15,2) [not null]
+  paid_at            date          [not null]
+  payment_method     varchar(255)  [not null, note: 'e.g. Transfer Bank BCA']
+  payment_ref        varchar(255)  [null, note: 'Transfer proof / reference number']
+  notes              text          [null]
+  created_at         timestamp     [null]
+  updated_at         timestamp     [null]
+
+  Indexes {
+    payment_term_id
+    paid_at
+    payment_account_id
+  }
+
+  Note: '''
+  Domain: Billing
+  One row per actual money movement.
+
+  A separate table is required because the UI supports partially paying a
+  single term, so one term accumulates several settlements over time.
+  Collapsing this into a paid_amount column on payment_terms would destroy
+  the payment history and leave each journal entry with nothing to point back
+  at when an auditor asks which transfer produced it.
+
+  Each settlement posts its own journal inside the same DB::transaction():
+    Client invoice -> Dr payment_account_id      / Cr default_receivable
+    Vendor PO      -> Dr default_payable         / Cr payment_account_id
+  '''
+}
+
+Ref: payment_settlements.payment_term_id    > payment_terms.id     [delete: cascade]
+Ref: payment_settlements.payment_account_id > chart_of_accounts.id
+Ref: payment_settlements.journal_entry_id   > journal_entries.id

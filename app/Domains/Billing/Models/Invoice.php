@@ -1,100 +1,86 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domains\Billing\Models;
 
-use App\Domains\Accounting\Models\ClosingPeriod;
-use App\Domains\Accounting\Models\JournalEntry;
-use App\Domains\Master\Models\Client;
-use App\Domains\Master\Models\Project;
-use App\Domains\Master\Models\Sales;
+use App\Domains\Billing\Enums\InvoiceStatus;
+use App\Domains\Client\Models\Client;
+use App\Domains\Project\Models\Project;
+use App\Domains\Sales\Models\Sales;
 use App\Domains\Shared\Enums\FiscalMode;
 use App\Domains\Shared\Traits\HasFiscalMode;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class Invoice extends Model
 {
-    use HasFiscalMode;
+    use HasFactory, HasFiscalMode, HasUuids;
+
+    protected static function newFactory()
+    {
+        return \Database\Factories\InvoiceFactory::new();
+    }
 
     protected $fillable = [
+        'invoice_number',
         'client_id',
         'sales_id',
         'project_id',
+        'revenue_account_id',
         'fiscal_mode',
         'transaction_date',
         'due_date',
         'subtotal',
         'ppn',
         'total',
-        'status', // draft, issued, paid
+        'status',
+        'notes',
     ];
 
-    protected $casts = [
-        'transaction_date' => 'date',
-        'due_date' => 'date',
-        'subtotal' => 'float',
-        'ppn' => 'float',
-        'total' => 'float',
-        'fiscal_mode' => FiscalMode::class,
-    ];
+    protected function casts(): array
+    {
+        return [
+            'fiscal_mode' => FiscalMode::class,
+            'status' => InvoiceStatus::class,
+            'transaction_date' => 'date',
+            'due_date' => 'date',
+            'subtotal' => 'decimal:2',
+            'ppn' => 'decimal:2',
+            'total' => 'decimal:2',
+        ];
+    }
 
     public static function boot(): void
     {
         parent::boot();
 
         static::saving(function (Invoice $invoice) {
-            // Client wajib
             if (empty($invoice->client_id)) {
-                throw new \InvalidArgumentException("Client wajib ditentukan.");
+                throw new \InvalidArgumentException('Client wajib ditentukan.');
             }
 
-            // Validasi Status Flow
             if ($invoice->isDirty('status')) {
-                $oldStatus = $invoice->getOriginal('status') ?? 'draft';
-                $newStatus = $invoice->status;
+                $oldStatus = $invoice->getOriginal('status') ?? InvoiceStatus::DRAFT->value;
+                $oldStatus = $oldStatus instanceof InvoiceStatus ? $oldStatus->value : $oldStatus;
+                $newStatus = $invoice->status instanceof InvoiceStatus ? $invoice->status->value : $invoice->status;
 
-                // Flow: draft -> issued -> paid
-                if ($oldStatus === 'draft' && $newStatus === 'paid') {
+                if ($oldStatus === InvoiceStatus::DRAFT->value && $newStatus === InvoiceStatus::PAID->value) {
                     throw new \DomainException("Status Invoice harus melalui 'issued' sebelum menjadi 'paid'.");
                 }
-                if ($oldStatus === 'paid' && $newStatus !== 'paid') {
+                if ($oldStatus === InvoiceStatus::PAID->value && $newStatus !== InvoiceStatus::PAID->value) {
                     throw new \DomainException("Status Invoice yang sudah 'paid' tidak bisa diubah kembali.");
                 }
             }
 
-            $date = Carbon::parse($invoice->transaction_date);
-            $modeStr = $invoice->fiscal_mode instanceof FiscalMode ? $invoice->fiscal_mode->value : $invoice->fiscal_mode;
-            if (ClosingPeriod::isClosed($date->month, $date->year, $modeStr)) {
-                throw new \DomainException("Periode akuntansi ({$date->format('M Y')} - {$modeStr}) sudah ditutup. Transaksi diblok sampai di-Unlock oleh Pimpinan.");
-            }
-
-            // Set default due date (+7 hari) jika tidak diisi
-            if (empty($invoice->due_date) && !empty($invoice->transaction_date)) {
+            if (empty($invoice->due_date) && ! empty($invoice->transaction_date)) {
                 $invoice->due_date = Carbon::parse($invoice->transaction_date)->addDays(7);
-            }
-
-            // Hitung subtotal, PPN, dan total
-            $invoice->calculateTotalsAndTax();
-        });
-
-        static::updated(function (Invoice $invoice) {
-            // Jurnal saat status berubah jadi Issued
-            if ($invoice->isDirty('status') && $invoice->getOriginal('status') === 'draft' && $invoice->status === 'issued') {
-                $invoice->postIssuedJournal();
-            }
-
-            // Kwitansi & Jurnal Pelunasan saat status berubah jadi Paid
-            if ($invoice->isDirty('status') && $invoice->getOriginal('status') === 'issued' && $invoice->status === 'paid') {
-                $paymentCode = request()->input('payment_account_code', '1110'); // Default to kas tunai
-                $invoice->generateKwitansi($paymentCode);
-                
-                // Refresh relasi kwitansi agar postPaidJournal bisa membaca akun yang benar
-                $invoice->load('kwitansi');
-                
-                $invoice->postPaidJournal();
             }
         });
     }
@@ -119,123 +105,27 @@ class Invoice extends Model
         return $this->hasMany(InvoiceItem::class);
     }
 
-    public function kwitansi(): HasOne
+    public function paymentPlan(): MorphOne
     {
-        return $this->hasOne(Kwitansi::class);
+        return $this->morphOne(PaymentPlan::class, 'payable');
     }
 
     /**
-     * Hitung PPN dan Total secara otomatis berdasarkan mode fiskal.
+     * Hitung ulang subtotal/ppn/total dari items. Journal posting & Kwitansi
+     * belum aktif — nunggu domain Accounting (chart_of_accounts,
+     * closing_periods, journal_entries) ada.
      */
-    public function calculateTotalsAndTax(): void
+    public function recalculateTotals(): void
     {
-        $this->subtotal = (float) $this->items()->sum(\DB::raw('quantity * price'));
+        $subtotal = (float) $this->items()->sum(DB::raw('quantity * price'));
+        $isPpn = $this->fiscal_mode instanceof FiscalMode
+            ? $this->fiscal_mode === FiscalMode::PPN
+            : $this->fiscal_mode === FiscalMode::PPN->value;
+        $ppn = $isPpn ? round($subtotal * 0.11, 2) : 0.0;
 
-        if ($this->fiscal_mode === FiscalMode::PPN->value || $this->fiscal_mode === FiscalMode::PPN) {
-            $this->ppn = $this->subtotal * 0.11; // PPN 11% wajib
-        } else {
-            $this->ppn = 0.0; // Disabled
-        }
-
-        $this->total = $this->subtotal + $this->ppn;
-    }
-
-    /**
-     * Posting Jurnal saat Invoice Diterbitkan (Issued).
-     * Debet: Piutang
-     * Kredit: Pendapatan (+ PPN Keluaran jika PPN)
-     */
-    public function postIssuedJournal(): void
-    {
-        if ($this->total <= 0) {
-            return;
-        }
-
-        $journal = JournalEntry::create([
-            'source_type' => self::class,
-            'source_id' => $this->id,
-            'fiscal_mode' => $this->fiscal_mode,
-            'description' => "Jurnal Piutang Invoice #{$this->id} - Client: {$this->client->name}",
-            'transaction_date' => $this->transaction_date,
-        ]);
-
-        // Debet Piutang
-        $journal->items()->create([
-            'account_name' => 'Piutang Dagang Client',
-            'debit' => $this->total,
-            'credit' => 0,
-        ]);
-
-        // Kredit Pendapatan
-        $journal->items()->create([
-            'account_name' => 'Pendapatan Sewa Media Iklan (Billboard/Videotron)',
-            'debit' => 0,
-            'credit' => $this->subtotal,
-        ]);
-
-        // Kredit PPN Keluaran (jika ada)
-        if ($this->ppn > 0) {
-            $journal->items()->create([
-                'account_name' => 'Hutang PPN Keluaran (11%)',
-                'debit' => 0,
-                'credit' => $this->ppn,
-            ]);
-        }
-    }
-
-    /**
-     * Posting Jurnal saat Invoice Dilunasi (Paid).
-     * Debet: Kas/Bank
-     * Kredit: Piutang
-     */
-    public function postPaidJournal(): void
-    {
-        $journal = JournalEntry::create([
-            'source_type' => self::class,
-            'source_id' => $this->id,
-            'fiscal_mode' => $this->fiscal_mode,
-            'description' => "Jurnal Pelunasan Invoice #{$this->id} - Client: {$this->client->name}",
-            'transaction_date' => now(), // Tanggal pembayaran saat ini
-        ]);
-
-        // Ambil nama akun bank dari kwitansi, atau default
-        $bankAccountName = 'Kas Tunai / Operasional';
-        if ($this->kwitansi && $this->kwitansi->payment_account_code) {
-            $code = $this->kwitansi->payment_account_code;
-            if ($code === '1111') $bankAccountName = 'Bank Mandiri Solo Baru (138-00-2010633-7)';
-            elseif ($code === '1112') $bankAccountName = 'Bank BCA Operasional Utama';
-            elseif ($code === '1110') $bankAccountName = 'Kas Tunai / Operasional';
-        }
-
-        // Debet Kas/Bank
-        $journal->items()->create([
-            'account_name' => $bankAccountName,
-            'debit' => $this->total,
-            'credit' => 0,
-        ]);
-
-        // Kredit Piutang
-        $journal->items()->create([
-            'account_name' => 'Piutang Dagang Client',
-            'debit' => 0,
-            'credit' => $this->total,
-        ]);
-    }
-
-    /**
-     * Terbit otomatis Kwitansi ketika Invoice lunas.
-     */
-    public function generateKwitansi(string $paymentAccountCode = null): void
-    {
-        if ($this->kwitansi()->exists()) {
-            return;
-        }
-
-        $this->kwitansi()->create([
-            'receipt_number' => 'KW-' . strtoupper(uniqid()),
-            'amount' => $this->total,
-            'paid_at' => now(),
-            'payment_account_code' => $paymentAccountCode,
-        ]);
+        $this->subtotal = $subtotal;
+        $this->ppn = $ppn;
+        $this->total = $subtotal + $ppn;
+        $this->saveQuietly();
     }
 }

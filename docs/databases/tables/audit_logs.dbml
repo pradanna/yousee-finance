@@ -1,0 +1,25 @@
+Table audit_logs {
+  id          uuid         [pk, default: `gen_random_uuid()`]
+  user_id     char(36)     [not null]
+  action      varchar(255) [not null, note: 'e.g. closing_period.unlock']
+  auditable_type varchar(255) [null, note: 'Morph — the record acted upon']
+  auditable_id   uuid      [null]
+  details     text         [not null, note: 'JSON payload of the change']
+  ip_address  varchar(45)  [null]
+  created_at  timestamp    [null]
+  updated_at  timestamp    [null]
+
+  Indexes {
+    user_id
+    (auditable_type, auditable_id)
+    action
+  }
+
+  Note: '''
+  Domain: Accounting
+  Audit trail for privileged operations — above all the PIMPINAN unlock of a
+  closed period, which is the one action that can rewrite settled history.
+  '''
+}
+
+Ref: audit_logs.user_id > users.id

@@ -7,8 +7,14 @@ import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown from '@/Components/UI/ActionDropdown';
 import Modal from '@/Components/UI/Modal';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from '@inertiajs/react';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import {
+    CreateProjectFormData,
+    createProjectSchema,
+} from './Projects/createProjectSchema';
 import {
     initialProjectsNonPPN,
     initialProjectsPPN,
@@ -21,9 +27,22 @@ import {
     ViewMode,
     calcFinancials,
     fmt,
-    mockClients,
-    mockSalesPICs,
 } from './Projects/projectTypes';
+
+interface ClientOption {
+    id: string;
+    name: string;
+}
+
+interface SalesOption {
+    id: string;
+    name: string;
+}
+
+interface ProjectsPageProps {
+    clients: ClientOption[];
+    sales: SalesOption[];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -207,7 +226,7 @@ function calcPeriodProgress(
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Projects Page Component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function Projects() {
+export default function Projects({ clients, sales }: ProjectsPageProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
@@ -222,31 +241,46 @@ export default function Projects() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 6;
 
-    const [form, setForm] = useState({
-        name: '',
-        clientName: '',
-        salesPIC: '',
-        startDate: '',
-        endDate: '',
-        totalLocations: '1',
-        contractValue: '',
-        taxMode: 'dpp' as 'dpp' | 'inc', // "dpp" = Belum PPN, "inc" = Sudah PPN
+    const {
+        register,
+        handleSubmit,
+        control,
+        watch,
+        reset,
+        setError,
+        formState: { errors, isSubmitting },
+    } = useForm<CreateProjectFormData>({
+        resolver: zodResolver(createProjectSchema),
+        defaultValues: {
+            name: '',
+            clientId: '',
+            salesId: '',
+            startDate: '',
+            endDate: '',
+            targetQty: '1',
+            contractValue: '',
+            taxMode: 'dpp', // "dpp" = Belum PPN, "inc" = Sudah PPN
+        },
     });
-    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const watchedStartDate = watch('startDate');
+    const watchedEndDate = watch('endDate');
+    const watchedContractValue = watch('contractValue');
+    const watchedTaxMode = watch('taxMode');
 
     const periodInfo = useMemo(() => {
-        return formatPeriod(form.startDate, form.endDate);
-    }, [form.startDate, form.endDate]);
+        return formatPeriod(watchedStartDate, watchedEndDate);
+    }, [watchedStartDate, watchedEndDate]);
 
     // Live calculations for Create Project modal
     const parsedRawValue =
-        parseInt(form.contractValue.replace(/[^0-9]/g, '')) || 0;
+        parseInt((watchedContractValue ?? '').replace(/[^0-9]/g, ''), 10) || 0;
     const computedFinancials = useMemo(() => {
         if (!parsedRawValue) return { dpp: 0, ppn: 0, total: 0 };
         if (!isPPN) {
             return { dpp: parsedRawValue, ppn: 0, total: parsedRawValue };
         }
-        if (form.taxMode === 'inc') {
+        if (watchedTaxMode === 'inc') {
             // User inputs Grand Total (Inc PPN) -> Convert back to DPP: DPP = Total / 1.11
             const dpp = Math.round(parsedRawValue / 1.11);
             const ppn = parsedRawValue - dpp;
@@ -257,63 +291,59 @@ export default function Projects() {
             const total = parsedRawValue + ppn;
             return { dpp: parsedRawValue, ppn, total };
         }
-    }, [parsedRawValue, form.taxMode, isPPN]);
+    }, [parsedRawValue, watchedTaxMode, isPPN]);
 
-    const handleCreate = (e: React.FormEvent) => {
-        e.preventDefault();
-        const errs: Record<string, string> = {};
-        if (!form.name.trim()) errs.name = 'Nama proyek wajib diisi.';
-        if (!form.clientName) errs.clientName = 'Client wajib dipilih.';
-        if (!form.startDate || !form.endDate) {
-            errs.period = 'Tanggal mulai dan selesai kampanye wajib diisi.';
-        } else if (new Date(form.startDate) > new Date(form.endDate)) {
-            errs.period =
-                'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.';
-        }
-        if (!form.contractValue)
-            errs.contractValue = 'Nilai kontrak wajib diisi.';
-
-        if (Object.keys(errs).length > 0) {
-            setErrors(errs);
-            return;
-        }
-
-        const newPrj: Project = {
-            id: Date.now(),
-            code: `PRJ-2026-${isPPN ? 'PPN' : 'NON'}${String(projects.length + 1).padStart(2, '0')}`,
-            name: form.name,
-            clientId: 99,
-            clientName: form.clientName,
-            salesPIC: form.salesPIC || 'Sales Admin',
-            period: periodInfo.label || 'Bulan Ini',
-            contractValue: computedFinancials.dpp, // Always save pure DPP in database
-            status: 'Draft',
-            invoiceIssued: false,
-            invoiceNumber: '',
-            targetQty: parseInt(form.totalLocations) || 1,
-            locations: [],
+    // Maps backend (snake_case) validation error keys back to RHF field names.
+    const SERVER_ERROR_FIELD_MAP: Record<string, keyof CreateProjectFormData> =
+        {
+            name: 'name',
+            client_id: 'clientId',
+            sales_id: 'salesId',
+            start_date: 'startDate',
+            end_date: 'endDate',
+            contract_value: 'contractValue',
+            target_qty: 'targetQty',
         };
 
-        setProjects([newPrj, ...projects]);
-        setIsCreateOpen(false);
-        setForm({
-            name: '',
-            clientName: '',
-            salesPIC: '',
-            startDate: '',
-            endDate: '',
-            totalLocations: '1',
-            contractValue: '',
-            taxMode: 'dpp',
-        });
-        setErrors({});
+    const onCreateProject = (data: CreateProjectFormData) => {
+        const rawContractValue =
+            parseInt(data.contractValue.replace(/[^0-9]/g, ''), 10) || 0;
+
+        router.post(
+            route('projects.store'),
+            {
+                name: data.name,
+                client_id: data.clientId,
+                sales_id: data.salesId || undefined,
+                fiscal_mode: fiscalMode,
+                start_date: data.startDate,
+                end_date: data.endDate,
+                contract_value: rawContractValue,
+                is_ppn_inclusive: isPPN && data.taxMode === 'inc',
+                target_qty: data.targetQty,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsCreateOpen(false);
+                    reset();
+                },
+                onError: (serverErrors) => {
+                    Object.entries(serverErrors).forEach(([key, message]) => {
+                        const field = SERVER_ERROR_FIELD_MAP[key];
+                        if (field) {
+                            setError(field, { message });
+                        }
+                    });
+                },
+            },
+        );
     };
 
     const handleUpdateProject = (updated: Project) => {
         setProjects((prev) =>
             prev.map((p) => (p.id === updated.id ? updated : p)),
         );
-
     };
 
     // Metrics calculation
@@ -693,7 +723,12 @@ export default function Projects() {
                                         <div
                                             key={project.id}
                                             onClick={() =>
-                                                router.visit(route('projects.show', project.id))
+                                                router.visit(
+                                                    route(
+                                                        'projects.show',
+                                                        project.id,
+                                                    ),
+                                                )
                                             }
                                             className="shadow-xs group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 transition-all duration-200 hover:border-blue-300 hover:shadow-lg"
                                         >
@@ -869,7 +904,12 @@ export default function Projects() {
                                             <div
                                                 key={project.id}
                                                 onClick={() =>
-                                                    router.visit(route('projects.show', project.id))
+                                                    router.visit(
+                                                        route(
+                                                            'projects.show',
+                                                            project.id,
+                                                        ),
+                                                    )
                                                 }
                                                 className="shadow-2xs cursor-pointer space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 transition-all hover:shadow-md"
                                             >
@@ -943,7 +983,12 @@ export default function Projects() {
                                             <div
                                                 key={project.id}
                                                 onClick={() =>
-                                                    router.visit(route('projects.show', project.id))
+                                                    router.visit(
+                                                        route(
+                                                            'projects.show',
+                                                            project.id,
+                                                        ),
+                                                    )
                                                 }
                                                 className="shadow-2xs cursor-pointer space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 transition-all hover:shadow-md"
                                             >
@@ -1038,7 +1083,12 @@ export default function Projects() {
                                             <div
                                                 key={project.id}
                                                 onClick={() =>
-                                                    router.visit(route('projects.show', project.id))
+                                                    router.visit(
+                                                        route(
+                                                            'projects.show',
+                                                            project.id,
+                                                        ),
+                                                    )
                                                 }
                                                 className="shadow-2xs cursor-pointer space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 transition-all hover:shadow-md"
                                             >
@@ -1263,7 +1313,12 @@ export default function Projects() {
                                                                             ),
                                                                             onClick:
                                                                                 () =>
-                                                                                    router.visit(route('projects.show', project.id)),
+                                                                                    router.visit(
+                                                                                        route(
+                                                                                            'projects.show',
+                                                                                            project.id,
+                                                                                        ),
+                                                                                    ),
                                                                         },
                                                                     ]}
                                                                 />
@@ -1322,7 +1377,10 @@ export default function Projects() {
                             </button>
                         </div>
 
-                        <form onSubmit={handleCreate} className="space-y-4">
+                        <form
+                            onSubmit={handleSubmit(onCreateProject)}
+                            className="space-y-4"
+                        >
                             <div className="space-y-1.5">
                                 <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
                                     Nama Proyek / Kampanye{' '}
@@ -1330,19 +1388,13 @@ export default function Projects() {
                                 </label>
                                 <input
                                     type="text"
-                                    value={form.name}
-                                    onChange={(e) =>
-                                        setForm({
-                                            ...form,
-                                            name: e.target.value,
-                                        })
-                                    }
+                                    {...register('name')}
                                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none"
                                     placeholder="Kampanye Iklan Film Toystory 5..."
                                 />
                                 {errors.name && (
                                     <span className="mt-1 block text-[10px] font-bold uppercase text-rose-500">
-                                        {errors.name}
+                                        {errors.name.message}
                                     </span>
                                 )}
                             </div>
@@ -1352,25 +1404,30 @@ export default function Projects() {
                                     Client / Pengiklan{' '}
                                     <span className="text-rose-500">*</span>
                                 </label>
-                                <SelectInput
-                                    value={form.clientName}
-                                    onChange={(e) =>
-                                        setForm({
-                                            ...form,
-                                            clientName: e.target.value,
-                                        })
-                                    }
-                                >
-                                    <option value="">-- Pilih Client --</option>
-                                    {mockClients.map((c) => (
-                                        <option key={c.id} value={c.name}>
-                                            {c.name}
-                                        </option>
-                                    ))}
-                                </SelectInput>
-                                {errors.clientName && (
+                                <Controller
+                                    control={control}
+                                    name="clientId"
+                                    render={({ field }) => (
+                                        <SelectInput
+                                            value={field.value}
+                                            onChange={(e) =>
+                                                field.onChange(e.target.value)
+                                            }
+                                        >
+                                            <option value="">
+                                                -- Pilih Client --
+                                            </option>
+                                            {clients.map((c) => (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.name}
+                                                </option>
+                                            ))}
+                                        </SelectInput>
+                                    )}
+                                />
+                                {errors.clientId && (
                                     <span className="mt-1 block text-[10px] font-bold uppercase text-rose-500">
-                                        {errors.clientName}
+                                        {errors.clientId.message}
                                     </span>
                                 )}
                             </div>
@@ -1379,24 +1436,32 @@ export default function Projects() {
                                 <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
                                     Sales PIC
                                 </label>
-                                <SelectInput
-                                    value={form.salesPIC}
-                                    onChange={(e) =>
-                                        setForm({
-                                            ...form,
-                                            salesPIC: e.target.value,
-                                        })
-                                    }
-                                >
-                                    <option value="">
-                                        -- Pilih Sales PIC --
-                                    </option>
-                                    {mockSalesPICs.map((pic) => (
-                                        <option key={pic} value={pic}>
-                                            {pic}
-                                        </option>
-                                    ))}
-                                </SelectInput>
+                                <Controller
+                                    control={control}
+                                    name="salesId"
+                                    render={({ field }) => (
+                                        <SelectInput
+                                            value={field.value}
+                                            onChange={(e) =>
+                                                field.onChange(e.target.value)
+                                            }
+                                        >
+                                            <option value="">
+                                                -- Pilih Sales PIC --
+                                            </option>
+                                            {sales.map((s) => (
+                                                <option key={s.id} value={s.id}>
+                                                    {s.name}
+                                                </option>
+                                            ))}
+                                        </SelectInput>
+                                    )}
+                                />
+                                {errors.salesId && (
+                                    <span className="mt-1 block text-[10px] font-bold uppercase text-rose-500">
+                                        {errors.salesId.message}
+                                    </span>
+                                )}
                             </div>
 
                             {/* Periode Kampanye (Date Range) */}
@@ -1446,13 +1511,7 @@ export default function Projects() {
                                         </span>
                                         <input
                                             type="date"
-                                            value={form.startDate}
-                                            onChange={(e) =>
-                                                setForm({
-                                                    ...form,
-                                                    startDate: e.target.value,
-                                                })
-                                            }
+                                            {...register('startDate')}
                                             onClick={(e) => {
                                                 if (
                                                     'showPicker' in
@@ -1476,13 +1535,7 @@ export default function Projects() {
                                         </span>
                                         <input
                                             type="date"
-                                            value={form.endDate}
-                                            onChange={(e) =>
-                                                setForm({
-                                                    ...form,
-                                                    endDate: e.target.value,
-                                                })
-                                            }
+                                            {...register('endDate')}
                                             onClick={(e) => {
                                                 if (
                                                     'showPicker' in
@@ -1500,9 +1553,10 @@ export default function Projects() {
                                     </div>
                                 </div>
 
-                                {errors.period && (
+                                {(errors.startDate || errors.endDate) && (
                                     <span className="mt-1 block text-[10px] font-bold uppercase text-rose-500">
-                                        {errors.period}
+                                        {errors.startDate?.message ||
+                                            errors.endDate?.message}
                                     </span>
                                 )}
                             </div>
@@ -1516,15 +1570,14 @@ export default function Projects() {
                                     type="number"
                                     min="1"
                                     max="20"
-                                    value={form.totalLocations}
-                                    onChange={(e) =>
-                                        setForm({
-                                            ...form,
-                                            totalLocations: e.target.value,
-                                        })
-                                    }
+                                    {...register('targetQty')}
                                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none"
                                 />
+                                {errors.targetQty && (
+                                    <span className="mt-1 block text-[10px] font-bold uppercase text-rose-500">
+                                        {errors.targetQty.message}
+                                    </span>
+                                )}
                             </div>
 
                             {/* Switch Tax Mode & Input Nilai Kontrak */}
@@ -1550,73 +1603,84 @@ export default function Projects() {
 
                                     {/* Mode Switch Pills (Hanya jika PPN aktif) */}
                                     {isPPN && (
-                                        <div className="inline-flex rounded-xl bg-slate-200/80 p-0.5">
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setForm({
-                                                        ...form,
-                                                        taxMode: 'dpp',
-                                                    })
-                                                }
-                                                className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all ${
-                                                    form.taxMode === 'dpp'
-                                                        ? 'shadow-2xs bg-white font-black text-blue-700'
-                                                        : 'text-slate-500 hover:text-slate-800'
-                                                }`}
-                                            >
-                                                Belum PPN (DPP)
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setForm({
-                                                        ...form,
-                                                        taxMode: 'inc',
-                                                    })
-                                                }
-                                                className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all ${
-                                                    form.taxMode === 'inc'
-                                                        ? 'shadow-2xs bg-primary font-black text-white'
-                                                        : 'text-slate-500 hover:text-slate-800'
-                                                }`}
-                                            >
-                                                Sudah Inc. PPN (11%)
-                                            </button>
-                                        </div>
+                                        <Controller
+                                            control={control}
+                                            name="taxMode"
+                                            render={({ field }) => (
+                                                <div className="inline-flex rounded-xl bg-slate-200/80 p-0.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            field.onChange(
+                                                                'dpp',
+                                                            )
+                                                        }
+                                                        className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all ${
+                                                            field.value ===
+                                                            'dpp'
+                                                                ? 'shadow-2xs bg-white font-black text-blue-700'
+                                                                : 'text-slate-500 hover:text-slate-800'
+                                                        }`}
+                                                    >
+                                                        Belum PPN (DPP)
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            field.onChange(
+                                                                'inc',
+                                                            )
+                                                        }
+                                                        className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all ${
+                                                            field.value ===
+                                                            'inc'
+                                                                ? 'shadow-2xs bg-primary font-black text-white'
+                                                                : 'text-slate-500 hover:text-slate-800'
+                                                        }`}
+                                                    >
+                                                        Sudah Inc. PPN (11%)
+                                                    </button>
+                                                </div>
+                                            )}
+                                        />
                                     )}
                                 </div>
 
-                                <input
-                                    type="text"
-                                    value={form.contractValue}
-                                    onChange={(e) => {
-                                        const raw = e.target.value.replace(
-                                            /[^0-9]/g,
-                                            '',
-                                        );
-                                        const formatted = raw
-                                            ? parseInt(raw, 10).toLocaleString(
-                                                  'id-ID',
-                                              )
-                                            : '';
-                                        setForm({
-                                            ...form,
-                                            contractValue: formatted,
-                                        });
-                                    }}
-                                    className="shadow-2xs w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-mono text-sm font-bold text-slate-800 transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    placeholder={
-                                        isPPN
-                                            ? form.taxMode === 'inc'
-                                                ? 'Masukkan Nilai Total (Sudah Inc PPN 11%)...'
-                                                : 'Masukkan Nilai DPP (Sebelum PPN)...'
-                                            : 'Masukkan Nilai Total Kontrak...'
-                                    }
+                                <Controller
+                                    control={control}
+                                    name="contractValue"
+                                    render={({ field }) => (
+                                        <input
+                                            type="text"
+                                            value={field.value}
+                                            onChange={(e) => {
+                                                const raw =
+                                                    e.target.value.replace(
+                                                        /[^0-9]/g,
+                                                        '',
+                                                    );
+                                                const formatted = raw
+                                                    ? parseInt(
+                                                          raw,
+                                                          10,
+                                                      ).toLocaleString('id-ID')
+                                                    : '';
+                                                field.onChange(formatted);
+                                            }}
+                                            className="shadow-2xs w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-mono text-sm font-bold text-slate-800 transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            placeholder={
+                                                isPPN
+                                                    ? watchedTaxMode === 'inc'
+                                                        ? 'Masukkan Nilai Total (Sudah Inc PPN 11%)...'
+                                                        : 'Masukkan Nilai DPP (Sebelum PPN)...'
+                                                    : 'Masukkan Nilai Total Kontrak...'
+                                            }
+                                        />
+                                    )}
                                 />
                                 {errors.contractValue && (
                                     <span className="mt-1 block text-[10px] font-bold uppercase text-rose-500">
-                                        {errors.contractValue}
+                                        {errors.contractValue.message}
                                     </span>
                                 )}
 
@@ -1661,16 +1725,17 @@ export default function Projects() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-primary-700"
+                                    disabled={isSubmitting}
+                                    className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                    Simpan Draft Proyek
+                                    {isSubmitting
+                                        ? 'Menyimpan...'
+                                        : 'Simpan Draft Proyek'}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </Modal>
-
-                
             </div>
         </AppLayout>
     );

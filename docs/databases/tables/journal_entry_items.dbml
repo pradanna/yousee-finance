@@ -1,0 +1,38 @@
+Table journal_entry_items {
+  id               uuid          [pk, default: `gen_random_uuid()`]
+  journal_entry_id uuid          [not null, note: 'cascadeOnDelete']
+  account_id       uuid          [not null, note: 'MUST be a leaf account']
+  project_id       uuid          [null, note: 'Analytical tagging — see note']
+  debit            decimal(15,2) [not null, default: 0]
+  credit           decimal(15,2) [not null, default: 0]
+  memo             varchar(255)  [null]
+  created_at       timestamp     [null]
+  updated_at       timestamp     [null]
+
+  Indexes {
+    journal_entry_id
+    account_id
+    project_id
+  }
+
+  Note: '''
+  Domain: Accounting
+
+  account_id is a real foreign key into chart_of_accounts. It replaces the
+  free-text account_name string used by the previous schema, which made
+  trial balances and P&L rollups impossible to compute reliably.
+
+  ANALYTICAL PROJECT TAGGING
+    project_id lives HERE, on the line, not on the account. This is what makes
+    per-project profit and loss reporting possible without polluting the COA
+    with per-project accounts.
+
+  INVARIANTS
+  - Exactly one of debit / credit is non-zero on any given line.
+  - account_id must point at a leaf account (children_count === 0).
+  '''
+}
+
+Ref: journal_entry_items.journal_entry_id > journal_entries.id   [delete: cascade]
+Ref: journal_entry_items.account_id       > chart_of_accounts.id
+Ref: journal_entry_items.project_id       > projects.id
