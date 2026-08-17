@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             VendorSeeder::class,
             ClientSeeder::class,
             SalesSeeder::class,
+            ChartOfAccountSeeder::class,
             ProjectTransactionSeeder::class,
         ]);
     }

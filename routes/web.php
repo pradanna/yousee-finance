@@ -89,13 +89,13 @@ Route::middleware('auth')->group(function () {
 
     // Accounting Domain — Master COA & Settings
     Route::prefix('accounting')->name('accounting.')->group(function () {
-        Route::get('coa', function () {
-            return Inertia::render('Accounting/MasterCoa/Index');
-        })->name('coa.index');
+        Route::get('coa', [\App\Http\Controllers\Accounting\MasterCoaController::class, 'index'])->name('coa.index');
+        Route::post('coa', [\App\Http\Controllers\Accounting\MasterCoaController::class, 'store'])->name('coa.store');
+        Route::put('coa/{chartOfAccount}', [\App\Http\Controllers\Accounting\MasterCoaController::class, 'update'])->name('coa.update');
+        Route::delete('coa/{chartOfAccount}', [\App\Http\Controllers\Accounting\MasterCoaController::class, 'destroy'])->name('coa.destroy');
 
-        Route::get('settings', function () {
-            return Inertia::render('Accounting/Settings/Index');
-        })->name('settings.index');
+        Route::get('settings', [\App\Http\Controllers\Accounting\AccountingSettingsController::class, 'index'])->name('settings.index');
+        Route::put('settings', [\App\Http\Controllers\Accounting\AccountingSettingsController::class, 'update'])->name('settings.update');
     });
 
     // Laporan

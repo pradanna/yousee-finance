@@ -4,21 +4,29 @@ namespace App\Domains\Accounting\Models;
 
 use App\Domains\Identity\Enums\UserRole;
 use App\Domains\Identity\Models\User;
-use Illuminate\Database\Eloquent\Model;
-
 use App\Domains\Shared\Enums\FiscalMode;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
 
 class ClosingPeriod extends Model
 {
+    use HasUuids;
+
     protected $fillable = [
         'month',
         'year',
         'fiscal_mode',
         'is_closed',
+        'closed_at',
+        'closed_by',
     ];
 
     protected $casts = [
+        'month' => 'integer',
+        'year' => 'integer',
+        'fiscal_mode' => FiscalMode::class,
         'is_closed' => 'boolean',
+        'closed_at' => 'datetime',
     ];
 
     public static function boot(): void
@@ -44,7 +52,8 @@ class ClosingPeriod extends Model
                 if ($hasPreviousRecords) {
                     $prevClosed = self::isClosed($prevMonth, $prevYear, $period->fiscal_mode);
                     if (!$prevClosed) {
-                        throw new \DomainException("Urutan closing salah: Periode bulan sebelumnya ({$prevMonth}-{$prevYear}) untuk Mode {$period->fiscal_mode} harus sudah ditutup terlebih dahulu.");
+                        $modeStr = $period->fiscal_mode instanceof FiscalMode ? $period->fiscal_mode->value : (string) $period->fiscal_mode;
+                        throw new \DomainException("Urutan closing salah: Periode bulan sebelumnya ({$prevMonth}-{$prevYear}) untuk Mode {$modeStr} harus sudah ditutup terlebih dahulu.");
                     }
                 }
             }
