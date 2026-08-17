@@ -223,7 +223,6 @@ export default function JournalReport() {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
-
     const [coaList, setCoaList] = useState<AccountCOA[]>(DEFAULT_COA_LIST);
 
     // Mock initial journal dataset
@@ -436,8 +435,8 @@ export default function JournalReport() {
     const [searchQuery, setSearchQuery] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [accountFilter, setAccountFilter] = useState<string>('all');
-    const [startDateFilter] = useState('');
-    const [endDateFilter] = useState('');
+    const [startDateFilter, setStartDateFilter] = useState('');
+    const [endDateFilter, setEndDateFilter] = useState('');
     const [selectedMonth, setSelectedMonth] = useState<string>('06');
     const [selectedYear, setSelectedYear] = useState<string>('2026');
     const [currentPage, setCurrentPage] = useState(1);
