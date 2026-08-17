@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PaymentTerm extends Model
 {
@@ -44,6 +45,19 @@ class PaymentTerm extends Model
     public function paymentPlan(): BelongsTo
     {
         return $this->belongsTo(PaymentPlan::class);
+    }
+
+    public function settlements(): HasMany
+    {
+        return $this->hasMany(PaymentSettlement::class)->orderBy('paid_at');
+    }
+
+    /**
+     * Total nominal yang sudah direalisasi dari semua settlement di termin ini.
+     */
+    public function paidAmount(): float
+    {
+        return (float) $this->settlements()->sum('amount');
     }
 
     /**
