@@ -87,10 +87,14 @@ class ClosingPeriod extends Model
         $this->save();
 
         // Catat Audit Log
+        $modeVal = $this->fiscal_mode instanceof \App\Domains\Shared\Enums\FiscalMode
+            ? $this->fiscal_mode->value
+            : (string) $this->fiscal_mode;
+
         AuditLog::create([
             'user_id' => $user->id,
             'action' => 'UNLOCK_PERIOD',
-            'details' => "Pimpinan {$user->name} membuka kembali periode {$this->month}-{$this->year} Mode: {$this->fiscal_mode}. Alasan: {$reason}",
+            'details' => "Pimpinan {$user->name} membuka kembali periode {$this->month}-{$this->year} Mode: {$modeVal}. Alasan: {$reason}",
         ]);
     }
 }

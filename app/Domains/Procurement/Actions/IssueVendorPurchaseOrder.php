@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domains\Procurement\Actions;
 
+use App\Domains\Accounting\Actions\PostJournalEntry;
+use App\Domains\Accounting\Models\AccountingSetting;
 use App\Domains\Billing\Actions\GeneratePaymentTerms;
 use App\Domains\Billing\Enums\PaymentScheme;
 use App\Domains\Procurement\Enums\PurchaseOrderStatus;
@@ -99,6 +101,59 @@ class IssueVendorPurchaseOrder
                     $percents,
                     $dueDates,
                     $extraData['top_notes'] ?? null,
+                );
+            }
+
+            // 4. Otomatis bentuk Jurnal Akuntansi (domain-dictionary.md / accounting-journal-flow.md §3 Flow B)
+            $expenseAccountId = AccountingSetting::getAccountId('default_project_expense');
+            $payableAccountId = AccountingSetting::getAccountId('default_payable');
+            $vatInputAccountId = AccountingSetting::getAccountId('default_vat_input');
+
+            if ($expenseAccountId && $payableAccountId) {
+                $subtotal = (float) $po->subtotal;
+                $ppn = (float) $po->ppn;
+                $total = (float) $po->total;
+
+                $journalItems = [];
+
+                // (Dr) Beban Project / HPP Billboard
+                $journalItems[] = [
+                    'account_id' => $expenseAccountId,
+                    'debit'      => $subtotal,
+                    'credit'     => 0,
+                    'project_id' => $project->id,
+                    'memo'       => "HPP Billboard PO {$po->po_number} - {$vendor->name}",
+                ];
+
+                // (Dr) PPN Masukan (Hanya jika mode PPN dan ada nominal PPN)
+                if ($ppn > 0 && $vatInputAccountId) {
+                    $journalItems[] = [
+                        'account_id' => $vatInputAccountId,
+                        'debit'      => $ppn,
+                        'credit'     => 0,
+                        'project_id' => $project->id,
+                        'memo'       => "PPN Masukan PO {$po->po_number}",
+                    ];
+                }
+
+                // (Cr) Hutang Dagang Vendor
+                $journalItems[] = [
+                    'account_id' => $payableAccountId,
+                    'debit'      => 0,
+                    'credit'     => $total,
+                    'project_id' => $project->id,
+                    'memo'       => "Hutang Vendor PO {$po->po_number} - {$vendor->name}",
+                ];
+
+                (new PostJournalEntry())->execute(
+                    headerData: [
+                        'fiscal_mode'      => $project->fiscal_mode,
+                        'transaction_date' => $transactionDate,
+                        'description'      => "Penerbitan PO {$po->po_number} untuk Vendor {$vendor->name} ({$project->name})",
+                        'project_id'       => $project->id,
+                    ],
+                    items: $journalItems,
+                    source: $po,
                 );
             }
 

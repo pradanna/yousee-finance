@@ -6,10 +6,12 @@ import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown from '@/Components/UI/ActionDropdown';
 import Modal from '@/Components/UI/Modal';
+import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
+import { PageProps } from '@/types';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { router } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { router, usePage } from '@inertiajs/react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
     CreateProjectFormData,
@@ -338,6 +340,44 @@ export default function Projects({
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 6;
 
+    // Toast state
+    const [toast, setToast] = useState<{
+        show: boolean;
+        type: ToastType;
+        title?: string;
+        message: string;
+    }>({
+        show: false,
+        type: 'success',
+        message: '',
+    });
+
+    const triggerToast = (
+        message: string,
+        type: ToastType = 'success',
+        title?: string,
+    ) => {
+        setToast({
+            show: true,
+            type,
+            title,
+            message,
+        });
+    };
+
+    // Flash Message Listener
+    const { flash } =
+        usePage<PageProps<{ flash?: { success?: string; error?: string } }>>()
+            .props;
+
+    useEffect(() => {
+        if (flash?.success) {
+            triggerToast(flash.success, 'success', 'Operasi Berhasil');
+        } else if (flash?.error) {
+            triggerToast(flash.error, 'error', 'Operasi Gagal');
+        }
+    }, [flash]);
+
     const {
         register,
         handleSubmit,
@@ -424,6 +464,11 @@ export default function Projects({
                 onSuccess: () => {
                     setIsCreateOpen(false);
                     reset();
+                    triggerToast(
+                        `Proyek "${data.name}" berhasil dibuat.`,
+                        'success',
+                        'Proyek Dibuat',
+                    );
                 },
                 onError: (serverErrors) => {
                     Object.entries(serverErrors).forEach(([key, message]) => {
@@ -432,6 +477,14 @@ export default function Projects({
                             setError(field, { message });
                         }
                     });
+                    const firstError = Object.values(serverErrors)[0];
+                    if (firstError) {
+                        triggerToast(
+                            String(firstError),
+                            'error',
+                            'Gagal Membuat Proyek',
+                        );
+                    }
                 },
             },
         );
@@ -1831,6 +1884,17 @@ export default function Projects({
                         </form>
                     </div>
                 </Modal>
+
+                {/* Floating Toast Notification */}
+                <Toast
+                    show={toast.show}
+                    type={toast.type}
+                    title={toast.title}
+                    message={toast.message}
+                    onClose={() =>
+                        setToast((prev) => ({ ...prev, show: false }))
+                    }
+                />
             </div>
         </AppLayout>
     );

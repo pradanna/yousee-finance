@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Domains\Accounting\Actions\PostJournalEntry;
+use App\Domains\Accounting\Models\AccountingSetting;
+use App\Domains\Accounting\Models\ChartOfAccount;
+use App\Domains\Billing\Actions\GeneratePaymentTerms;
 use App\Domains\Billing\Enums\InvoiceStatus;
 use App\Domains\Billing\Enums\PaymentScheme;
 use App\Domains\Billing\Enums\PaymentTermStatus;
 use App\Domains\Billing\Models\Invoice;
 use App\Domains\Billing\Models\InvoiceItem;
 use App\Domains\Billing\Models\PaymentPlan;
+use App\Domains\Billing\Models\PaymentSettlement;
 use App\Domains\Billing\Models\PaymentTerm;
 use App\Domains\Client\Models\Client;
 use App\Domains\Procurement\Enums\PurchaseOrderStatus;
@@ -41,6 +46,16 @@ class ProjectTransactionSeeder extends Seeder
         if ($clients->isEmpty() || $vendors->isEmpty() || $salesList->isEmpty()) {
             return;
         }
+
+        // Resolving default COA mappings
+        $receivableAccId = AccountingSetting::getAccountId('default_receivable');
+        $salesRevAccId = AccountingSetting::getAccountId('default_sales_revenue');
+        $vatOutputAccId = AccountingSetting::getAccountId('default_vat_output');
+        $expenseAccId = AccountingSetting::getAccountId('default_project_expense');
+        $payableAccId = AccountingSetting::getAccountId('default_payable');
+        $vatInputAccId = AccountingSetting::getAccountId('default_vat_input');
+        $bankAccId = AccountingSetting::getAccountId('default_bank');
+        $cashAccId = AccountingSetting::getAccountId('default_cash');
 
         $now = now();
 
@@ -158,6 +173,7 @@ class ProjectTransactionSeeder extends Seeder
 
         $globalPoSeq = 1;
         $globalInvSeq = 1;
+        $postJournal = new PostJournalEntry();
 
         foreach ($projectTemplates as $idx => $tmpl) {
             $client = $clients[$idx % $clients->count()];
@@ -225,14 +241,15 @@ class ProjectTransactionSeeder extends Seeder
 
                 $tag = $isPpn ? 'PTSSI-PO' : 'YS-PO';
                 $poNumber = sprintf('%03d/%s/%02d/%02d', $globalPoSeq++, $tag, $month, $year % 100);
+                $poDate = (clone $startDate)->addDays(7);
 
                 $po = PurchaseOrder::create([
                     'po_number' => $poNumber,
                     'vendor_id' => $vendor->id,
                     'project_id' => $project->id,
                     'fiscal_mode' => $project->fiscal_mode,
-                    'transaction_date' => (clone $startDate)->addDays(7),
-                    'issued_at' => (clone $startDate)->addDays(7),
+                    'transaction_date' => $poDate,
+                    'issued_at' => $poDate,
                     'subtotal' => 0,
                     'ppn' => 0,
                     'total' => 0,
@@ -253,6 +270,107 @@ class ProjectTransactionSeeder extends Seeder
                 }
 
                 $po->recalculateTotal();
+
+                // Setup vendor payment plan & terms (Default full)
+                $poPlan = PaymentPlan::create([
+                    'payable_type' => PurchaseOrder::class,
+                    'payable_id' => $po->id,
+                    'scheme' => PaymentScheme::FULL,
+                    'total_amount' => $po->total,
+                    'notes' => 'Termin PO Vendor',
+                ]);
+
+                $isPoPaid = ($tmpl['status'] === ProjectStatus::COMPLETED || $idx % 2 === 1);
+                $poTerm = PaymentTerm::create([
+                    'payment_plan_id' => $poPlan->id,
+                    'sort_order' => 1,
+                    'label' => 'Pelunasan PO',
+                    'amount' => $po->total,
+                    'percent' => 100,
+                    'due_date' => (clone $poDate)->addDays(14),
+                    'status' => $isPoPaid ? PaymentTermStatus::PAID : PaymentTermStatus::UNPAID,
+                ]);
+
+                // Post PO Journal: (Dr) Beban Project + (Dr) PPN Masukan (if PPN) = (Cr) Hutang Vendor
+                if ($expenseAccId && $payableAccId) {
+                    $poJournalItems = [
+                        [
+                            'account_id' => $expenseAccId,
+                            'debit'      => (float) $po->subtotal,
+                            'credit'     => 0,
+                            'project_id' => $project->id,
+                            'memo'       => "HPP Billboard PO {$po->po_number} - {$vendor->name}",
+                        ],
+                    ];
+
+                    if ((float) $po->ppn > 0 && $vatInputAccId) {
+                        $poJournalItems[] = [
+                            'account_id' => $vatInputAccId,
+                            'debit'      => (float) $po->ppn,
+                            'credit'     => 0,
+                            'project_id' => $project->id,
+                            'memo'       => "PPN Masukan PO {$po->po_number}",
+                        ];
+                    }
+
+                    $poJournalItems[] = [
+                        'account_id' => $payableAccId,
+                        'debit'      => 0,
+                        'credit'     => (float) $po->total,
+                        'project_id' => $project->id,
+                        'memo'       => "Hutang Vendor PO {$po->po_number} - {$vendor->name}",
+                    ];
+
+                    $postJournal->execute(
+                        headerData: [
+                            'fiscal_mode'      => $project->fiscal_mode,
+                            'transaction_date' => $poDate->format('Y-m-d'),
+                            'description'      => "Penerbitan PO {$po->po_number} untuk Vendor {$vendor->name} ({$project->name})",
+                            'project_id'       => $project->id,
+                        ],
+                        items: $poJournalItems,
+                        source: $po,
+                    );
+                }
+
+                // If PO is marked paid, record Settlement & Journal
+                if ($isPoPaid && $payableAccId && $bankAccId) {
+                    $settleDate = (clone $poDate)->addDays(10);
+                    $settlement = PaymentSettlement::create([
+                        'payment_term_id' => $poTerm->id,
+                        'amount'          => (float) $po->total,
+                        'paid_at'         => $settleDate,
+                        'payment_method'  => 'Transfer Bank BCA',
+                        'payment_ref'     => "TRX-V-{$po->id}",
+                        'notes'           => "Pelunasan PO {$po->po_number}",
+                    ]);
+
+                    $postJournal->execute(
+                        headerData: [
+                            'fiscal_mode'      => $project->fiscal_mode,
+                            'transaction_date' => $settleDate->format('Y-m-d'),
+                            'description'      => "Pelunasan Hutang PO {$po->po_number} - {$poTerm->label} ({$vendor->name})",
+                            'project_id'       => $project->id,
+                        ],
+                        items: [
+                            [
+                                'account_id' => $payableAccId,
+                                'debit'      => (float) $po->total,
+                                'credit'     => 0,
+                                'project_id' => $project->id,
+                                'memo'       => "Pelunasan Hutang Vendor {$po->po_number}",
+                            ],
+                            [
+                                'account_id' => $bankAccId,
+                                'debit'      => 0,
+                                'credit'     => (float) $po->total,
+                                'project_id' => $project->id,
+                                'memo'       => "Pengeluaran Bank BCA untuk PO {$po->po_number}",
+                            ],
+                        ],
+                        source: $settlement,
+                    );
+                }
             }
 
             // 2. Invoice & Payment Plan
@@ -264,6 +382,7 @@ class ProjectTransactionSeeder extends Seeder
                 $invNumber = $tmpl['invoice_status'] === InvoiceStatus::DRAFT
                     ? null
                     : sprintf('INV-%s-%d%02d-%03d', $codeTag, $year, $month, $globalInvSeq++);
+                $invDate = (clone $startDate)->addDays(5);
 
                 $invoice = Invoice::create([
                     'invoice_number' => $invNumber,
@@ -271,7 +390,7 @@ class ProjectTransactionSeeder extends Seeder
                     'sales_id' => $sales->id,
                     'project_id' => $project->id,
                     'fiscal_mode' => $project->fiscal_mode,
-                    'transaction_date' => (clone $startDate)->addDays(5),
+                    'transaction_date' => $invDate,
                     'due_date' => (clone $startDate)->addDays(25),
                     'subtotal' => $invDpp,
                     'ppn' => $invPpn,
@@ -286,6 +405,48 @@ class ProjectTransactionSeeder extends Seeder
                     'quantity' => 1,
                     'price' => $invDpp,
                 ]);
+
+                // If invoice is issued/paid, Post Client Invoice Journal:
+                // (Dr) Piutang Dagang Client = (Cr) Pendapatan Sewa + (Cr) PPN Keluaran
+                if ($invoice->status !== InvoiceStatus::DRAFT && $receivableAccId && $salesRevAccId) {
+                    $invJournalItems = [
+                        [
+                            'account_id' => $receivableAccId,
+                            'debit'      => $invTotal,
+                            'credit'     => 0,
+                            'project_id' => $project->id,
+                            'memo'       => "Piutang Invoice {$invoice->invoice_number} - {$client->name}",
+                        ],
+                        [
+                            'account_id' => $salesRevAccId,
+                            'debit'      => 0,
+                            'credit'     => $invDpp,
+                            'project_id' => $project->id,
+                            'memo'       => "Pendapatan Proyek {$project->name} ({$invoice->invoice_number})",
+                        ],
+                    ];
+
+                    if ($invPpn > 0 && $vatOutputAccId) {
+                        $invJournalItems[] = [
+                            'account_id' => $vatOutputAccId,
+                            'debit'      => 0,
+                            'credit'     => $invPpn,
+                            'project_id' => $project->id,
+                            'memo'       => "PPN Keluaran Invoice {$invoice->invoice_number}",
+                        ];
+                    }
+
+                    $postJournal->execute(
+                        headerData: [
+                            'fiscal_mode'      => $project->fiscal_mode,
+                            'transaction_date' => $invDate->format('Y-m-d'),
+                            'description'      => "Penerbitan Invoice {$invoice->invoice_number} ke {$client->name} ({$project->name})",
+                            'project_id'       => $project->id,
+                        ],
+                        items: $invJournalItems,
+                        source: $invoice,
+                    );
+                }
 
                 if (! empty($tmpl['scheme']) && ! empty($tmpl['terms'])) {
                     $plan = PaymentPlan::create([
@@ -305,16 +466,57 @@ class ProjectTransactionSeeder extends Seeder
                             ? round($invTotal - $runningAmt, 2)
                             : round($invTotal * $tTmpl['percent'] / 100, 2);
                         $runningAmt += $termAmt;
+                        $termDueDate = (clone $startDate)->addDays($tTmpl['days']);
 
-                        PaymentTerm::create([
+                        $term = PaymentTerm::create([
                             'payment_plan_id' => $plan->id,
                             'sort_order' => $tIdx + 1,
                             'label' => $tTmpl['label'],
                             'amount' => $termAmt,
                             'percent' => (float) $tTmpl['percent'],
-                            'due_date' => (clone $startDate)->addDays($tTmpl['days']),
+                            'due_date' => $termDueDate,
                             'status' => $tTmpl['status'],
                         ]);
+
+                        // If client term is PAID, record PaymentSettlement & Journal:
+                        // (Dr) Bank BCA = (Cr) Piutang Dagang Client
+                        if ($tTmpl['status'] === PaymentTermStatus::PAID && $receivableAccId && $bankAccId) {
+                            $paidDate = (clone $termDueDate)->subDays(1);
+                            $settlement = PaymentSettlement::create([
+                                'payment_term_id' => $term->id,
+                                'amount'          => $termAmt,
+                                'paid_at'         => $paidDate,
+                                'payment_method'  => 'Transfer Bank BCA',
+                                'payment_ref'     => "TRX-INV-{$invoice->id}-{$tIdx}",
+                                'notes'           => "Penerimaan {$term->label} dari {$client->name}",
+                            ]);
+
+                            $postJournal->execute(
+                                headerData: [
+                                    'fiscal_mode'      => $project->fiscal_mode,
+                                    'transaction_date' => $paidDate->format('Y-m-d'),
+                                    'description'      => "Penerimaan Pembayaran {$invoice->invoice_number} - {$term->label} ({$client->name})",
+                                    'project_id'       => $project->id,
+                                ],
+                                items: [
+                                    [
+                                        'account_id' => $bankAccId,
+                                        'debit'      => $termAmt,
+                                        'credit'     => 0,
+                                        'project_id' => $project->id,
+                                        'memo'       => "Penerimaan Bank BCA untuk Invoice {$invoice->invoice_number}",
+                                    ],
+                                    [
+                                        'account_id' => $receivableAccId,
+                                        'debit'      => 0,
+                                        'credit'     => $termAmt,
+                                        'project_id' => $project->id,
+                                        'memo'       => "Pelunasan Piutang {$invoice->invoice_number} - {$term->label}",
+                                    ],
+                                ],
+                                source: $settlement,
+                            );
+                        }
                     }
                 }
             }

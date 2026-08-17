@@ -55,10 +55,20 @@ class CreateProjectLocation
 
     private function generateCode(Project $project): string
     {
-        $sequence = ProjectLocation::where('project_id', $project->id)
+        $existingCodes = ProjectLocation::where('project_id', $project->id)
             ->lockForUpdate()
-            ->count() + 1;
+            ->pluck('code');
 
-        return 'LOC-' . str_pad((string) $sequence, 3, '0', STR_PAD_LEFT);
+        $maxSeq = 0;
+        foreach ($existingCodes as $code) {
+            $numPart = substr($code, 4); // Strip 'LOC-'
+            if (is_numeric($numPart)) {
+                $maxSeq = max($maxSeq, (int) $numPart);
+            }
+        }
+
+        $nextSeq = $maxSeq + 1;
+
+        return 'LOC-' . str_pad((string) $nextSeq, 3, '0', STR_PAD_LEFT);
     }
 }

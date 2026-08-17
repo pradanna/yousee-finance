@@ -16,7 +16,9 @@ export default function VendorPOTab({
     project,
     projectId,
     purchaseOrders,
+    cashBankAccounts = [],
     onIssuePO,
+    onIssueBulkPO,
     onUpdateProject,
 }: {
     locations: BillboardLocation[];
@@ -24,8 +26,24 @@ export default function VendorPOTab({
     project: Project;
     projectId: string;
     purchaseOrders: PurchaseOrderWithPlan[];
+    cashBankAccounts?: Array<{
+        id: string | number;
+        code: string;
+        name: string;
+        display_name: string;
+    }>;
     onIssuePO: (
         locId: string | number,
+        poNumber: string,
+        lighting?: 'Berlampu' | 'Tidak Berlampu',
+        topNotes?: string,
+        vendorTermScheme?: PaymentScheme,
+        vendorTermPercents?: number[],
+        vendorTermDates?: string[],
+    ) => void;
+    onIssueBulkPO?: (
+        vendorId: string | number,
+        locationIds: Array<string | number>,
         poNumber: string,
         lighting?: 'Berlampu' | 'Tidak Berlampu',
         topNotes?: string,
@@ -48,6 +66,41 @@ export default function VendorPOTab({
     const [poTopNotes, setPoTopNotes] = useState<string>(
         'Lunas setelah visual terpasang',
     );
+
+    // Vendor Payment Modal State
+    const [selectedVendorForPay, setSelectedVendorForPay] = useState<{
+        vendorName: string;
+        poNumber: string;
+        poId?: string | number;
+        totalAmount: number;
+        remainingAmount: number;
+        schedule: Array<{
+            id: string;
+            label: string;
+            percent: number;
+            targetAmount: number;
+            paidAmount: number;
+            remainingAmount: number;
+            dueDate: string;
+            isPaid: boolean;
+            isPartial: boolean;
+            poId?: string | number;
+            poNumber?: string;
+        }>;
+        selectedTermId?: string;
+    } | null>(null);
+    const [vPayType, setVPayType] = useState<'full' | 'partial'>('full');
+    const [vPayAmountInput, setVPayAmountInput] = useState<number>(0);
+    const [vPayDateInput, setVPayDateInput] = useState<string>(
+        new Date().toISOString().split('T')[0],
+    );
+    const [vPayMethodInput, setVPayMethodInput] =
+        useState<string>('Transfer Bank BCA');
+    const [vPayAccountId, setVPayAccountId] = useState<string | number>(
+        cashBankAccounts[0]?.id ? String(cashBankAccounts[0].id) : '',
+    );
+    const [vPayRefInput, setVPayRefInput] = useState<string>('');
+    const [vPayNotesInput, setVPayNotesInput] = useState<string>('');
 
     // Collapsible Vendor TOP State
     const [expandedVendorTop, setExpandedVendorTop] = useState<
@@ -92,36 +145,6 @@ export default function VendorPOTab({
             setPoTopNotes('Tempo 30 Hari (Net 30)');
         }
     };
-
-    // Vendor Payment Modal State
-    const [selectedVendorForPay, setSelectedVendorForPay] = useState<{
-        vendorName: string;
-        poNumber: string;
-        poId?: string;
-        totalAmount: number;
-        remainingAmount: number;
-        schedule: Array<{
-            id: string;
-            label: string;
-            percent: number;
-            targetAmount: number;
-            paidAmount: number;
-            remainingAmount: number;
-            dueDate: string;
-            isPaid: boolean;
-            isPartial: boolean;
-        }>;
-        selectedTermId?: string;
-    } | null>(null);
-    const [vPayType, setVPayType] = useState<'full' | 'partial'>('full');
-    const [vPayAmountInput, setVPayAmountInput] = useState<number>(0);
-    const [vPayDateInput, setVPayDateInput] = useState<string>(
-        new Date().toISOString().split('T')[0],
-    );
-    const [vPayMethodInput, setVPayMethodInput] =
-        useState<string>('Transfer Bank BCA');
-    const [vPayRefInput, setVPayRefInput] = useState<string>('');
-    const [vPayNotesInput, setVPayNotesInput] = useState<string>('');
 
     const handleDownloadPO = (
         vendorName: string,
@@ -265,9 +288,10 @@ export default function VendorPOTab({
             vendorTermDates,
         }));
 
-        confirmingVendorGroup.unissuedItems.forEach((loc) => {
-            onIssuePO(
-                loc.id,
+        if (onIssueBulkPO) {
+            onIssueBulkPO(
+                confirmingVendorGroup.vendorId,
+                confirmingVendorGroup.unissuedItems.map((loc) => loc.id),
                 collectivePoNumber,
                 poLighting,
                 poTopNotes,
@@ -275,7 +299,19 @@ export default function VendorPOTab({
                 vendorTermPercents,
                 vendorTermDates,
             );
-        });
+        } else {
+            confirmingVendorGroup.unissuedItems.forEach((loc) => {
+                onIssuePO(
+                    loc.id,
+                    collectivePoNumber,
+                    poLighting,
+                    poTopNotes,
+                    vendorTermScheme,
+                    vendorTermPercents,
+                    vendorTermDates,
+                );
+            });
+        }
         setConfirmingVendorGroup(null);
 
         // Auto Download PDF upon bulk issuance
@@ -484,19 +520,40 @@ export default function VendorPOTab({
                         const vendorIssuedCount =
                             group.items.length - unissuedItems.length;
 
-                        // Payment Calculations for Vendor
-                        const vendorPo = purchaseOrders.find(
+                        // Payment Calculations for Vendor (Mendukung Multi-PO per Vendor)
+                        const vendorPos = purchaseOrders.filter(
                             (po) => po.vendor_id === group.vendorId,
                         );
-                        const dbPlan = vendorPo?.payment_plan ?? null;
-                        const dbTerms = dbPlan?.terms ?? null;
+                        const vendorPo = vendorPos[0] ?? null;
+                        const dbPlans = vendorPos
+                            .map((po) => po.payment_plan)
+                            .filter(
+                                (
+                                    p,
+                                ): p is NonNullable<
+                                    (typeof vendorPos)[number]['payment_plan']
+                                > => p !== null && p !== undefined,
+                            );
+
+                        // Gabungkan semua terms dari seluruh PO vendor ini
+                        const allDbTerms = dbPlans.flatMap(
+                            (plan) => plan.terms || [],
+                        );
+                        const dbTerms =
+                            allDbTerms.length > 0 ? allDbTerms : null;
 
                         // Gunakan settlement dari DB jika ada, fallback ke project.vendorPayments lokal
                         const dbSettlements = dbTerms
-                            ? dbTerms.flatMap((t) =>
-                                  t.settlements.map((s) => ({
+                            ? dbTerms.flatMap((t) => {
+                                  const parentPo = vendorPos.find((po) =>
+                                      po.payment_plan?.terms?.some(
+                                          (term) => term.id === t.id,
+                                      ),
+                                  );
+                                  return t.settlements.map((s) => ({
                                       id: s.id,
                                       poNumber:
+                                          parentPo?.po_number ||
                                           vendorPo?.po_number ||
                                           `PO-${group.vendorName.replace(/\s+/g, '')}`,
                                       vendorName: group.vendorName,
@@ -505,8 +562,8 @@ export default function VendorPOTab({
                                       paymentMethod: s.payment_method,
                                       paymentRef: s.payment_ref || undefined,
                                       notes: s.notes || undefined,
-                                  })),
-                              )
+                                  }));
+                              })
                             : [];
 
                         const vendorRecords =
@@ -522,7 +579,7 @@ export default function VendorPOTab({
                             : vendorRecords.reduce((s, r) => s + r.amount, 0);
                         const vendorRemaining = Math.max(
                             0,
-                            vendorGrandTotal - totalVendorPaid,
+                            Math.round(vendorGrandTotal - totalVendorPaid),
                         );
                         const isFullyPaid =
                             totalVendorPaid >= vendorGrandTotal &&
@@ -707,22 +764,46 @@ export default function VendorPOTab({
                                                 dueDate: string;
                                                 isPaid: boolean;
                                                 isPartial: boolean;
+                                                poId?: string | number;
+                                                poNumber?: string;
                                             }> = dbTerms
-                                                ? dbTerms.map((term) => ({
-                                                      id: term.id,
-                                                      label: term.label,
-                                                      percent: term.percent,
-                                                      targetAmount: term.amount,
-                                                      paidAmount:
-                                                          term.totalPaid,
-                                                      remainingAmount:
-                                                          term.remaining,
-                                                      dueDate: term.due_date,
-                                                      isPaid: term.isPaid,
-                                                      isPartial:
-                                                          term.totalPaid > 0 &&
-                                                          !term.isPaid,
-                                                  }))
+                                                ? dbTerms.map((term) => {
+                                                      const parentPo =
+                                                          vendorPos.find((po) =>
+                                                              po.payment_plan?.terms?.some(
+                                                                  (t) =>
+                                                                      t.id ===
+                                                                      term.id,
+                                                              ),
+                                                          );
+                                                      return {
+                                                          id: term.id,
+                                                          label: term.label,
+                                                          percent: term.percent,
+                                                          targetAmount:
+                                                              Math.round(
+                                                                  term.amount,
+                                                              ),
+                                                          paidAmount:
+                                                              Math.round(
+                                                                  term.totalPaid,
+                                                              ),
+                                                          remainingAmount:
+                                                              Math.round(
+                                                                  term.remaining,
+                                                              ),
+                                                          dueDate:
+                                                              term.due_date,
+                                                          isPaid: term.isPaid,
+                                                          isPartial:
+                                                              term.totalPaid >
+                                                                  0 &&
+                                                              !term.isPaid,
+                                                          poId: parentPo?.id,
+                                                          poNumber:
+                                                              parentPo?.po_number,
+                                                      };
+                                                  })
                                                 : (() => {
                                                       const firstIssuedLoc =
                                                           group.items.find(
@@ -839,6 +920,9 @@ export default function VendorPOTab({
                                                                   dueDate,
                                                                   isPaid,
                                                                   isPartial,
+                                                                  poId: vendorPo?.id,
+                                                                  poNumber:
+                                                                      firstPoNum,
                                                               };
                                                           },
                                                       );
@@ -861,12 +945,19 @@ export default function VendorPOTab({
                                                                 vendorName:
                                                                     group.vendorName,
                                                                 poNumber:
+                                                                    firstUnpaid?.poNumber ||
                                                                     firstPoNum,
-                                                                poId: vendorPo?.id,
+                                                                poId:
+                                                                    firstUnpaid?.poId ||
+                                                                    vendorPo?.id,
                                                                 totalAmount:
-                                                                    vendorGrandTotal,
+                                                                    Math.round(
+                                                                        vendorGrandTotal,
+                                                                    ),
                                                                 remainingAmount:
-                                                                    vendorRemaining,
+                                                                    Math.round(
+                                                                        vendorRemaining,
+                                                                    ),
                                                                 schedule:
                                                                     vendorSchedule,
                                                                 selectedTermId:
@@ -883,8 +974,12 @@ export default function VendorPOTab({
                                                                 ? firstUnpaid.remainingAmount
                                                                 : vendorRemaining >
                                                                     0
-                                                                  ? vendorRemaining
-                                                                  : vendorGrandTotal,
+                                                                  ? Math.round(
+                                                                        vendorRemaining,
+                                                                    )
+                                                                  : Math.round(
+                                                                        vendorGrandTotal,
+                                                                    ),
                                                         );
                                                         setVPayDateInput(
                                                             new Date()
@@ -897,7 +992,7 @@ export default function VendorPOTab({
                                                         setVPayRefInput('');
                                                         setVPayNotesInput(
                                                             firstUnpaid
-                                                                ? `Pembayaran ${firstUnpaid.label} PO ${firstPoNum}`
+                                                                ? `Pembayaran ${firstUnpaid.label} PO ${firstUnpaid.poNumber || firstPoNum}`
                                                                 : `Pelunasan PO ${firstPoNum}`,
                                                         );
                                                     }}
@@ -1135,17 +1230,6 @@ export default function VendorPOTab({
                                 {/* Dynamic Vendor TOP Stepper & Collapsible Schedule (Hanya tampil jika PO sudah terbit) */}
                                 {vendorIssuedCount > 0 &&
                                     (() => {
-                                        // Cari PO dari DB yang sesuai vendor group ini.
-                                        // Jika ada payment_plan, gunakan terms dari DB.
-                                        // Fallback ke komputasi lokal jika PO belum punya payment_plan.
-                                        const vendorPo = purchaseOrders.find(
-                                            (po) =>
-                                                po.vendor_id === group.vendorId,
-                                        );
-                                        const dbTerms =
-                                            vendorPo?.payment_plan?.terms ??
-                                            null;
-
                                         // vendorSchedule: preferensikan data DB, fallback ke komputasi lokal.
                                         const vendorSchedule: Array<{
                                             id: string;
@@ -1157,21 +1241,42 @@ export default function VendorPOTab({
                                             dueDate: string;
                                             isPaid: boolean;
                                             isPartial: boolean;
+                                            poId?: string | number;
+                                            poNumber?: string;
                                         }> = dbTerms
-                                            ? dbTerms.map((term) => ({
-                                                  id: term.id,
-                                                  label: term.label,
-                                                  percent: term.percent,
-                                                  targetAmount: term.amount,
-                                                  paidAmount: term.totalPaid,
-                                                  remainingAmount:
-                                                      term.remaining,
-                                                  dueDate: term.due_date,
-                                                  isPaid: term.isPaid,
-                                                  isPartial:
-                                                      term.totalPaid > 0 &&
-                                                      !term.isPaid,
-                                              }))
+                                            ? dbTerms.map((term) => {
+                                                  const parentPo =
+                                                      vendorPos.find((po) =>
+                                                          po.payment_plan?.terms?.some(
+                                                              (t) =>
+                                                                  t.id ===
+                                                                  term.id,
+                                                          ),
+                                                      );
+                                                  return {
+                                                      id: term.id,
+                                                      label: term.label,
+                                                      percent: term.percent,
+                                                      targetAmount: Math.round(
+                                                          term.amount,
+                                                      ),
+                                                      paidAmount: Math.round(
+                                                          term.totalPaid,
+                                                      ),
+                                                      remainingAmount:
+                                                          Math.round(
+                                                              term.remaining,
+                                                          ),
+                                                      dueDate: term.due_date,
+                                                      isPaid: term.isPaid,
+                                                      isPartial:
+                                                          term.totalPaid > 0 &&
+                                                          !term.isPaid,
+                                                      poId: parentPo?.id,
+                                                      poNumber:
+                                                          parentPo?.po_number,
+                                                  };
+                                              })
                                             : (() => {
                                                   // Fallback lokal (PO belum punya payment_plan di DB)
                                                   const firstIssuedLoc =
@@ -1257,6 +1362,9 @@ export default function VendorPOTab({
                                                               dueDate,
                                                               isPaid,
                                                               isPartial,
+                                                              poId: vendorPo?.id,
+                                                              poNumber:
+                                                                  firstPoNum,
                                                           };
                                                       },
                                                   );
@@ -1527,12 +1635,19 @@ export default function VendorPOTab({
                                                                                                 vendorName:
                                                                                                     group.vendorName,
                                                                                                 poNumber:
+                                                                                                    term.poNumber ||
                                                                                                     firstPoNum,
-                                                                                                poId: vendorPo?.id,
+                                                                                                poId:
+                                                                                                    term.poId ||
+                                                                                                    vendorPo?.id,
                                                                                                 totalAmount:
-                                                                                                    vendorGrandTotal,
+                                                                                                    Math.round(
+                                                                                                        vendorGrandTotal,
+                                                                                                    ),
                                                                                                 remainingAmount:
-                                                                                                    vendorRemaining,
+                                                                                                    Math.round(
+                                                                                                        vendorRemaining,
+                                                                                                    ),
                                                                                                 schedule:
                                                                                                     vendorSchedule,
                                                                                                 selectedTermId:
@@ -1546,7 +1661,9 @@ export default function VendorPOTab({
                                                                                                 : 'partial',
                                                                                         );
                                                                                         setVPayAmountInput(
-                                                                                            term.remainingAmount,
+                                                                                            Math.round(
+                                                                                                term.remainingAmount,
+                                                                                            ),
                                                                                         );
                                                                                         setVPayDateInput(
                                                                                             new Date()
@@ -1562,7 +1679,7 @@ export default function VendorPOTab({
                                                                                             '',
                                                                                         );
                                                                                         setVPayNotesInput(
-                                                                                            `Pembayaran ${term.label} PO ${firstPoNum}`,
+                                                                                            `Pembayaran ${term.label} PO ${term.poNumber || firstPoNum}`,
                                                                                         );
                                                                                     }}
                                                                                     className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-emerald-700"
@@ -1770,6 +1887,12 @@ export default function VendorPOTab({
                                                                     ...selectedVendorForPay,
                                                                     selectedTermId:
                                                                         term.id,
+                                                                    poId:
+                                                                        term.poId ||
+                                                                        selectedVendorForPay.poId,
+                                                                    poNumber:
+                                                                        term.poNumber ||
+                                                                        selectedVendorForPay.poNumber,
                                                                 },
                                                             );
                                                             setVPayType(
@@ -1778,11 +1901,15 @@ export default function VendorPOTab({
                                                             setVPayAmountInput(
                                                                 term.remainingAmount >
                                                                     0
-                                                                    ? term.remainingAmount
-                                                                    : term.targetAmount,
+                                                                    ? Math.round(
+                                                                          term.remainingAmount,
+                                                                      )
+                                                                    : Math.round(
+                                                                          term.targetAmount,
+                                                                      ),
                                                             );
                                                             setVPayNotesInput(
-                                                                `Pembayaran ${term.label} PO ${selectedVendorForPay.poNumber}`,
+                                                                `Pembayaran ${term.label} PO ${term.poNumber || selectedVendorForPay.poNumber}`,
                                                             );
                                                         }}
                                                         className={`flex cursor-pointer items-center justify-between rounded-2xl border p-3 text-left transition-all ${
@@ -1795,6 +1922,13 @@ export default function VendorPOTab({
                                                     >
                                                         <div className="min-w-0">
                                                             <div className="flex items-center gap-2 text-xs font-bold">
+                                                                {term.poNumber && (
+                                                                    <span className="rounded bg-slate-200/80 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-slate-700">
+                                                                        {
+                                                                            term.poNumber
+                                                                        }
+                                                                    </span>
+                                                                )}
                                                                 <span>
                                                                     {term.label}{' '}
                                                                     (
@@ -1954,27 +2088,28 @@ export default function VendorPOTab({
 
                             <div className="space-y-1.5">
                                 <label className="block text-xs font-bold text-slate-700">
-                                    Metode Bayar
+                                    Rekening / Sumber Dana Kas
                                 </label>
                                 <select
-                                    value={vPayMethodInput}
+                                    value={vPayAccountId}
                                     onChange={(e) =>
-                                        setVPayMethodInput(e.target.value)
+                                        setVPayAccountId(e.target.value)
                                     }
-                                    className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:outline-none"
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:outline-none"
                                 >
-                                    <option value="Transfer Bank BCA">
-                                        Transfer BCA
-                                    </option>
-                                    <option value="Transfer Bank Mandiri">
-                                        Transfer Mandiri
-                                    </option>
-                                    <option value="Transfer Bank BRI">
-                                        Transfer BRI
-                                    </option>
-                                    <option value="Kas / Tunai">
-                                        Kas / Tunai
-                                    </option>
+                                    {cashBankAccounts &&
+                                    cashBankAccounts.length > 0 ? (
+                                        cashBankAccounts.map((acc) => (
+                                            <option key={acc.id} value={acc.id}>
+                                                {acc.display_name ||
+                                                    `${acc.code} - ${acc.name}`}
+                                            </option>
+                                        ))
+                                    ) : (
+                                        <option value="">
+                                            Transfer Bank BCA (Default)
+                                        </option>
+                                    )}
                                 </select>
                             </div>
                         </div>
@@ -2014,6 +2149,16 @@ export default function VendorPOTab({
                                             (t) => !t.isPaid,
                                         )?.id;
 
+                                    const selectedAccount =
+                                        cashBankAccounts.find(
+                                            (a) =>
+                                                String(a.id) ===
+                                                String(vPayAccountId),
+                                        );
+                                    const derivedMethod = selectedAccount
+                                        ? selectedAccount.name
+                                        : 'Transfer Bank BCA';
+
                                     // Jika termin dan PO terdaftar di database, kirim via endpoint backend
                                     if (
                                         poId &&
@@ -2029,7 +2174,15 @@ export default function VendorPOTab({
                                                     new Date()
                                                         .toISOString()
                                                         .split('T')[0],
-                                                payment_method: vPayMethodInput,
+                                                payment_method: derivedMethod,
+                                                account_id:
+                                                    vPayAccountId ||
+                                                    (cashBankAccounts[0]?.id
+                                                        ? String(
+                                                              cashBankAccounts[0]
+                                                                  .id,
+                                                          )
+                                                        : null),
                                                 payment_ref:
                                                     vPayRefInput || null,
                                                 notes: vPayNotesInput || null,
@@ -2057,7 +2210,7 @@ export default function VendorPOTab({
                                         paidAt:
                                             vPayDateInput ||
                                             new Date().toISOString(),
-                                        paymentMethod: vPayMethodInput,
+                                        paymentMethod: derivedMethod,
                                         paymentRef: vPayRefInput || undefined,
                                         notes: vPayNotesInput || undefined,
                                     };

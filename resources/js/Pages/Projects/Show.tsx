@@ -1,6 +1,8 @@
+import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import { router } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { PageProps } from '@/types';
+import { router, usePage } from '@inertiajs/react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     ActiveTab,
     BillboardLocation,
@@ -157,6 +159,12 @@ interface ShowProjectProps {
     clients?: Array<{ id: string; name: string }>;
     sales?: Array<{ id: string; name: string }>;
     vendors?: Array<{ id: string; name: string }>;
+    cashBankAccounts?: Array<{
+        id: string | number;
+        code: string;
+        name: string;
+        display_name: string;
+    }>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,6 +173,7 @@ interface ShowProjectProps {
 export default function Show({
     project: dbProject,
     vendors = [],
+    cashBankAccounts = [],
 }: ShowProjectProps) {
     const fiscalMode: FiscalMode =
         dbProject?.fiscal_mode === 'non-ppn' ? 'non-ppn' : 'ppn';
@@ -375,9 +384,46 @@ export default function Show({
     const [payDateInput, setPayDateInput] = useState<string>(
         new Date().toISOString().split('T')[0],
     );
-    const [payMethodInput, setPayMethodInput] =
-        useState<string>('Transfer Bank BCA');
+    const [payAccountId, setPayAccountId] = useState<string>('');
     const [payRefInput, setPayRefInput] = useState<string>('');
+
+    // Toast state
+    const [toast, setToast] = useState<{
+        show: boolean;
+        type: ToastType;
+        title?: string;
+        message: string;
+    }>({
+        show: false,
+        type: 'success',
+        message: '',
+    });
+
+    const triggerToast = (
+        message: string,
+        type: ToastType = 'success',
+        title?: string,
+    ) => {
+        setToast({
+            show: true,
+            type,
+            title,
+            message,
+        });
+    };
+
+    // Flash Message Listener
+    const { flash } =
+        usePage<PageProps<{ flash?: { success?: string; error?: string } }>>()
+            .props;
+
+    useEffect(() => {
+        if (flash?.success) {
+            triggerToast(flash.success, 'success', 'Operasi Berhasil');
+        } else if (flash?.error) {
+            triggerToast(flash.error, 'error', 'Operasi Gagal');
+        }
+    }, [flash]);
 
     const prj = displayedProject;
     const isPPN = fiscalMode === 'ppn';
@@ -711,6 +757,7 @@ export default function Show({
                                     project={prj}
                                     projectId={prj.id}
                                     purchaseOrders={prj.purchaseOrders ?? []}
+                                    cashBankAccounts={cashBankAccounts}
                                     onIssuePO={(
                                         locId,
                                         _poNumber,
@@ -769,6 +816,57 @@ export default function Show({
                                             },
                                         );
                                     }}
+                                    onIssueBulkPO={(
+                                        vendorId,
+                                        locationIds,
+                                        _poNumber,
+                                        lighting,
+                                        topNotes,
+                                        vendorTermScheme,
+                                        vendorTermPercents,
+                                        vendorTermDates,
+                                    ) => {
+                                        router.post(
+                                            `/projects/${prj.id}/purchase-orders`,
+                                            {
+                                                vendor_id: vendorId,
+                                                location_ids: locationIds,
+                                                transaction_date: new Date()
+                                                    .toISOString()
+                                                    .split('T')[0],
+                                                lighting:
+                                                    lighting || 'Berlampu',
+                                                top_notes:
+                                                    topNotes ||
+                                                    'Lunas setelah visual terpasang',
+                                                term_scheme:
+                                                    vendorTermScheme || 'full',
+                                                term_percents:
+                                                    vendorTermPercents &&
+                                                    vendorTermPercents.length >
+                                                        0
+                                                        ? vendorTermPercents
+                                                        : [100],
+                                                term_due_dates:
+                                                    vendorTermDates &&
+                                                    vendorTermDates.length > 0
+                                                        ? vendorTermDates
+                                                        : [
+                                                              new Date()
+                                                                  .toISOString()
+                                                                  .split(
+                                                                      'T',
+                                                                  )[0],
+                                                          ],
+                                            },
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    router.reload();
+                                                },
+                                            },
+                                        );
+                                    }}
                                     onUpdateProject={onUpdateProject}
                                 />
                             )}
@@ -791,7 +889,11 @@ export default function Show({
                                                 .toISOString()
                                                 .split('T')[0],
                                         );
-                                        setPayMethodInput('Transfer Bank');
+                                        setPayAccountId(
+                                            cashBankAccounts[0]?.id
+                                                ? String(cashBankAccounts[0].id)
+                                                : '',
+                                        );
                                         setPayRefInput('');
                                     }}
                                 />
@@ -945,7 +1047,7 @@ export default function Show({
                                 )}
                             </div>
 
-                            {/* Tanggal Pembayaran & Metode Pembayaran */}
+                            {/* Tanggal Pembayaran & Rekening / Akun Kas Penerimaan */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <label className="block text-xs font-bold text-slate-700">
@@ -983,30 +1085,31 @@ export default function Show({
 
                                 <div className="space-y-1.5">
                                     <label className="block text-xs font-bold text-slate-700">
-                                        Metode Bayar
+                                        Rekening / Kas Penerimaan
                                     </label>
                                     <select
-                                        value={payMethodInput}
+                                        value={payAccountId}
                                         onChange={(e) =>
-                                            setPayMethodInput(e.target.value)
+                                            setPayAccountId(e.target.value)
                                         }
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:outline-none"
+                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:outline-none"
                                     >
-                                        <option value="Transfer Bank BCA">
-                                            Transfer BCA
-                                        </option>
-                                        <option value="Transfer Bank Mandiri">
-                                            Transfer Mandiri
-                                        </option>
-                                        <option value="Transfer Bank BRI">
-                                            Transfer BRI
-                                        </option>
-                                        <option value="Kas / Tunai">
-                                            Kas / Tunai
-                                        </option>
-                                        <option value="QRIS / E-Wallet">
-                                            QRIS / E-Wallet
-                                        </option>
+                                        {cashBankAccounts &&
+                                        cashBankAccounts.length > 0 ? (
+                                            cashBankAccounts.map((acc) => (
+                                                <option
+                                                    key={acc.id}
+                                                    value={acc.id}
+                                                >
+                                                    {acc.display_name ||
+                                                        `${acc.code} - ${acc.name}`}
+                                                </option>
+                                            ))
+                                        ) : (
+                                            <option value="">
+                                                Transfer Bank BCA (Default)
+                                            </option>
+                                        )}
                                     </select>
                                 </div>
                             </div>
@@ -1050,6 +1153,16 @@ export default function Show({
                                             ? Math.round(payAmountInput / 1.11)
                                             : payAmountInput;
 
+                                        const selectedAccount =
+                                            cashBankAccounts.find(
+                                                (a) =>
+                                                    String(a.id) ===
+                                                    String(payAccountId),
+                                            );
+                                        const derivedMethod = selectedAccount
+                                            ? selectedAccount.name
+                                            : 'Transfer Bank BCA';
+
                                         const updatedTerms =
                                             prj.clientPaymentPlan!.terms.map(
                                                 (t) => {
@@ -1068,7 +1181,7 @@ export default function Show({
                                                                 payDateInput ||
                                                                 new Date().toISOString(),
                                                             paymentMethod:
-                                                                payMethodInput,
+                                                                derivedMethod,
                                                             paymentRef:
                                                                 payRefInput ||
                                                                 undefined,
@@ -1088,6 +1201,11 @@ export default function Show({
                                         };
                                         onUpdateProject(updatedPrj);
                                         setSelectedPayTerm(null);
+                                        triggerToast(
+                                            `Pembayaran ${selectedPayTerm.label} sebesar ${fmt(payAmountInput)} berhasil dicatat.`,
+                                            'success',
+                                            'Pembayaran Diterima',
+                                        );
                                     }}
                                     className="cursor-pointer rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700"
                                 >
@@ -1108,13 +1226,11 @@ export default function Show({
                                         <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
                                         {!prj.clientPaymentPlan
                                             ? 'Atur Skema Pembayaran Client'
-                                            : !prj.invoiceIssued
-                                              ? 'Atur Skema & Terbitkan Invoice'
-                                              : 'Ubah Skema Penagihan Client'}
+                                            : 'Ubah Skema Pembayaran Client'}
                                     </h3>
                                     <p className="mt-0.5 text-xs text-slate-500">
-                                        Tentukan metode pembayaran dan tanggal
-                                        jatuh tempo per termin
+                                        Atur termin tagihan pembayaran untuk
+                                        proyek ini
                                     </p>
                                 </div>
                                 <button
@@ -1126,67 +1242,93 @@ export default function Show({
                                 </button>
                             </div>
 
-                            {/* Step 1: Pilih Scheme */}
-                            <div className="space-y-3">
+                            {/* Info Box */}
+                            <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                                <div>
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-blue-500">
+                                        Total Nilai Tagihan
+                                    </div>
+                                    <div className="font-mono text-base font-black text-blue-950">
+                                        {fmt(fin.totalInvoice)}
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-blue-500">
+                                        Status Pajak
+                                    </div>
+                                    <div className="text-xs font-bold text-blue-700">
+                                        {isPPN ? 'PPN 11% Aktif' : 'Non-PPN'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Pilihan Skema */}
+                            <div className="space-y-2">
                                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                                     Pilih Skema Pembayaran
                                 </label>
-                                <div className="grid grid-cols-2 gap-2.5">
+                                <div className="grid grid-cols-3 gap-2.5">
                                     {[
                                         {
-                                            id: 'full',
-                                            label: 'Lunas Sekaligus',
-                                            desc: 'Cash 100% saat terbit',
-                                            defaultPercents: [100],
+                                            id: 'full' as PaymentScheme,
+                                            label: 'Lunas 100%',
+                                            desc: '1 kali pembayaran penuh',
                                         },
                                         {
-                                            id: 'dp',
+                                            id: 'dp' as PaymentScheme,
                                             label: 'DP + Pelunasan',
-                                            desc: 'DP 30% & Pelunasan 70%',
-                                            defaultPercents: [30, 70],
+                                            desc: '2 kali (DP 50% & Sisa 50%)',
                                         },
                                         {
-                                            id: 'termin',
-                                            label: 'Termin 3 Tahap',
-                                            desc: 'Milestone progres 30-40-30%',
-                                            defaultPercents: [30, 40, 30],
+                                            id: 'termin' as PaymentScheme,
+                                            label: 'Termin Kustom',
+                                            desc: 'Fleksibel 2-4 tahapan',
                                         },
-                                        {
-                                            id: 'installment',
-                                            label: 'Cicilan Bulanan',
-                                            desc: 'Angsuran berkala per bulan',
-                                            defaultPercents: [33, 33, 34],
-                                        },
-                                    ].map((s) => (
+                                    ].map((sc) => (
                                         <button
-                                            key={s.id}
+                                            key={sc.id}
                                             type="button"
                                             onClick={() => {
-                                                setModalScheme(
-                                                    s.id as PaymentScheme,
-                                                );
-                                                setModalTerminPercents(
-                                                    s.defaultPercents,
-                                                );
+                                                setModalScheme(sc.id);
+                                                if (sc.id === 'full') {
+                                                    setModalTerminPercents([
+                                                        100,
+                                                    ]);
+                                                } else if (sc.id === 'dp') {
+                                                    setModalTerminPercents([
+                                                        50, 50,
+                                                    ]);
+                                                } else {
+                                                    setModalTerminPercents([
+                                                        30, 40, 30,
+                                                    ]);
+                                                }
+                                                setModalPercentError(null);
                                             }}
-                                            className={`cursor-pointer rounded-2xl border p-3.5 text-left transition-all ${
-                                                modalScheme === s.id
-                                                    ? 'border-blue-600 bg-blue-50/90 text-blue-900 ring-2 ring-blue-600/20'
-                                                    : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+                                            className={`cursor-pointer rounded-2xl border p-3 text-left transition-all ${
+                                                modalScheme === sc.id
+                                                    ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-600/20'
+                                                    : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'
                                             }`}
                                         >
-                                            <div className="text-xs font-bold text-slate-900">
-                                                {s.label}
+                                            <div
+                                                className={`text-xs font-bold ${
+                                                    modalScheme === sc.id
+                                                        ? 'text-blue-900'
+                                                        : 'text-slate-800'
+                                                }`}
+                                            >
+                                                {sc.label}
                                             </div>
-                                            <div className="mt-1 text-[10px] font-medium text-slate-500">
-                                                {s.desc}
+                                            <div className="mt-0.5 text-[10px] text-slate-500">
+                                                {sc.desc}
                                             </div>
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Step 2: Tanggal Jatuh Tempo & Persentase Manual */}
+                            {/* Breakdown Tahapan Termin */}
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -1781,6 +1923,16 @@ export default function Show({
                         </div>
                     </div>
                 )}
+                {/* Floating Toast Notification */}
+                <Toast
+                    show={toast.show}
+                    type={toast.type}
+                    title={toast.title}
+                    message={toast.message}
+                    onClose={() =>
+                        setToast((prev) => ({ ...prev, show: false }))
+                    }
+                />
             </div>
         </AppLayout>
     );

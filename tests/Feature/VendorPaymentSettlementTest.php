@@ -215,4 +215,77 @@ class VendorPaymentSettlementTest extends TestCase
         $term->refresh();
         $this->assertEquals(PaymentTermStatus::PAID, $term->status);
     }
+
+    public function test_issue_vendor_po_and_settlement_creates_balanced_journal_entries(): void
+    {
+        $this->seed(\Database\Seeders\ChartOfAccountSeeder::class);
+
+        $client = Client::create(['name' => 'PT Client Empat']);
+        $sales = Sales::create(['name' => 'Sales PIC 4', 'email' => 'sales4@yousee.com']);
+        $vendor = Vendor::create(['name' => 'PT Vendor Mega']);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'sales_id' => $sales->id,
+            'code' => 'PRJ-TEST-004',
+            'name' => 'Project Billboard D PPN',
+            'fiscal_mode' => FiscalMode::PPN,
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-31',
+            'contract_value' => 100000000,
+        ]);
+
+        $location = ProjectLocation::create([
+            'project_id' => $project->id,
+            'vendor_id' => $vendor->id,
+            'code' => 'LOC-004',
+            'type' => 'Billboard',
+            'area' => 'Surabaya',
+            'description' => 'Billboard Darmo',
+            'size' => '4x8m',
+            'vendor_cost' => 50000000,
+            'qty' => 1,
+        ]);
+
+        // 1. Terbitkan PO
+        $po = (new IssueVendorPurchaseOrder())->execute(
+            $project,
+            $vendor,
+            [$location->id],
+            '2026-08-17',
+            [
+                'term_scheme' => 'full',
+                'term_percents' => [100],
+                'term_due_dates' => ['2026-08-17'],
+            ],
+        );
+
+        // Verifikasi Jurnal PO Terbentuk:
+        // Subtotal = 50.000.000, PPN 11% = 5.500.000, Total = 55.500.000
+        $poJournal = \App\Domains\Accounting\Models\JournalEntry::where('source_type', PurchaseOrder::class)
+            ->where('source_id', $po->id)
+            ->first();
+
+        $this->assertNotNull($poJournal);
+        $this->assertEquals(55500000, (float) $poJournal->items()->sum('debit'));
+        $this->assertEquals(55500000, (float) $poJournal->items()->sum('credit'));
+
+        // 2. Lunasi Termin PO
+        $term = $po->paymentPlan->terms->first();
+        $settlement = (new SettleVendorPaymentTerm())->execute($term, [
+            'amount' => 55500000,
+            'paid_at' => '2026-08-17',
+            'payment_method' => 'Transfer Bank BCA',
+            'notes' => 'Pelunasan penuh PO Darmo',
+        ]);
+
+        // Verifikasi Jurnal Settlement Terbentuk:
+        // (Dr) Hutang Vendor 55.500.000 = (Cr) Bank BCA 55.500.000
+        $settleJournal = \App\Domains\Accounting\Models\JournalEntry::where('source_type', PaymentSettlement::class)
+            ->where('source_id', $settlement->id)
+            ->first();
+
+        $this->assertNotNull($settleJournal);
+        $this->assertEquals(55500000, (float) $settleJournal->items()->sum('debit'));
+        $this->assertEquals(55500000, (float) $settleJournal->items()->sum('credit'));
+    }
 }

@@ -99,11 +99,25 @@ class ProjectController extends Controller
         $sales = Sales::orderBy('name')->get(['id', 'name']);
         $vendors = Vendor::active()->orderBy('name')->get(['id', 'name']);
 
+        $cashBankAccounts = \App\Domains\Accounting\Models\ChartOfAccount::where('is_active', true)
+            ->where('code', 'like', '111%')
+            ->orderBy('code')
+            ->get()
+            ->filter(fn (\App\Domains\Accounting\Models\ChartOfAccount $acc) => $acc->isLeaf())
+            ->values()
+            ->map(fn (\App\Domains\Accounting\Models\ChartOfAccount $acc) => [
+                'id'           => $acc->id,
+                'code'         => $acc->code,
+                'name'         => $acc->name,
+                'display_name' => "{$acc->code} - {$acc->name}",
+            ]);
+
         return Inertia::render('Projects/Show', [
-            'project' => (new ProjectResource($project))->resolve(),
-            'clients' => ClientOptionResource::collection($clients)->resolve(),
-            'sales' => SalesOptionResource::collection($sales)->resolve(),
-            'vendors' => VendorOptionResource::collection($vendors)->resolve(),
+            'project'          => (new ProjectResource($project))->resolve(),
+            'clients'          => ClientOptionResource::collection($clients)->resolve(),
+            'sales'            => SalesOptionResource::collection($sales)->resolve(),
+            'vendors'          => VendorOptionResource::collection($vendors)->resolve(),
+            'cashBankAccounts' => $cashBankAccounts,
         ]);
     }
 

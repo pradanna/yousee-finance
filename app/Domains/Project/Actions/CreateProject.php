@@ -60,11 +60,21 @@ class CreateProject
         $modeTag = $fiscalMode === FiscalMode::PPN->value ? 'PPN' : 'NON';
         $prefix = "PRJ-{$year}-{$modeTag}";
 
-        $sequence = Project::withTrashed()
+        $existingCodes = Project::withTrashed()
             ->where('code', 'like', "{$prefix}%")
             ->lockForUpdate()
-            ->count() + 1;
+            ->pluck('code');
 
-        return $prefix . str_pad((string) $sequence, 2, '0', STR_PAD_LEFT);
+        $maxSeq = 0;
+        foreach ($existingCodes as $code) {
+            $numPart = substr($code, strlen($prefix));
+            if (is_numeric($numPart)) {
+                $maxSeq = max($maxSeq, (int) $numPart);
+            }
+        }
+
+        $nextSeq = $maxSeq + 1;
+
+        return $prefix . str_pad((string) $nextSeq, 2, '0', STR_PAD_LEFT);
     }
 }

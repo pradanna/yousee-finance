@@ -22,6 +22,7 @@ class StoreVendorPaymentSettlementRequest extends FormRequest
             'amount'         => ['required', 'numeric', 'min:0.01'],
             'paid_at'        => ['required', 'date'],
             'payment_method' => ['required', 'string', 'max:100'],
+            'account_id'     => ['nullable', 'exists:chart_of_accounts,id'],
             'payment_ref'    => ['nullable', 'string', 'max:255'],
             'notes'          => ['nullable', 'string'],
         ];

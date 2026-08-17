@@ -43,6 +43,62 @@ class IssueClientInvoice
                 $project->update(['status' => ProjectStatus::ACTIVE]);
             }
 
+            // Otomatis bentuk Jurnal Akuntansi Penerbitan Invoice Client (accounting-journal-flow.md §3 Flow A)
+            // (Dr) Piutang Dagang Client (`default_receivable`) = Total Tagihan
+            // (Cr) Pendapatan Sewa Reklame (`default_sales_revenue`) = Nilai DPP / Subtotal
+            // (Cr) PPN Keluaran (`default_vat_output`) = Nilai PPN (Jika Mode PPN)
+            $receivableAccId = \App\Domains\Accounting\Models\AccountingSetting::getAccountId('default_receivable');
+            $salesRevAccId = \App\Domains\Accounting\Models\AccountingSetting::getAccountId('default_sales_revenue');
+            $vatOutputAccId = \App\Domains\Accounting\Models\AccountingSetting::getAccountId('default_vat_output');
+
+            if ($receivableAccId && $salesRevAccId) {
+                $subtotal = (float) $invoice->subtotal;
+                $ppn = (float) $invoice->ppn;
+                $total = (float) $invoice->total;
+
+                $journalItems = [];
+
+                // (Dr) Piutang Dagang Client
+                $journalItems[] = [
+                    'account_id' => $receivableAccId,
+                    'debit'      => $total,
+                    'credit'     => 0,
+                    'project_id' => $project->id,
+                    'memo'       => "Piutang Invoice {$invoice->invoice_number} - {$project->client?->name}",
+                ];
+
+                // (Cr) Pendapatan Sewa Reklame
+                $journalItems[] = [
+                    'account_id' => $salesRevAccId,
+                    'debit'      => 0,
+                    'credit'     => $subtotal,
+                    'project_id' => $project->id,
+                    'memo'       => "Pendapatan Proyek {$project->name} ({$invoice->invoice_number})",
+                ];
+
+                // (Cr) PPN Keluaran (hanya jika mode PPN)
+                if ($ppn > 0 && $vatOutputAccId) {
+                    $journalItems[] = [
+                        'account_id' => $vatOutputAccId,
+                        'debit'      => 0,
+                        'credit'     => $ppn,
+                        'project_id' => $project->id,
+                        'memo'       => "PPN Keluaran Invoice {$invoice->invoice_number}",
+                    ];
+                }
+
+                (new \App\Domains\Accounting\Actions\PostJournalEntry())->execute(
+                    headerData: [
+                        'fiscal_mode'      => $project->fiscal_mode,
+                        'transaction_date' => $invoice->transaction_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
+                        'description'      => "Penerbitan Invoice {$invoice->invoice_number} ke {$project->client?->name} ({$project->name})",
+                        'project_id'       => $project->id,
+                    ],
+                    items: $journalItems,
+                    source: $invoice,
+                );
+            }
+
             Log::info('Client invoice issued', [
                 'invoice_id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,
