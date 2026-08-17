@@ -536,3 +536,11 @@ Every line carries `project_id` so per-project profit and loss is a filter on `j
 2. **Invoice per project** — one invoice per project (assumed here), or can a project be billed with several invoices?
 3. **`Cancelled` status** — is there a UI entry point? `StatusBadge` renders it but no view triggers the transition.
 4. **Sales PIC** — FE uses free-text names (`mockSalesPICs`). This contract binds `sales_id` to the existing `sales` table; confirm those names exist as Sales records.
+
+---
+
+## 10. Implementation Status — see `docs/contracts/BE/projects.md`
+
+`Project` CRUD and `ProjectLocation` create/delete have been implemented (Provider-Driven — BE built first, not driven by this doc's exact shapes). The actual shipped contract — real payload field names, real response shapes, and every point where it diverges from what's written above (UUID ids, `is_ppn_inclusive` instead of `tax_mode`, no session fiscal mode yet, `projects.show` still a mock closure, etc.) — is documented separately in **[`docs/contracts/BE/projects.md`](../BE/projects.md)**.
+
+Wiring FE against what's actually live today (not this aspirational doc) starts there.
