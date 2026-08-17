@@ -1,4 +1,5 @@
-import { Link } from '@inertiajs/react';
+import { PageProps } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
 import React from 'react';
 
 interface SidebarProps {
@@ -26,10 +27,12 @@ interface NavItem {
     label: string;
     href: string;
     icon: React.ReactNode;
+    roles?: string[];
 }
 
 interface NavSection {
     sectionTitle?: string;
+    roles?: string[];
     items: NavItem[];
 }
 
@@ -37,8 +40,16 @@ export default function Sidebar({
     activePage,
     isCollapsed = false,
 }: SidebarProps) {
+    const { auth } = usePage<PageProps>().props;
+    const userRoles = auth?.user?.roles || [];
+    const isStaffOnly =
+        userRoles.includes('staff') &&
+        !userRoles.includes('admin') &&
+        !userRoles.includes('pimpinan') &&
+        !userRoles.includes('akuntan');
     const sections: NavSection[] = [
         {
+            roles: ['admin', 'pimpinan', 'akuntan'],
             items: [
                 {
                     id: 'overview',
@@ -64,6 +75,7 @@ export default function Sidebar({
         },
         {
             sectionTitle: 'DATA MASTER',
+            roles: ['admin', 'pimpinan', 'akuntan'],
             items: [
                 {
                     id: 'vendors',
@@ -174,6 +186,7 @@ export default function Sidebar({
                     id: 'cash-out',
                     label: 'Pengeluaran Kas',
                     href: '/cash-out',
+                    roles: ['admin', 'pimpinan', 'akuntan'],
                     icon: (
                         <svg
                             className="h-5 w-5 shrink-0"
@@ -214,6 +227,7 @@ export default function Sidebar({
                     id: 'debt-receivable',
                     label: 'Hutang Piutang',
                     href: '/debt-receivable',
+                    roles: ['admin', 'pimpinan', 'akuntan'],
                     icon: (
                         <svg
                             className="h-5 w-5 shrink-0"
@@ -234,6 +248,7 @@ export default function Sidebar({
         },
         {
             sectionTitle: 'AKUNTANSI',
+            roles: ['admin', 'pimpinan', 'akuntan'],
             items: [
                 {
                     id: 'coa',
@@ -284,6 +299,7 @@ export default function Sidebar({
         },
         {
             sectionTitle: 'LAPORAN',
+            roles: ['admin', 'pimpinan', 'akuntan'],
             items: [
                 {
                     id: 'journal',
@@ -349,6 +365,20 @@ export default function Sidebar({
         },
     ];
 
+    const visibleSections = sections
+        .map((section) => {
+            if (userRoles.length > 0 && section.roles && !section.roles.some((r) => userRoles.includes(r))) {
+                return null;
+            }
+            const visibleItems = section.items.filter((item) => {
+                if (userRoles.length === 0 || !item.roles) return true;
+                return item.roles.some((r) => userRoles.includes(r));
+            });
+            if (visibleItems.length === 0) return null;
+            return { ...section, items: visibleItems };
+        })
+        .filter((s): s is NavSection => s !== null);
+
     return (
         <aside
             className={`shadow-xs fixed bottom-0 left-0 top-0 z-40 flex min-h-screen flex-col justify-between overflow-y-auto border-r border-slate-200/80 bg-white text-slate-700 transition-all duration-300 ${
@@ -359,7 +389,7 @@ export default function Sidebar({
             <div>
                 <div className="sticky top-0 z-20 flex h-16 items-center justify-center border-b border-slate-100 bg-white px-4">
                     <Link
-                        href="/overview"
+                        href={isStaffOnly ? '/projects' : '/overview'}
                         className="flex w-full items-center justify-center gap-3 overflow-hidden"
                     >
                         {isCollapsed ? (
@@ -383,7 +413,7 @@ export default function Sidebar({
                 <div
                     className={`space-y-4 py-3 ${isCollapsed ? 'px-2' : 'px-3'}`}
                 >
-                    {sections.map((section, sIdx) => (
+                    {visibleSections.map((section, sIdx) => (
                         <div key={sIdx} className="space-y-1">
                             {section.sectionTitle && !isCollapsed && (
                                 <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">

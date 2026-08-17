@@ -27,3 +27,5 @@ Thumbs.db
 
 # Backups created by .claude/sync-agents.sh
 .claude/.sync-backup/
+
+composer.phar

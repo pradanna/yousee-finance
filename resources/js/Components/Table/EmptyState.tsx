@@ -3,6 +3,7 @@ import React from 'react';
 interface EmptyStateProps {
     title?: string;
     description?: string;
+    message?: string;
     icon?: React.ReactNode;
     action?: React.ReactNode;
     className?: string;
@@ -10,11 +11,16 @@ interface EmptyStateProps {
 
 export default function EmptyState({
     title = 'Belum ada data',
-    description = 'Data tidak ditemukan atau belum ada transaksi yang tercatat.',
+    description,
+    message,
     icon,
     action,
     className = '',
 }: EmptyStateProps) {
+    const descText =
+        description ||
+        message ||
+        'Data tidak ditemukan atau belum ada transaksi yang tercatat.';
     return (
         <div
             className={`flex flex-col items-center justify-center space-y-3 p-12 text-center ${className}`}
@@ -41,7 +47,7 @@ export default function EmptyState({
                     {title}
                 </h4>
                 <p className="mt-1 max-w-sm text-xs text-slate-400">
-                    {description}
+                    {descText}
                 </p>
             </div>
             {action && <div className="pt-2">{action}</div>}
