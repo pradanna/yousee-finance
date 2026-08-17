@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domains\Procurement\Actions;
 
+use App\Domains\Billing\Actions\GeneratePaymentTerms;
+use App\Domains\Billing\Enums\PaymentScheme;
 use App\Domains\Procurement\Enums\PurchaseOrderStatus;
 use App\Domains\Procurement\Models\PurchaseOrder;
 use App\Domains\Procurement\Models\PurchaseOrderItem;
@@ -22,10 +24,11 @@ class IssueVendorPurchaseOrder
      * lewat method ini — bulk cuma ngirim lebih dari 1 location_id).
      *
      * @param list<string> $locationIds
+     * @param array<string, mixed> $extraData
      */
-    public function execute(Project $project, Vendor $vendor, array $locationIds, string $transactionDate): PurchaseOrder
+    public function execute(Project $project, Vendor $vendor, array $locationIds, string $transactionDate, array $extraData = []): PurchaseOrder
     {
-        return DB::transaction(function () use ($project, $vendor, $locationIds, $transactionDate) {
+        return DB::transaction(function () use ($project, $vendor, $locationIds, $transactionDate, $extraData) {
             $locations = ProjectLocation::whereIn('id', $locationIds)
                 ->lockForUpdate()
                 ->get();
@@ -65,7 +68,38 @@ class IssueVendorPurchaseOrder
                     'price' => $location->vendor_cost,
                 ]);
 
-                $location->update(['purchase_order_id' => $po->id]);
+                $updateData = ['purchase_order_id' => $po->id];
+                if (! empty($extraData['lighting'])) {
+                    $updateData['lighting'] = $extraData['lighting'];
+                }
+                if (array_key_exists('top_notes', $extraData)) {
+                    $updateData['top_notes'] = $extraData['top_notes'];
+                }
+
+                $location->update($updateData);
+            }
+
+            $po->recalculateTotal();
+
+            // Generate payment plan & terms jika data termin dikirim dari FE.
+            // TODO: tambahkan closing period guard saat domain Accounting tersedia.
+            if (! empty($extraData['term_percents']) && is_array($extraData['term_percents'])) {
+                $scheme = PaymentScheme::from($extraData['term_scheme'] ?? 'full');
+                $percents = array_map('floatval', $extraData['term_percents']);
+                $dueDates = array_map('strval', $extraData['term_due_dates'] ?? [date('Y-m-d')]);
+
+                // Pastikan jumlah due_dates sesuai percents, fallback ke hari ini.
+                while (count($dueDates) < count($percents)) {
+                    $dueDates[] = date('Y-m-d');
+                }
+
+                (new GeneratePaymentTerms())->execute(
+                    $po->fresh(),
+                    $scheme,
+                    $percents,
+                    $dueDates,
+                    $extraData['top_notes'] ?? null,
+                );
             }
 
             Log::info('Vendor PO issued', [

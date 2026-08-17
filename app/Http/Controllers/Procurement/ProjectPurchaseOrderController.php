@@ -25,6 +25,13 @@ class ProjectPurchaseOrderController extends Controller
             $vendor,
             $request->validated('location_ids'),
             $request->validated('transaction_date'),
+            [
+                'lighting'       => $request->validated('lighting'),
+                'top_notes'      => $request->validated('top_notes'),
+                'term_scheme'    => $request->validated('term_scheme'),
+                'term_percents'  => $request->validated('term_percents'),
+                'term_due_dates' => $request->validated('term_due_dates'),
+            ],
         );
 
         return redirect()->back()->with('success', 'PO vendor berhasil diterbitkan.');

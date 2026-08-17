@@ -9,11 +9,13 @@ use App\Domains\Project\Models\Project;
 use App\Domains\Shared\Enums\FiscalMode;
 use App\Domains\Shared\Traits\HasFiscalMode;
 use App\Domains\Vendor\Models\Vendor;
+use App\Domains\Billing\Models\PaymentPlan;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Facades\DB;
 
 class PurchaseOrder extends Model
@@ -66,6 +68,11 @@ class PurchaseOrder extends Model
     public function items(): HasMany
     {
         return $this->hasMany(PurchaseOrderItem::class);
+    }
+
+    public function paymentPlan(): MorphOne
+    {
+        return $this->morphOne(PaymentPlan::class, 'payable');
     }
 
     /**
