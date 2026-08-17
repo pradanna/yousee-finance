@@ -38,6 +38,14 @@ Route::middleware('auth')->group(function () {
     // Project Domain ('index' di-handle terpisah di luar grup auth, lihat bawah —
     // halaman /projects publik seperti vendors/clients/sales)
     Route::resource('projects', \App\Http\Controllers\Project\ProjectController::class)->only(['store', 'update', 'destroy']);
+    Route::post('projects/{project}/locations', [\App\Http\Controllers\Project\ProjectLocationController::class, 'store'])->name('projects.locations.store');
+    Route::put('projects/{project}/locations/{location}', [\App\Http\Controllers\Project\ProjectLocationController::class, 'update'])->name('projects.locations.update');
+    Route::delete('projects/{project}/locations/{location}', [\App\Http\Controllers\Project\ProjectLocationController::class, 'destroy'])->name('projects.locations.destroy');
+
+    Route::post('projects/{project}/purchase-orders', [\App\Http\Controllers\Procurement\ProjectPurchaseOrderController::class, 'store'])->name('projects.purchase-orders.store');
+
+    Route::post('projects/{project}/payment-plan', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'storePaymentPlan'])->name('projects.payment-plan.store');
+    Route::post('projects/{project}/invoice/issue', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'issue'])->name('projects.invoice.issue');
 });
 
 // Accounting Domain — Master COA & Settings (Mock View Mode - Unauthenticated / Public access for testing)
