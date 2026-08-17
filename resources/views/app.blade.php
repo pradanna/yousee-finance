@@ -11,14 +11,20 @@
         <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
         <link rel="shortcut icon" href="/images/favicon.ico">
 
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=plus-jakarta-sans:400,500,600,700,800&display=swap" rel="stylesheet" />
+        <!-- Inline theme initialization to prevent flash of initial state (FOIC) -->
+        <script>
+            (function() {
+                try {
+                    var mode = localStorage.getItem('app_fiscal_mode') || 'ppn';
+                    document.documentElement.setAttribute('data-fiscal-mode', mode);
+                } catch (e) {}
+            })();
+        </script>
 
-        <!-- Scripts -->
+        <!-- Stylesheets & Scripts -->
         @routes
         @viteReactRefresh
-        @vite(['resources/js/app.tsx', "resources/js/Pages/{$page['component']}.tsx"])
+        @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/Pages/{$page['component']}.tsx"])
         @inertiaHead
     </head>
     <body class="font-sans antialiased">

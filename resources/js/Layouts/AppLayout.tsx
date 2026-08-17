@@ -68,18 +68,34 @@ export default function AppLayout({
     title,
     breadcrumbs,
 }: AppLayoutProps) {
-    const [fiscalMode, setFiscalMode] = useState<'ppn' | 'non-ppn'>('ppn');
+    const [fiscalMode, setFiscalMode] = useState<'ppn' | 'non-ppn'>(() => {
+        if (typeof window === 'undefined') return 'ppn';
+        const saved = localStorage.getItem('app_fiscal_mode');
+        return saved === 'ppn' || saved === 'non-ppn' ? saved : 'ppn';
+    });
     const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem('sidebar_collapsed') === 'true';
     });
 
-    // Load from localStorage on mount
+    // Listen to storage/tab/event changes
     useEffect(() => {
-        const savedMode = localStorage.getItem('app_fiscal_mode');
-        if (savedMode === 'ppn' || savedMode === 'non-ppn') {
-            setFiscalMode(savedMode);
-        }
+        const handleModeChange = () => {
+            const savedMode = localStorage.getItem('app_fiscal_mode');
+            if (savedMode === 'ppn' || savedMode === 'non-ppn') {
+                setFiscalMode(savedMode);
+            }
+        };
+
+        window.addEventListener(
+            'storage_fiscal_mode_changed',
+            handleModeChange,
+        );
+        return () =>
+            window.removeEventListener(
+                'storage_fiscal_mode_changed',
+                handleModeChange,
+            );
     }, []);
 
     useEffect(() => {
