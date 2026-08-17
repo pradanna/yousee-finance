@@ -13,6 +13,8 @@ use App\Domains\Sales\Models\Sales;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Project\StoreProjectRequest;
 use App\Http\Requests\Project\UpdateProjectRequest;
+use App\Domains\Vendor\Models\Vendor;
+use App\Http\Resources\Vendor\VendorOptionResource;
 use App\Http\Resources\Client\ClientOptionResource;
 use App\Http\Resources\Project\ProjectResource;
 use App\Http\Resources\Sales\SalesOptionResource;
@@ -32,7 +34,16 @@ class ProjectController extends Controller
         $salesId = $request->query('sales_id');
         $search = $request->query('search');
 
-        $query = Project::with(['client', 'sales']);
+        $query = Project::with([
+            'client',
+            'sales',
+            'locations.vendor',
+            'locations.purchaseOrder',
+            'purchaseOrders.vendor',
+            'purchaseOrders.items',
+            'purchaseOrders.paymentPlan.terms.settlements',
+            'invoices.paymentPlan.terms',
+        ]);
 
         if (! empty($clientId)) {
             $query->where('client_id', $clientId);
@@ -53,16 +64,46 @@ class ProjectController extends Controller
         $projects = $query->orderByDesc('created_at')->paginate(10)->withQueryString();
         $clients = Client::active()->orderBy('name')->get(['id', 'name']);
         $sales = Sales::orderBy('name')->get(['id', 'name']);
+        $vendors = Vendor::active()->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Projects', [
             'projects' => ProjectResource::collection($projects),
             'clients' => ClientOptionResource::collection($clients)->resolve(),
             'sales' => SalesOptionResource::collection($sales)->resolve(),
+            'vendors' => VendorOptionResource::collection($vendors)->resolve(),
             'filters' => [
                 'client_id' => (string) ($clientId ?? ''),
                 'sales_id' => (string) ($salesId ?? ''),
                 'search' => (string) ($search ?? ''),
             ],
+        ]);
+    }
+
+    /**
+     * Display the specified project details.
+     */
+    public function show(Project $project): Response
+    {
+        $project->load([
+            'client',
+            'sales',
+            'locations.vendor',
+            'locations.purchaseOrder',
+            'purchaseOrders.vendor',
+            'purchaseOrders.items',
+            'purchaseOrders.paymentPlan.terms.settlements',
+            'invoices.paymentPlan.terms',
+        ]);
+
+        $clients = Client::active()->orderBy('name')->get(['id', 'name']);
+        $sales = Sales::orderBy('name')->get(['id', 'name']);
+        $vendors = Vendor::active()->orderBy('name')->get(['id', 'name']);
+
+        return Inertia::render('Projects/Show', [
+            'project' => (new ProjectResource($project))->resolve(),
+            'clients' => ClientOptionResource::collection($clients)->resolve(),
+            'sales' => SalesOptionResource::collection($sales)->resolve(),
+            'vendors' => VendorOptionResource::collection($vendors)->resolve(),
         ]);
     }
 

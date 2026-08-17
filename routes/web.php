@@ -50,9 +50,7 @@ Route::middleware('auth')->group(function () {
     // Project Domain
     Route::get('/projects', [\App\Http\Controllers\Project\ProjectController::class, 'index'])->name('projects');
     Route::resource('projects', \App\Http\Controllers\Project\ProjectController::class)->only(['store', 'update', 'destroy']);
-    Route::get('/projects/{projectId}', function ($projectId) {
-        return Inertia::render('Projects/Show', ['projectId' => (int) $projectId]);
-    })->name('projects.show');
+    Route::get('/projects/{project}', [\App\Http\Controllers\Project\ProjectController::class, 'show'])->name('projects.show');
     Route::get('/projects/{projectId}/payment', function ($projectId) {
         return Inertia::render('Projects/ProjectPayment', ['projectId' => (int) $projectId]);
     })->name('project.payment');
@@ -61,6 +59,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('projects/{project}/locations/{location}', [\App\Http\Controllers\Project\ProjectLocationController::class, 'destroy'])->name('projects.locations.destroy');
 
     Route::post('projects/{project}/purchase-orders', [\App\Http\Controllers\Procurement\ProjectPurchaseOrderController::class, 'store'])->name('projects.purchase-orders.store');
+    Route::post(
+        'projects/{project}/purchase-orders/{purchaseOrder}/payment-terms/{paymentTerm}/settle',
+        [\App\Http\Controllers\Procurement\ProjectVendorPaymentController::class, 'store'],
+    )->name('projects.po.payment-terms.settle');
     Route::post('projects/{project}/payment-plan', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'storePaymentPlan'])->name('projects.payment-plan.store');
     Route::post('projects/{project}/invoice/issue', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'issue'])->name('projects.invoice.issue');
 
