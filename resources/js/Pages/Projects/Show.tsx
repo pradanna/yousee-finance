@@ -1,6 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { useState } from 'react';
-import { initialProjectsNonPPN, initialProjectsPPN } from './projectData';
+import { router } from '@inertiajs/react';
+import { useMemo, useState } from 'react';
 import {
     ActiveTab,
     BillboardLocation,
@@ -13,6 +13,9 @@ import {
     PaymentTerm,
     PaymentTermStatus,
     Project,
+    PurchaseOrderWithPlan,
+    VendorPaymentPlan,
+    VendorPaymentPlanTerm,
 } from './projectTypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -61,35 +64,291 @@ import InvoiceTab from './Tabs/InvoiceTab';
 import LocationsTab from './Tabs/LocationsTab';
 import VendorPOTab from './Tabs/VendorPOTab';
 
-// ─────────────────────────────────────────────────────────────────────────────
+interface DbPaymentSettlement {
+    id: string;
+    amount: number | string;
+    paid_at?: string;
+    payment_method: string;
+    payment_ref?: string | null;
+    notes?: string | null;
+}
+
+interface DbPaymentTerm {
+    id: string;
+    sort_order?: number;
+    label: string;
+    amount: number | string;
+    percent: number | string;
+    due_date?: string;
+    status: string;
+    notes?: string;
+    settlements?: DbPaymentSettlement[];
+}
+
+interface DbPurchaseOrder {
+    id: string;
+    po_number: string;
+    vendor_id: string;
+    vendor?: { id: string; name: string };
+    total?: number | string;
+    payment_plan?: {
+        id: string;
+        scheme?: string;
+        total_amount?: number | string;
+        notes?: string | null;
+        terms?: DbPaymentTerm[];
+    } | null;
+}
+
+interface DbProjectLocation {
+    id: string;
+    code: string;
+    area: string;
+    description: string;
+    type?: BillboardLocation['type'];
+    size: string;
+    vendor_id?: string | null;
+    vendor?: { id: string; name: string };
+    vendor_cost: number | string;
+    po_issued?: boolean;
+    po_number?: string;
+    purchase_order_id?: string | null;
+    orientation?: 'V' | 'H';
+    lighting?: 'Berlampu' | 'Tidak Berlampu';
+    top_notes?: string;
+}
+
+interface DbProject {
+    id: string;
+    code: string;
+    name: string;
+    client_id: string;
+    client?: { id: string; name: string };
+    client_name?: string;
+    sales_id?: string;
+    sales?: { id: string; name: string };
+    sales_pic?: string;
+    fiscal_mode?: 'ppn' | 'non-ppn';
+    start_date: string;
+    end_date: string;
+    contract_value: number | string;
+    status: 'draft' | 'active' | 'completed' | 'cancelled' | string;
+    target_qty?: number;
+    notes?: string;
+    invoice_issued?: boolean;
+    invoice_number?: string;
+    invoices?: Array<{
+        id?: string;
+        invoice_number?: string;
+        created_at?: string;
+        payment_plan?: {
+            id?: string;
+            scheme?: string;
+            total_amount?: number | string;
+            notes?: string;
+            terms?: DbPaymentTerm[];
+        };
+    }>;
+    locations?: DbProjectLocation[];
+    purchase_orders?: DbPurchaseOrder[];
+}
+
+interface ShowProjectProps {
+    project: DbProject;
+    clients?: Array<{ id: string; name: string }>;
+    sales?: Array<{ id: string; name: string }>;
+    vendors?: Array<{ id: string; name: string }>;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Show Project Page
 // ─────────────────────────────────────────────────────────────────────────────
-export default function Show({ projectId }: { projectId?: number }) {
-    // In a real app, this would come from Inertia props.
-    // For prototype, we resolve from mock data.
-    const urlId =
-        projectId ??
-        parseInt(window.location.pathname.split('/').filter(Boolean)[1] ?? '1');
-    const allProjects = [...initialProjectsPPN, ...initialProjectsNonPPN];
-    const initialProject =
-        allProjects.find((p) => p.id === urlId) ?? allProjects[0];
+export default function Show({
+    project: dbProject,
+    vendors = [],
+}: ShowProjectProps) {
+    const fiscalMode: FiscalMode =
+        dbProject?.fiscal_mode === 'non-ppn' ? 'non-ppn' : 'ppn';
 
-    const [fiscalMode] = useState<FiscalMode>(
-        initialProject.id >= 100 ? 'non-ppn' : 'ppn',
-    );
-    const [displayedProject, setDisplayedProject] =
-        useState<Project>(initialProject);
-    const [locations, setLocations] = useState<BillboardLocation[]>(
-        initialProject.locations || [],
-    );
-
-    // Mock update function for the prototype
-    const onUpdateProject = (updated: Project) => {
-        setDisplayedProject(updated);
+    const statusMap: Record<string, Project['status']> = {
+        draft: 'Draft',
+        active: 'Active',
+        completed: 'Completed',
+        cancelled: 'Cancelled',
     };
 
-    const [activeTab, setActiveTab] = useState<ActiveTab>('info');
+    // Construct frontend Project model from database response
+    const displayedProject: Project = useMemo(() => {
+        if (!dbProject) {
+            return {
+                id: '',
+                code: '',
+                name: '',
+                clientId: '',
+                clientName: '',
+                salesPIC: '',
+                period: '',
+                contractValue: 0,
+                status: 'Draft',
+                locations: [],
+                invoiceIssued: false,
+                invoiceNumber: '',
+                targetQty: 1,
+            };
+        }
+
+        const invoice = dbProject.invoices?.[0];
+        const paymentPlan = invoice?.payment_plan;
+
+        return {
+            id: dbProject.id,
+            code: dbProject.code,
+            name: dbProject.name,
+            clientId: dbProject.client_id,
+            clientName: dbProject.client?.name ?? dbProject.client_name ?? '-',
+            salesPIC: dbProject.sales?.name ?? dbProject.sales_pic ?? '-',
+            period: `${dbProject.start_date} - ${dbProject.end_date}`,
+            startDate: dbProject.start_date,
+            endDate: dbProject.end_date,
+            contractValue: Number(dbProject.contract_value) || 0,
+            status: statusMap[dbProject.status] || 'Draft',
+            targetQty: dbProject.target_qty || 1,
+            invoiceIssued: Boolean(dbProject.invoice_issued),
+            invoiceNumber:
+                dbProject.invoice_number || invoice?.invoice_number || '',
+            clientPaymentPlan: paymentPlan
+                ? {
+                      scheme: (paymentPlan.scheme as PaymentScheme) || 'full',
+                      totalAmount: Number(paymentPlan.total_amount) || 0,
+                      notes: paymentPlan.notes,
+                      createdAt: invoice.created_at || '',
+                      terms: (paymentPlan.terms || []).map(
+                          (term: DbPaymentTerm) => ({
+                              id: term.id,
+                              label: term.label,
+                              amount: Number(term.amount) || 0,
+                              percent: Number(term.percent) || 0,
+                              dueDate: term.due_date || '',
+                              status:
+                                  (term.status as PaymentTermStatus) ||
+                                  'unpaid',
+                              notes: term.notes,
+                          }),
+                      ),
+                  }
+                : undefined,
+            locations: (Array.isArray(dbProject.locations)
+                ? dbProject.locations
+                : []
+            ).map((loc: DbProjectLocation) => ({
+                id: loc.id,
+                code: loc.code,
+                area: loc.area,
+                description: loc.description,
+                type: loc.type || 'Billboard',
+                size: loc.size,
+                vendorId: loc.vendor_id ?? null,
+                vendorName: loc.vendor?.name ?? '-',
+                vendorCost: Number(loc.vendor_cost) || 0,
+                poIssued: Boolean(loc.po_issued),
+                poNumber: loc.po_number || '',
+                purchaseOrderId: loc.purchase_order_id ?? undefined,
+                orientation: loc.orientation,
+                lighting: loc.lighting,
+                topNotes: loc.top_notes,
+            })),
+            purchaseOrders: (Array.isArray(dbProject.purchase_orders)
+                ? dbProject.purchase_orders
+                : []
+            ).map((po: DbPurchaseOrder): PurchaseOrderWithPlan => {
+                const plan = po.payment_plan ?? null;
+                return {
+                    id: po.id,
+                    po_number: po.po_number,
+                    vendor_id: po.vendor_id,
+                    vendor_name: po.vendor?.name ?? '-',
+                    total: Number(po.total) || 0,
+                    payment_plan: plan
+                        ? {
+                              id: plan.id,
+                              scheme: (plan.scheme as PaymentScheme) || 'full',
+                              total_amount: Number(plan.total_amount) || 0,
+                              notes: plan.notes ?? null,
+                              terms: (plan.terms ?? []).map(
+                                  (term: DbPaymentTerm): VendorPaymentPlanTerm => {
+                                      const settlements = (term.settlements ?? []).map(
+                                          (s) => ({
+                                              id: s.id,
+                                              amount: Number(s.amount) || 0,
+                                              paid_at: s.paid_at ?? '',
+                                              payment_method: s.payment_method,
+                                              payment_ref: s.payment_ref ?? null,
+                                              notes: s.notes ?? null,
+                                          }),
+                                      );
+                                      const totalPaid = settlements.reduce(
+                                          (sum, s) => sum + s.amount,
+                                          0,
+                                      );
+                                      const termAmount = Number(term.amount) || 0;
+                                      return {
+                                          id: term.id,
+                                          sort_order: term.sort_order ?? 0,
+                                          label: term.label,
+                                          amount: termAmount,
+                                          percent: Number(term.percent) || 0,
+                                          due_date: term.due_date ?? '',
+                                          status:
+                                              (term.status as PaymentTermStatus) ??
+                                              'unpaid',
+                                          notes: term.notes ?? null,
+                                          settlements,
+                                          totalPaid,
+                                          remaining: Math.max(
+                                              0,
+                                              termAmount - totalPaid,
+                                          ),
+                                          isPaid: term.status === 'paid',
+                                      };
+                                  },
+                              ),
+                          }
+                        : null,
+                };
+            }),
+        };
+    }, [dbProject]);
+
+    const locations = displayedProject.locations || [];
+
+    const onUpdateProject = (_updated?: Project) => {
+        router.reload();
+    };
+
+    const validTabs: ActiveTab[] = ['info', 'locations', 'vendors', 'invoice'];
+
+    const getInitialTab = (): ActiveTab => {
+        if (typeof window !== 'undefined') {
+            const hash = window.location.hash.replace('#', '') as ActiveTab;
+            if (validTabs.includes(hash)) return hash;
+
+            const searchParams = new URLSearchParams(window.location.search);
+            const tabParam = searchParams.get('tab') as ActiveTab;
+            if (validTabs.includes(tabParam)) return tabParam;
+        }
+        return 'info';
+    };
+
+    const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab);
+
+    const handleTabChange = (tab: ActiveTab) => {
+        setActiveTab(tab);
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.hash = tab;
+            window.history.replaceState(null, '', url.toString());
+        }
+    };
 
     // Issue Invoice Modal State
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -501,7 +760,9 @@ export default function Show({ projectId }: { projectId?: number }) {
                                     return (
                                         <button
                                             key={tab.id}
-                                            onClick={() => setActiveTab(tab.id)}
+                                            onClick={() =>
+                                                handleTabChange(tab.id)
+                                            }
                                             className={`flex cursor-pointer items-center gap-2 border-b-2 py-3.5 text-xs font-bold transition-all ${
                                                 isActive
                                                     ? 'border-blue-600 text-blue-600'
@@ -550,23 +811,41 @@ export default function Show({ projectId }: { projectId?: number }) {
                                 <LocationsTab
                                     locations={locations}
                                     isPPN={isPPN}
+                                    vendors={vendors}
                                     onAddLocation={(newLoc) => {
-                                        const updated = [...locations, newLoc];
-                                        setLocations(updated);
-                                        onUpdateProject({
-                                            ...prj,
-                                            locations: updated,
-                                        });
+                                        if (!newLoc.vendorId) return;
+                                        router.post(
+                                            `/projects/${prj.id}/locations`,
+                                            {
+                                                vendor_id: newLoc.vendorId,
+                                                area: newLoc.area,
+                                                description: newLoc.description,
+                                                type: newLoc.type,
+                                                size: newLoc.size,
+                                                orientation: newLoc.orientation,
+                                                lighting: newLoc.lighting,
+                                                qty: newLoc.qty || 1,
+                                                vendor_cost: newLoc.vendorCost,
+                                                top_notes: newLoc.topNotes,
+                                            },
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    router.reload();
+                                                },
+                                            },
+                                        );
                                     }}
                                     onDeleteLocation={(locId) => {
-                                        const updated = locations.filter(
-                                            (l) => l.id !== locId,
+                                        router.delete(
+                                            `/projects/${prj.id}/locations/${locId}`,
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    router.reload();
+                                                },
+                                            },
                                         );
-                                        setLocations(updated);
-                                        onUpdateProject({
-                                            ...prj,
-                                            locations: updated,
-                                        });
                                     }}
                                 />
                             )}
@@ -578,34 +857,62 @@ export default function Show({ projectId }: { projectId?: number }) {
                                     isPPN={isPPN}
                                     projectCode={prj.code}
                                     project={prj}
+                                    projectId={prj.id}
+                                    purchaseOrders={prj.purchaseOrders ?? []}
                                     onIssuePO={(
                                         locId,
-                                        poNumber,
+                                        _poNumber,
                                         lighting,
                                         topNotes,
                                         vendorTermScheme,
                                         vendorTermPercents,
                                         vendorTermDates,
                                     ) => {
-                                        const updated = locations.map((l) =>
-                                            l.id === locId
-                                                ? {
-                                                      ...l,
-                                                      poIssued: true,
-                                                      poNumber,
-                                                      lighting,
-                                                      topNotes,
-                                                      vendorTermScheme,
-                                                      vendorTermPercents,
-                                                      vendorTermDates,
-                                                  }
-                                                : l,
+                                        const targetLoc = locations.find(
+                                            (l) => l.id === locId,
                                         );
-                                        setLocations(updated);
-                                        onUpdateProject({
-                                            ...prj,
-                                            locations: updated,
-                                        });
+                                        if (!targetLoc?.vendorId) return;
+
+                                        router.post(
+                                            `/projects/${prj.id}/purchase-orders`,
+                                            {
+                                                vendor_id: targetLoc.vendorId,
+                                                location_ids: [targetLoc.id],
+                                                transaction_date: new Date()
+                                                    .toISOString()
+                                                    .split('T')[0],
+                                                lighting:
+                                                    lighting ||
+                                                    targetLoc.lighting ||
+                                                    'Berlampu',
+                                                top_notes:
+                                                    topNotes ||
+                                                    targetLoc.topNotes ||
+                                                    'Lunas setelah visual terpasang',
+                                                term_scheme:
+                                                    vendorTermScheme || 'full',
+                                                term_percents:
+                                                    vendorTermPercents &&
+                                                    vendorTermPercents.length > 0
+                                                        ? vendorTermPercents
+                                                        : [100],
+                                                term_due_dates:
+                                                    vendorTermDates &&
+                                                    vendorTermDates.length > 0
+                                                        ? vendorTermDates
+                                                        : [
+                                                              new Date()
+                                                                  .toISOString()
+                                                                  .split('T')[0],
+                                                          ],
+                                            },
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    router.reload();
+                                                },
+                                            },
+                                        );
                                     }}
                                     onUpdateProject={onUpdateProject}
                                 />
@@ -619,7 +926,7 @@ export default function Show({ projectId }: { projectId?: number }) {
                                     onOpenInvoiceModal={() =>
                                         setShowInvoiceModal(true)
                                     }
-                                    onUpdateProject={setDisplayedProject}
+                                    onUpdateProject={onUpdateProject}
                                     onOpenPaymentModal={(term, targetAmt) => {
                                         setSelectedPayTerm(term);
                                         setPayType('full');
@@ -925,7 +1232,6 @@ export default function Show({ projectId }: { projectId?: number }) {
                                             ...prj,
                                             clientPaymentPlan: updatedPlan,
                                         };
-                                        setDisplayedProject(updatedPrj);
                                         onUpdateProject(updatedPrj);
                                         setSelectedPayTerm(null);
                                     }}
@@ -1593,7 +1899,6 @@ export default function Show({ projectId }: { projectId?: number }) {
                                             clientPaymentPlan: newPlan,
                                         };
 
-                                        setDisplayedProject(updated);
                                         onUpdateProject(updated);
                                         setShowInvoiceModal(false);
                                     }}

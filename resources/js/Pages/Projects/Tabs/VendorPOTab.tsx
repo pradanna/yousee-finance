@@ -1,11 +1,22 @@
-import React, { useState, useMemo } from 'react';
-import { BillboardLocation, VendorPaymentRecord, formatIndoDate, fmt, Project, PaymentScheme } from '../projectTypes';
+import { router } from '@inertiajs/react';
+import { useMemo, useState } from 'react';
+import {
+    BillboardLocation,
+    fmt,
+    formatIndoDate,
+    PaymentScheme,
+    Project,
+    PurchaseOrderWithPlan,
+    VendorPaymentRecord,
+} from '../projectTypes';
 
 export default function VendorPOTab({
     locations,
     isPPN,
     projectCode,
     project,
+    projectId,
+    purchaseOrders,
     onIssuePO,
     onUpdateProject,
 }: {
@@ -13,8 +24,10 @@ export default function VendorPOTab({
     isPPN: boolean;
     projectCode: string;
     project: Project;
+    projectId: string;
+    purchaseOrders: PurchaseOrderWithPlan[];
     onIssuePO: (
-        locId: number,
+        locId: string | number,
         poNumber: string,
         lighting?: 'Berlampu' | 'Tidak Berlampu',
         topNotes?: string,
@@ -27,7 +40,7 @@ export default function VendorPOTab({
     const [confirmingLoc, setConfirmingLoc] =
         useState<BillboardLocation | null>(null);
     const [confirmingVendorGroup, setConfirmingVendorGroup] = useState<{
-        vendorId: number;
+        vendorId: string | number;
         vendorName: string;
         unissuedItems: BillboardLocation[];
     } | null>(null);
@@ -40,7 +53,7 @@ export default function VendorPOTab({
 
     // Collapsible Vendor TOP State
     const [expandedVendorTop, setExpandedVendorTop] = useState<
-        Record<number, boolean>
+        Record<string | number, boolean>
     >({});
 
     // Vendor TOP Terms Breakdown State
@@ -86,6 +99,7 @@ export default function VendorPOTab({
     const [selectedVendorForPay, setSelectedVendorForPay] = useState<{
         vendorName: string;
         poNumber: string;
+        poId?: string;
         totalAmount: number;
         remainingAmount: number;
         schedule: Array<{
@@ -300,11 +314,15 @@ export default function VendorPOTab({
     // Group PO locations by vendor
     const groupedVendorPOs = useMemo(() => {
         const map = new Map<
-            number,
-            { vendorId: number; vendorName: string; items: BillboardLocation[] }
+            string | number,
+            {
+                vendorId: string | number;
+                vendorName: string;
+                items: BillboardLocation[];
+            }
         >();
         locations.forEach((loc) => {
-            const vId = loc.vendorId || 0;
+            const vId = loc.vendorId || 'unassigned';
             if (!map.has(vId)) {
                 map.set(vId, {
                     vendorId: vId,
@@ -470,13 +488,43 @@ export default function VendorPOTab({
                             group.items.length - unissuedItems.length;
 
                         // Payment Calculations for Vendor
-                        const vendorRecords = (
-                            project.vendorPayments || []
-                        ).filter((vp) => vp.vendorName === group.vendorName);
-                        const totalVendorPaid = vendorRecords.reduce(
-                            (s, r) => s + r.amount,
-                            0,
+                        const vendorPo = purchaseOrders.find(
+                            (po) => po.vendor_id === group.vendorId,
                         );
+                        const dbPlan = vendorPo?.payment_plan ?? null;
+                        const dbTerms = dbPlan?.terms ?? null;
+
+                        // Gunakan settlement dari DB jika ada, fallback ke project.vendorPayments lokal
+                        const dbSettlements = dbTerms
+                            ? dbTerms.flatMap((t) =>
+                                  t.settlements.map((s) => ({
+                                      id: s.id,
+                                      poNumber:
+                                          vendorPo?.po_number ||
+                                          `PO-${group.vendorName.replace(/\s+/g, '')}`,
+                                      vendorName: group.vendorName,
+                                      amount: s.amount,
+                                      paidAt: s.paid_at,
+                                      paymentMethod: s.payment_method,
+                                      paymentRef: s.payment_ref || undefined,
+                                      notes: s.notes || undefined,
+                                  })),
+                              )
+                            : [];
+
+                        const vendorRecords =
+                            dbSettlements.length > 0
+                                ? dbSettlements
+                                : (project.vendorPayments || []).filter(
+                                      (vp) => vp.vendorName === group.vendorName,
+                                  );
+
+                        const totalVendorPaid = dbTerms
+                            ? dbTerms.reduce((sum, t) => sum + t.totalPaid, 0)
+                            : vendorRecords.reduce(
+                                  (s, r) => s + r.amount,
+                                  0,
+                              );
                         const vendorRemaining = Math.max(
                             0,
                             vendorGrandTotal - totalVendorPaid,
@@ -654,107 +702,140 @@ export default function VendorPOTab({
 
                                         {/* Dynamic Vendor TOP Schedule & Due Dates calculation */}
                                         {(() => {
-                                            const firstIssuedLoc =
-                                                group.items.find(
-                                                    (l) => l.poIssued,
-                                                );
-                                            const schemePercents =
-                                                firstIssuedLoc?.vendorTermPercents ||
-                                                (poTopNotes.includes('30') ||
-                                                poTopNotes.includes('Termin')
-                                                    ? [30, 40, 30]
-                                                    : [50, 50]);
-                                            const schemeDates =
-                                                firstIssuedLoc?.vendorTermDates || [
-                                                    new Date()
-                                                        .toISOString()
-                                                        .split('T')[0],
-                                                    new Date(
-                                                        Date.now() +
-                                                            30 *
-                                                                24 *
-                                                                60 *
-                                                                60 *
-                                                                1000,
-                                                    )
-                                                        .toISOString()
-                                                        .split('T')[0],
-                                                    new Date(
-                                                        Date.now() +
-                                                            60 *
-                                                                24 *
-                                                                60 *
-                                                                60 *
-                                                                1000,
-                                                    )
-                                                        .toISOString()
-                                                        .split('T')[0],
-                                                ];
+                                            const vendorSchedule: Array<{
+                                                id: string;
+                                                label: string;
+                                                percent: number;
+                                                targetAmount: number;
+                                                paidAmount: number;
+                                                remainingAmount: number;
+                                                dueDate: string;
+                                                isPaid: boolean;
+                                                isPartial: boolean;
+                                            }> = dbTerms
+                                                ? dbTerms.map((term) => ({
+                                                      id: term.id,
+                                                      label: term.label,
+                                                      percent: term.percent,
+                                                      targetAmount: term.amount,
+                                                      paidAmount: term.totalPaid,
+                                                      remainingAmount:
+                                                          term.remaining,
+                                                      dueDate: term.due_date,
+                                                      isPaid: term.isPaid,
+                                                      isPartial:
+                                                          term.totalPaid > 0 &&
+                                                          !term.isPaid,
+                                                  }))
+                                                : (() => {
+                                                      const firstIssuedLoc =
+                                                          group.items.find(
+                                                              (l) => l.poIssued,
+                                                          );
+                                                      const schemePercents =
+                                                          firstIssuedLoc?.vendorTermPercents ||
+                                                          (poTopNotes.includes(
+                                                              '30',
+                                                          ) ||
+                                                          poTopNotes.includes(
+                                                              'Termin',
+                                                          )
+                                                              ? [30, 40, 30]
+                                                              : [50, 50]);
+                                                      const schemeDates =
+                                                          firstIssuedLoc?.vendorTermDates || [
+                                                              new Date()
+                                                                  .toISOString()
+                                                                  .split('T')[0],
+                                                              new Date(
+                                                                  Date.now() +
+                                                                      30 *
+                                                                          24 *
+                                                                          60 *
+                                                                          60 *
+                                                                          1000,
+                                                              )
+                                                                  .toISOString()
+                                                                  .split('T')[0],
+                                                              new Date(
+                                                                  Date.now() +
+                                                                      60 *
+                                                                          24 *
+                                                                          60 *
+                                                                          60 *
+                                                                          1000,
+                                                              )
+                                                                  .toISOString()
+                                                                  .split('T')[0],
+                                                          ];
 
-                                            let runningPaid = totalVendorPaid;
-                                            const vendorSchedule =
-                                                schemePercents.map(
-                                                    (pct, idx) => {
-                                                        const targetAmount =
-                                                            Math.round(
-                                                                (vendorGrandTotal *
-                                                                    pct) /
-                                                                    100,
-                                                            );
-                                                        const paidAmount =
-                                                            Math.min(
-                                                                targetAmount,
-                                                                Math.max(
-                                                                    0,
-                                                                    runningPaid,
-                                                                ),
-                                                            );
-                                                        runningPaid -=
-                                                            paidAmount;
-                                                        const remainingAmount =
-                                                            Math.max(
-                                                                0,
-                                                                targetAmount -
-                                                                    paidAmount,
-                                                            );
-                                                        const isPaid =
-                                                            paidAmount >=
-                                                                targetAmount &&
-                                                            targetAmount > 0;
-                                                        const isPartial =
-                                                            paidAmount > 0 &&
-                                                            !isPaid;
-                                                        const dueDate =
-                                                            schemeDates[idx] ||
-                                                            new Date()
-                                                                .toISOString()
-                                                                .split('T')[0];
+                                                      let runningPaid =
+                                                          totalVendorPaid;
+                                                      return schemePercents.map(
+                                                          (pct, idx) => {
+                                                              const targetAmount =
+                                                                  Math.round(
+                                                                      (vendorGrandTotal *
+                                                                          pct) /
+                                                                          100,
+                                                                  );
+                                                              const paidAmount =
+                                                                  Math.min(
+                                                                      targetAmount,
+                                                                      Math.max(
+                                                                          0,
+                                                                          runningPaid,
+                                                                      ),
+                                                                  );
+                                                              runningPaid -=
+                                                                  paidAmount;
+                                                              const remainingAmount =
+                                                                  Math.max(
+                                                                      0,
+                                                                      targetAmount -
+                                                                          paidAmount,
+                                                                  );
+                                                              const isPaid =
+                                                                  paidAmount >=
+                                                                      targetAmount &&
+                                                                  targetAmount > 0;
+                                                              const isPartial =
+                                                                  paidAmount > 0 &&
+                                                                  !isPaid;
+                                                              const dueDate =
+                                                                  schemeDates[
+                                                                      idx
+                                                                  ] ||
+                                                                  new Date()
+                                                                      .toISOString()
+                                                                      .split('T')[0];
 
-                                                        const label =
-                                                            schemePercents.length ===
-                                                            1
-                                                                ? 'Pelunasan Total Vendor'
-                                                                : idx === 0
-                                                                  ? 'Termin 1 – Uang Muka (DP)'
-                                                                  : idx ===
-                                                                      schemePercents.length -
-                                                                          1
-                                                                    ? `Termin ${idx + 1} – Pelunasan`
-                                                                    : `Termin ${idx + 1} – Progres`;
+                                                              const label =
+                                                                  schemePercents.length ===
+                                                                  1
+                                                                      ? 'Pelunasan Total Vendor'
+                                                                      : idx === 0
+                                                                        ? 'Termin 1 – Uang Muka (DP)'
+                                                                        : idx ===
+                                                                            schemePercents.length -
+                                                                                1
+                                                                          ? `Termin ${idx + 1} – Pelunasan`
+                                                                          : `Termin ${idx + 1} – Progres`;
 
-                                                        return {
-                                                            id: `vterm-${group.vendorId}-${idx}`,
-                                                            label,
-                                                            percent: pct,
-                                                            targetAmount,
-                                                            paidAmount,
-                                                            remainingAmount,
-                                                            dueDate,
-                                                            isPaid,
-                                                            isPartial,
-                                                        };
-                                                    },
-                                                );
+                                                              return {
+                                                                  id: `vterm-${group.vendorId}-${idx}`,
+                                                                  label,
+                                                                  percent: pct,
+                                                                  targetAmount,
+                                                                  paidAmount,
+                                                                  remainingAmount,
+                                                                  dueDate,
+                                                                  isPaid,
+                                                                  isPartial,
+                                                              };
+                                                          },
+                                                      );
+                                                  })();
 
                                             if (vendorIssuedCount === 0)
                                                 return null;
@@ -774,6 +855,7 @@ export default function VendorPOTab({
                                                                     group.vendorName,
                                                                 poNumber:
                                                                     firstPoNum,
+                                                                poId: vendorPo?.id,
                                                                 totalAmount:
                                                                     vendorGrandTotal,
                                                                 remainingAmount:
@@ -1047,95 +1129,130 @@ export default function VendorPOTab({
                                 {/* Dynamic Vendor TOP Stepper & Collapsible Schedule (Hanya tampil jika PO sudah terbit) */}
                                 {vendorIssuedCount > 0 &&
                                     (() => {
-                                        const firstIssuedLoc = group.items.find(
-                                            (l) => l.poIssued,
+                                        // Cari PO dari DB yang sesuai vendor group ini.
+                                        // Jika ada payment_plan, gunakan terms dari DB.
+                                        // Fallback ke komputasi lokal jika PO belum punya payment_plan.
+                                        const vendorPo = purchaseOrders.find(
+                                            (po) =>
+                                                po.vendor_id ===
+                                                group.vendorId,
                                         );
-                                        const schemePercents =
-                                            firstIssuedLoc?.vendorTermPercents ||
-                                            (poTopNotes.includes('30') ||
-                                            poTopNotes.includes('Termin')
-                                                ? [30, 40, 30]
-                                                : [50, 50]);
-                                        const schemeDates =
-                                            firstIssuedLoc?.vendorTermDates || [
-                                                new Date()
-                                                    .toISOString()
-                                                    .split('T')[0],
-                                                new Date(
-                                                    Date.now() +
-                                                        30 *
-                                                            24 *
-                                                            60 *
-                                                            60 *
-                                                            1000,
-                                                )
-                                                    .toISOString()
-                                                    .split('T')[0],
-                                                new Date(
-                                                    Date.now() +
-                                                        60 *
-                                                            24 *
-                                                            60 *
-                                                            60 *
-                                                            1000,
-                                                )
-                                                    .toISOString()
-                                                    .split('T')[0],
-                                            ];
+                                        const dbTerms =
+                                            vendorPo?.payment_plan?.terms ?? null;
 
-                                        let runningPaid = totalVendorPaid;
-                                        const vendorSchedule =
-                                            schemePercents.map((pct, idx) => {
-                                                const targetAmount = Math.round(
-                                                    (vendorGrandTotal * pct) /
-                                                        100,
-                                                );
-                                                const paidAmount = Math.min(
-                                                    targetAmount,
-                                                    Math.max(0, runningPaid),
-                                                );
-                                                runningPaid -= paidAmount;
-                                                const remainingAmount =
-                                                    Math.max(
-                                                        0,
-                                                        targetAmount -
-                                                            paidAmount,
-                                                    );
-                                                const isPaid =
-                                                    paidAmount >=
-                                                        targetAmount &&
-                                                    targetAmount > 0;
-                                                const isPartial =
-                                                    paidAmount > 0 && !isPaid;
-                                                const dueDate =
-                                                    schemeDates[idx] ||
-                                                    new Date()
-                                                        .toISOString()
-                                                        .split('T')[0];
-
-                                                const label =
-                                                    schemePercents.length === 1
-                                                        ? 'Pelunasan Total Vendor'
-                                                        : idx === 0
-                                                          ? 'Termin 1 – Uang Muka (DP)'
-                                                          : idx ===
-                                                              schemePercents.length -
-                                                                  1
-                                                            ? `Termin ${idx + 1} – Pelunasan`
-                                                            : `Termin ${idx + 1} – Progres`;
-
-                                                return {
-                                                    id: `vterm-${group.vendorId}-${idx}`,
-                                                    label,
-                                                    percent: pct,
-                                                    targetAmount,
-                                                    paidAmount,
-                                                    remainingAmount,
-                                                    dueDate,
-                                                    isPaid,
-                                                    isPartial,
-                                                };
-                                            });
+                                        // vendorSchedule: preferensikan data DB, fallback ke komputasi lokal.
+                                        const vendorSchedule: Array<{
+                                            id: string;
+                                            label: string;
+                                            percent: number;
+                                            targetAmount: number;
+                                            paidAmount: number;
+                                            remainingAmount: number;
+                                            dueDate: string;
+                                            isPaid: boolean;
+                                            isPartial: boolean;
+                                        }> = dbTerms
+                                            ? dbTerms.map((term) => ({
+                                                  id: term.id,
+                                                  label: term.label,
+                                                  percent: term.percent,
+                                                  targetAmount: term.amount,
+                                                  paidAmount: term.totalPaid,
+                                                  remainingAmount:
+                                                      term.remaining,
+                                                  dueDate: term.due_date,
+                                                  isPaid: term.isPaid,
+                                                  isPartial:
+                                                      term.totalPaid > 0 &&
+                                                      !term.isPaid,
+                                              }))
+                                            : (() => {
+                                                  // Fallback lokal (PO belum punya payment_plan di DB)
+                                                  const firstIssuedLoc =
+                                                      group.items.find(
+                                                          (l) => l.poIssued,
+                                                      );
+                                                  const schemePercents =
+                                                      firstIssuedLoc?.vendorTermPercents ||
+                                                      (poTopNotes.includes(
+                                                          '30',
+                                                      ) ||
+                                                      poTopNotes.includes(
+                                                          'Termin',
+                                                      )
+                                                          ? [30, 40, 30]
+                                                          : [50, 50]);
+                                                  const schemeDates =
+                                                      firstIssuedLoc?.vendorTermDates || [
+                                                          new Date()
+                                                              .toISOString()
+                                                              .split('T')[0],
+                                                      ];
+                                                  let runningPaid =
+                                                      totalVendorPaid;
+                                                  return schemePercents.map(
+                                                      (pct, idx) => {
+                                                          const targetAmount =
+                                                              Math.round(
+                                                                  (vendorGrandTotal *
+                                                                      pct) /
+                                                                      100,
+                                                              );
+                                                          const paidAmount =
+                                                              Math.min(
+                                                                  targetAmount,
+                                                                  Math.max(
+                                                                      0,
+                                                                      runningPaid,
+                                                                  ),
+                                                              );
+                                                          runningPaid -=
+                                                              paidAmount;
+                                                          const remainingAmount =
+                                                              Math.max(
+                                                                  0,
+                                                                  targetAmount -
+                                                                      paidAmount,
+                                                              );
+                                                          const isPaid =
+                                                              paidAmount >=
+                                                                  targetAmount &&
+                                                              targetAmount > 0;
+                                                          const isPartial =
+                                                              paidAmount > 0 &&
+                                                              !isPaid;
+                                                          const dueDate =
+                                                              schemeDates[
+                                                                  idx
+                                                              ] ||
+                                                              new Date()
+                                                                  .toISOString()
+                                                                  .split('T')[0];
+                                                          const label =
+                                                              schemePercents.length ===
+                                                              1
+                                                                  ? 'Pelunasan Total Vendor'
+                                                                  : idx === 0
+                                                                    ? 'Termin 1 – Uang Muka (DP)'
+                                                                    : idx ===
+                                                                        schemePercents.length -
+                                                                            1
+                                                                      ? `Termin ${idx + 1} – Pelunasan`
+                                                                      : `Termin ${idx + 1} – Progres`;
+                                                          return {
+                                                              id: `vterm-${group.vendorId}-${idx}`,
+                                                              label,
+                                                              percent: pct,
+                                                              targetAmount,
+                                                              paidAmount,
+                                                              remainingAmount,
+                                                              dueDate,
+                                                              isPaid,
+                                                              isPartial,
+                                                          };
+                                                      },
+                                                  );
+                                              })();
 
                                         const isExpanded =
                                             !!expandedVendorTop[group.vendorId];
@@ -1403,6 +1520,8 @@ export default function VendorPOTab({
                                                                                                     group.vendorName,
                                                                                                 poNumber:
                                                                                                     firstPoNum,
+                                                                                                poId:
+                                                                                                    vendorPo?.id,
                                                                                                 totalAmount:
                                                                                                     vendorGrandTotal,
                                                                                                 remainingAmount:
@@ -1881,6 +2000,41 @@ export default function VendorPOTab({
                             <button
                                 type="button"
                                 onClick={() => {
+                                    const poId = selectedVendorForPay.poId;
+                                    const termId =
+                                        selectedVendorForPay.selectedTermId ||
+                                        selectedVendorForPay.schedule.find(
+                                            (t) => !t.isPaid,
+                                        )?.id;
+
+                                    // Jika termin dan PO terdaftar di database, kirim via endpoint backend
+                                    if (poId && termId && !termId.startsWith('vterm-')) {
+                                        router.post(
+                                            `/projects/${projectId}/purchase-orders/${poId}/payment-terms/${termId}/settle`,
+                                            {
+                                                amount: vPayAmountInput,
+                                                paid_at:
+                                                    vPayDateInput ||
+                                                    new Date()
+                                                        .toISOString()
+                                                        .split('T')[0],
+                                                payment_method: vPayMethodInput,
+                                                payment_ref:
+                                                    vPayRefInput || null,
+                                                notes: vPayNotesInput || null,
+                                            },
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    setSelectedVendorForPay(null);
+                                                    router.reload();
+                                                },
+                                            },
+                                        );
+                                        return;
+                                    }
+
+                                    // Fallback simpan lokal jika belum ada DB record
                                     const newRecord: VendorPaymentRecord = {
                                         id: `vpay-${Date.now()}`,
                                         poNumber: selectedVendorForPay.poNumber,

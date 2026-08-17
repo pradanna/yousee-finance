@@ -1,16 +1,23 @@
 import React, { useMemo, useState } from 'react';
-import { BillboardLocation, fmt, mockVendors } from '../projectTypes';
+import { BillboardLocation, fmt } from '../projectTypes';
+
+interface VendorOption {
+    id: string;
+    name: string;
+}
 
 export default function LocationsTab({
     locations,
     isPPN,
+    vendors = [],
     onAddLocation,
     onDeleteLocation,
 }: {
     locations: BillboardLocation[];
     isPPN: boolean;
+    vendors?: VendorOption[];
     onAddLocation: (loc: BillboardLocation) => void;
-    onDeleteLocation: (id: number) => void;
+    onDeleteLocation: (id: string) => void;
 }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedVendorId, setSelectedVendorId] = useState<string>('');
@@ -35,12 +42,12 @@ export default function LocationsTab({
     // Group locations by vendor
     const groupedLocations = useMemo(() => {
         const map = new Map<
-            number,
-            { vendorId: number; vendorName: string; items: BillboardLocation[] }
+            string,
+            { vendorId: string; vendorName: string; items: BillboardLocation[] }
         >();
 
         locations.forEach((loc) => {
-            const vId = loc.vendorId || 0;
+            const vId = loc.vendorId || 'unassigned';
             if (!map.has(vId)) {
                 map.set(vId, {
                     vendorId: vId,
@@ -102,19 +109,17 @@ export default function LocationsTab({
             return;
         }
 
-        const vendor = mockVendors.find(
-            (v) => v.id === parseInt(selectedVendorId),
-        )!;
+        const vendor = vendors.find((v) => v.id === selectedVendorId);
         const newLoc: BillboardLocation = {
-            id: Date.now(),
+            id: String(Date.now()),
             code: `LOC-${String(Date.now()).slice(-4)}`,
             area: form.area.trim(),
             description: form.description.trim(),
             type: form.type,
             orientation: form.orientation,
             size: form.size.trim(),
-            vendorId: vendor.id,
-            vendorName: vendor.name,
+            vendorId: vendor ? vendor.id : selectedVendorId,
+            vendorName: vendor ? vendor.name : 'Vendor',
             vendorCost: computedVendorCost.dpp, // Always store pure DPP
             poIssued: false,
             poNumber: '',
@@ -433,16 +438,15 @@ export default function LocationsTab({
                                 </label>
                                 <select
                                     value={selectedVendorId}
-                                    onChange={(e) => {
-                                        setSelectedVendorId(e.target.value);
-                                        setErrors({ ...errors, vendorId: '' });
-                                    }}
+                                    onChange={(e) =>
+                                        setSelectedVendorId(e.target.value)
+                                    }
                                     className="shadow-xs w-full rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 transition-all focus:border-blue-500 focus:outline-none"
                                 >
                                     <option value="">
                                         -- Pilih Vendor Mitra --
                                     </option>
-                                    {mockVendors.map((v) => (
+                                    {vendors.map((v) => (
                                         <option key={v.id} value={v.id}>
                                             {v.name}
                                         </option>

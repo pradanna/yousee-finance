@@ -15,10 +15,6 @@ import {
     CreateProjectFormData,
     createProjectSchema,
 } from './Projects/createProjectSchema';
-import {
-    initialProjectsNonPPN,
-    initialProjectsPPN,
-} from './Projects/projectData';
 import { StatusBadge } from './Projects/Show';
 
 import {
@@ -39,9 +35,59 @@ interface SalesOption {
     name: string;
 }
 
+interface VendorOption {
+    id: string;
+    name: string;
+}
+
 interface ProjectsPageProps {
+    projects: {
+        data: Array<{
+            id: string;
+            code: string;
+            name: string;
+            client_id: string;
+            client?: { id: string; name: string };
+            client_name?: string;
+            sales_id?: string;
+            sales?: { id: string; name: string };
+            sales_pic?: string;
+            fiscal_mode: 'ppn' | 'non-ppn';
+            start_date: string;
+            end_date: string;
+            contract_value: number;
+            target_qty: number;
+            status: 'draft' | 'active' | 'completed' | 'cancelled';
+            notes?: string;
+            locations?: Array<{
+                id: string;
+                code: string;
+                area: string;
+                description: string;
+                type: string;
+                size: string;
+                vendor_id?: string;
+                vendor?: { id: string; name: string };
+                vendor_cost: number;
+                po_issued: boolean;
+                po_number?: string;
+            }>;
+            purchase_orders?: Array<unknown>;
+            invoices?: Array<unknown>;
+            invoice_issued?: boolean;
+            invoice_number?: string;
+        }>;
+        links: Array<{ url: string | null; label: string; active: boolean }>;
+        meta?: Record<string, unknown>;
+    };
     clients: ClientOption[];
     sales: SalesOption[];
+    vendors?: VendorOption[];
+    filters?: {
+        client_id?: string;
+        sales_id?: string;
+        search?: string;
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,13 +272,64 @@ function calcPeriodProgress(
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Projects Page Component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function Projects({ clients, sales }: ProjectsPageProps) {
+export default function Projects({
+    projects: paginatedProjectsData,
+    clients,
+    sales,
+    vendors,
+}: ProjectsPageProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
-    const [projects, setProjects] = useState<Project[]>(
-        isPPN ? initialProjectsPPN : initialProjectsNonPPN,
-    );
+    // Map database projects to frontend Project format
+    const projects: Project[] = useMemo(() => {
+        const rawList = paginatedProjectsData?.data || [];
+        return rawList
+            .filter((p) =>
+                isPPN ? p.fiscal_mode === 'ppn' : p.fiscal_mode === 'non-ppn',
+            )
+            .map((p) => {
+                const statusMap: Record<string, Project['status']> = {
+                    draft: 'Draft',
+                    active: 'Active',
+                    completed: 'Completed',
+                    cancelled: 'Cancelled',
+                };
+
+                const periodObj = formatPeriod(p.start_date, p.end_date);
+
+                return {
+                    id: p.id,
+                    code: p.code,
+                    name: p.name,
+                    clientId: p.client_id,
+                    clientName: p.client?.name ?? p.client_name ?? '-',
+                    salesPIC: p.sales?.name ?? p.sales_pic ?? '-',
+                    period:
+                        periodObj.label || `${p.start_date} - ${p.end_date}`,
+                    startDate: p.start_date,
+                    endDate: p.end_date,
+                    contractValue: Number(p.contract_value) || 0,
+                    status: statusMap[p.status] || 'Draft',
+                    targetQty: p.target_qty || 1,
+                    locations: (p.locations || []).map((loc) => ({
+                        id: loc.id,
+                        code: loc.code,
+                        area: loc.area,
+                        description: loc.description,
+                        type: (loc.type as any) || 'Billboard',
+                        size: loc.size,
+                        vendorId: loc.vendor_id ?? null,
+                        vendorName: loc.vendor?.name ?? '-',
+                        vendorCost: Number(loc.vendor_cost) || 0,
+                        poIssued: Boolean(loc.po_issued),
+                        poNumber: loc.po_number || '',
+                    })),
+                    invoiceIssued: Boolean(p.invoice_issued),
+                    invoiceNumber: p.invoice_number || '',
+                };
+            });
+    }, [paginatedProjectsData, isPPN]);
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -340,10 +437,8 @@ export default function Projects({ clients, sales }: ProjectsPageProps) {
         );
     };
 
-    const handleUpdateProject = (updated: Project) => {
-        setProjects((prev) =>
-            prev.map((p) => (p.id === updated.id ? updated : p)),
-        );
+    const handleUpdateProject = (_updated?: Project) => {
+        router.reload();
     };
 
     // Metrics calculation

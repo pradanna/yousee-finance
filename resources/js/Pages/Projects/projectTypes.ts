@@ -112,18 +112,19 @@ export interface VendorPO {
 // ─── Billboard & Project ──────────────────────────────────────────────────────
 
 export interface BillboardLocation {
-    id: number;
+    id: string;
     code: string;
     area: string;
     description: string;
     type: 'Billboard' | 'Videotron' | 'Baliho' | 'Neonbox';
     size: string;
-    vendorId: number | null;
+    vendorId: string | null;
     vendorName: string;
     qty?: number;
     vendorCost: number;
     poIssued: boolean;
     poNumber: string;
+    purchaseOrderId?: string; // DB UUID of the PO (populated from backend)
     orientation?: 'V' | 'H';
     lighting?: 'Berlampu' | 'Tidak Berlampu';
     topNotes?: string;
@@ -132,6 +133,9 @@ export interface BillboardLocation {
     vendorTermDates?: string[];
 }
 
+// ─── Vendor Payment Settlement (DB-driven) ────────────────────────────────────
+
+/** @deprecated Gunakan PurchaseOrderWithPlan.payment_plan.terms.settlements — ini hanya untuk backward compat state lokal */
 export interface VendorPaymentRecord {
     id: string;
     poNumber: string;
@@ -143,14 +147,57 @@ export interface VendorPaymentRecord {
     notes?: string;
 }
 
+export interface VendorPaymentSettlement {
+    id: string;
+    amount: number;
+    paid_at: string; // ISO date string (YYYY-MM-DD)
+    payment_method: string;
+    payment_ref?: string | null;
+    notes?: string | null;
+}
+
+export interface VendorPaymentPlanTerm {
+    id: string; // Real DB UUID of the payment_term
+    sort_order: number;
+    label: string;
+    amount: number; // Target nominal termin ini
+    percent: number;
+    due_date: string;
+    status: PaymentTermStatus;
+    notes?: string | null;
+    settlements: VendorPaymentSettlement[];
+    totalPaid: number; // Derived: sum of settlements.amount
+    remaining: number; // Derived: amount - totalPaid
+    isPaid: boolean; // Derived: status === 'paid'
+}
+
+export interface VendorPaymentPlan {
+    id: string;
+    scheme: PaymentScheme;
+    total_amount: number;
+    notes?: string | null;
+    terms: VendorPaymentPlanTerm[];
+}
+
+export interface PurchaseOrderWithPlan {
+    id: string;
+    po_number: string;
+    vendor_id: string;
+    vendor_name: string;
+    total: number;
+    payment_plan: VendorPaymentPlan | null;
+}
+
 export interface Project {
-    id: number;
+    id: string;
     code: string;
     name: string;
-    clientId: number;
+    clientId: string;
     clientName: string;
     salesPIC: string;
     period: string;
+    startDate?: string;
+    endDate?: string;
     contractValue: number;
     status: 'Draft' | 'Active' | 'Completed' | 'Cancelled';
     locations: BillboardLocation[];
@@ -160,6 +207,8 @@ export interface Project {
     paymentTerms?: VendorPaymentTerm;
     clientPaymentPlan?: ClientPaymentPlan;
     vendorPayments?: VendorPaymentRecord[];
+    /** Purchase orders dari backend — populated di Show.tsx dari dbProject.purchase_orders */
+    purchaseOrders?: PurchaseOrderWithPlan[];
 }
 
 export type ActiveTab = 'info' | 'locations' | 'vendors' | 'invoice';

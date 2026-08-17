@@ -1,6 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useMemo, useState } from 'react';
-import { initialProjectsNonPPN, initialProjectsPPN } from './projectData';
 import {
     ClientPaymentPlan,
     FiscalMode,
@@ -156,21 +155,52 @@ function StatusChip({
     );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function ProjectPayment({ projectId }: { projectId?: number }) {
-    // In a real app, this would come from Inertia props.
-    // For prototype, we resolve from mock data.
-    const urlId =
-        projectId ??
-        parseInt(window.location.pathname.split('/').filter(Boolean)[1] ?? '1');
-    const allProjects = [...initialProjectsPPN, ...initialProjectsNonPPN];
-    const initialProject =
-        allProjects.find((p) => p.id === urlId) ?? allProjects[0];
+interface DbProjectInput {
+    id?: string;
+    code?: string;
+    name?: string;
+    client_id?: string;
+    client?: { id: string; name: string };
+    client_name?: string;
+    sales_id?: string;
+    sales?: { id: string; name: string };
+    sales_pic?: string;
+    fiscal_mode?: 'ppn' | 'non-ppn' | string;
+    start_date?: string;
+    end_date?: string;
+    contract_value?: number | string;
+    status?: Project['status'];
+}
 
-    const [project, setProject] = useState<Project>(initialProject);
-    const [fiscalMode] = useState<FiscalMode>(
-        initialProject.id >= 100 ? 'non-ppn' : 'ppn',
-    );
+interface ProjectPaymentProps {
+    projectId?: string | number;
+    project?: DbProjectInput;
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function ProjectPayment({
+    projectId,
+    project: dbProject,
+}: ProjectPaymentProps) {
+    const defaultProject: Project = {
+        id: dbProject?.id || '',
+        code: dbProject?.code || '',
+        name: dbProject?.name || '',
+        clientId: dbProject?.client_id || '',
+        clientName: dbProject?.client?.name || '-',
+        salesPIC: dbProject?.sales?.name || '-',
+        period: `${dbProject?.start_date || ''} - ${dbProject?.end_date || ''}`,
+        contractValue: Number(dbProject?.contract_value) || 0,
+        status: dbProject?.status || 'Draft',
+        locations: [],
+        invoiceIssued: false,
+        invoiceNumber: '',
+        targetQty: 1,
+    };
+
+    const [project, setProject] = useState<Project>(defaultProject);
+    const fiscalMode: FiscalMode =
+        dbProject?.fiscal_mode === 'non-ppn' ? 'non-ppn' : 'ppn';
     const isPPN = fiscalMode === 'ppn';
     const fin = calcFinancials(project, project.locations, fiscalMode);
     const totalInvoice = fin.totalInvoice;
