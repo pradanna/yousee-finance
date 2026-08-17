@@ -17,27 +17,50 @@ const SETTING_LABELS: Record<
     string,
     { label: string; description: string; ppnOnly?: boolean }
 > = {
-    default_receivable_account_id: {
-        label: 'Piutang Dagang Default',
+    default_cash: {
+        label: 'Kas Tunai Default',
+        description:
+            'Akun kas tunai operasional untuk penerimaan/pengeluaran kas.',
+    },
+    default_bank: {
+        label: 'Bank Operasional Default',
+        description: 'Akun bank utama (misal BCA) untuk transaksi transfer.',
+    },
+    default_receivable: {
+        label: 'Piutang Dagang Client Default',
         description: 'Akun yang didebet saat Invoice diterbitkan ke Client.',
     },
-    default_payable_account_id: {
-        label: 'Hutang Dagang Default',
-        description: 'Akun yang dikredit saat Purchase Order dibuat.',
+    default_payable: {
+        label: 'Hutang Dagang Vendor Default',
+        description: 'Akun yang dikredit saat Purchase Order (PO) dibuat.',
     },
-    default_vat_in_account_id: {
-        label: 'PPN Masukan Default',
-        description: 'Akun PPN Masukan. Hanya aktif pada transaksi Mode PPN.',
+    default_sales_revenue: {
+        label: 'Pendapatan Sewa Reklame Default',
+        description: 'Akun pendapatan yang dikredit saat Invoice diterbitkan.',
+    },
+    default_project_expense: {
+        label: 'Beban HPP Billboard Default',
+        description: 'Akun beban sewa vendor yang didebet saat PO diterbitkan.',
+    },
+    default_vat_input: {
+        label: 'PPN Masukan Default (11%)',
+        description: 'Akun PPN Masukan saat PO diterbitkan pada Mode PPN.',
         ppnOnly: true,
     },
-    default_vat_out_account_id: {
-        label: 'PPN Keluaran Default',
-        description: 'Akun PPN Keluaran. Hanya aktif pada transaksi Mode PPN.',
+    default_vat_output: {
+        label: 'PPN Keluaran Default (11%)',
+        description:
+            'Akun PPN Keluaran saat Invoice diterbitkan pada Mode PPN.',
         ppnOnly: true,
     },
-    default_pph_payable_account_id: {
-        label: 'Hutang PPh Default',
-        description: 'Akun yang dikredit untuk pencatatan pemotongan PPh.',
+    default_income_tax: {
+        label: 'Hutang PPh Pemotongan Default',
+        description:
+            'Akun yang dikredit untuk pencatatan pemotongan pajak PPh.',
+    },
+    opening_balance_equity: {
+        label: 'Opening Balance Equity',
+        description: 'Akun modal penyeimbang untuk setup saldo awal migrasi.',
     },
 };
 
@@ -45,28 +68,27 @@ export default function AccountingSettingsIndex({
     settings = mockAccountingSettings,
     leafAccounts = mockLeafAccounts,
 }: Props) {
-    const initialData = settings.reduce<Record<string, number | null>>(
-        (acc, s) => {
-            acc[s.key] = s.chart_of_account_id;
-            return acc;
-        },
-        {},
-    );
-
     const form = useForm<{
-        settings: { key: string; chart_of_account_id: number | null }[];
+        settings: { key: string; chart_of_account_id: string | null }[];
     }>({
         settings: settings.map((s) => ({
             key: s.key,
-            chart_of_account_id: s.chart_of_account_id,
+            chart_of_account_id: s.chart_of_account_id
+                ? String(s.chart_of_account_id)
+                : null,
         })),
     });
 
-    const handleAccountChange = (key: string, id: number | null) => {
+    const handleAccountChange = (key: string, id: string | number | null) => {
         form.setData(
             'settings',
             form.data.settings.map((s) =>
-                s.key === key ? { ...s, chart_of_account_id: id } : s,
+                s.key === key
+                    ? {
+                          ...s,
+                          chart_of_account_id: id !== null ? String(id) : null,
+                      }
+                    : s,
             ),
         );
     };

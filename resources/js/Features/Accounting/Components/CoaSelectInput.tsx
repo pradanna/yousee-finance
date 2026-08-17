@@ -1,12 +1,11 @@
 import { ChartOfAccount } from '@/Features/Accounting/types';
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 
 interface CoaSelectInputProps {
     id?: string;
     label?: string;
-    value: number | null;
-    onChange: (id: number | null) => void;
+    value: string | number | null;
+    onChange: (id: string | number | null) => void;
     options: ChartOfAccount[]; // hanya leaf nodes
     placeholder?: string;
     error?: string;
@@ -25,33 +24,20 @@ export function CoaSelectInput({
 }: CoaSelectInputProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
-    const triggerRef = useRef<HTMLButtonElement>(null);
-    const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    const selected = options.find((o) => o.id === value) ?? null;
+    const selected =
+        options.find((o) => String(o.id) === String(value)) ?? null;
 
     const filtered = options.filter((o) =>
         `${o.code} ${o.name}`.toLowerCase().includes(search.toLowerCase()),
     );
 
     useEffect(() => {
-        if (open && triggerRef.current) {
-            const rect = triggerRef.current.getBoundingClientRect();
-            setDropdownStyle({
-                position: 'fixed',
-                top: rect.bottom + 4,
-                left: rect.left,
-                width: rect.width,
-                zIndex: 9999,
-            });
-        }
-    }, [open]);
-
-    useEffect(() => {
         const handleClick = (e: MouseEvent) => {
             if (
-                triggerRef.current &&
-                !triggerRef.current.contains(e.target as Node)
+                containerRef.current &&
+                !containerRef.current.contains(e.target as Node)
             ) {
                 setOpen(false);
             }
@@ -61,7 +47,7 @@ export function CoaSelectInput({
     }, []);
 
     return (
-        <div className="w-full">
+        <div ref={containerRef} className="relative w-full">
             {label && (
                 <label
                     htmlFor={id}
@@ -72,7 +58,6 @@ export function CoaSelectInput({
             )}
             <button
                 id={id}
-                ref={triggerRef}
                 type="button"
                 disabled={disabled}
                 onClick={() => {
@@ -112,81 +97,75 @@ export function CoaSelectInput({
 
             {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
 
-            {open &&
-                createPortal(
-                    <div
-                        style={dropdownStyle}
-                        className="flex max-h-60 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white p-1.5 shadow-2xl"
-                    >
-                        {/* Search */}
-                        <div className="p-1.5 pb-1">
-                            <input
-                                autoFocus
-                                type="text"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Cari kode atau nama akun..."
-                                className="focus:ring-primary/20 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2"
-                            />
-                        </div>
+            {open && (
+                <div className="animate-in fade-in zoom-in-95 absolute left-0 top-full z-50 mt-1 flex max-h-64 w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl duration-100">
+                    {/* Search */}
+                    <div className="p-1.5 pb-1">
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Cari kode atau nama akun..."
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
 
-                        {/* Options */}
-                        <div className="flex-1 overflow-y-auto">
-                            {value !== null && (
+                    {/* Options */}
+                    <div className="max-h-48 flex-1 overflow-y-auto">
+                        {value !== null && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onChange(null);
+                                    setOpen(false);
+                                }}
+                                className="w-full rounded-xl px-3 py-2 text-left text-xs text-slate-400 transition-colors hover:bg-slate-50"
+                            >
+                                — Kosongkan pilihan
+                            </button>
+                        )}
+                        {filtered.length === 0 ? (
+                            <div className="py-4 text-center text-xs text-slate-400">
+                                Tidak ada akun ditemukan
+                            </div>
+                        ) : (
+                            filtered.map((opt) => (
                                 <button
+                                    key={opt.id}
                                     type="button"
                                     onClick={() => {
-                                        onChange(null);
+                                        onChange(opt.id);
                                         setOpen(false);
                                     }}
-                                    className="w-full rounded-xl px-3 py-2 text-left text-xs text-slate-400 transition-colors hover:bg-slate-50"
+                                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors ${String(opt.id) === String(value) ? 'bg-blue-50 font-bold text-blue-700' : 'text-slate-800 hover:bg-slate-50'} `}
                                 >
-                                    — Kosongkan pilihan
+                                    <span className="w-10 flex-shrink-0 font-mono text-[10px] font-bold text-slate-400">
+                                        {opt.code}
+                                    </span>
+                                    <span className="flex-1 truncate text-xs font-medium">
+                                        {opt.name}
+                                    </span>
+                                    {String(opt.id) === String(value) && (
+                                        <svg
+                                            className="h-3.5 w-3.5 flex-shrink-0 text-blue-600"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={3}
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="m4.5 12.75 6 6 9-13.5"
+                                            />
+                                        </svg>
+                                    )}
                                 </button>
-                            )}
-                            {filtered.length === 0 ? (
-                                <div className="py-4 text-center text-xs text-slate-400">
-                                    Tidak ada akun ditemukan
-                                </div>
-                            ) : (
-                                filtered.map((opt) => (
-                                    <button
-                                        key={opt.id}
-                                        type="button"
-                                        onClick={() => {
-                                            onChange(opt.id);
-                                            setOpen(false);
-                                        }}
-                                        className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors ${opt.id === value ? 'bg-blue-50 text-blue-700' : 'text-slate-800 hover:bg-slate-50'} `}
-                                    >
-                                        <span className="w-10 flex-shrink-0 font-mono text-[10px] font-bold text-slate-400">
-                                            {opt.code}
-                                        </span>
-                                        <span className="flex-1 truncate text-xs font-medium">
-                                            {opt.name}
-                                        </span>
-                                        {opt.id === value && (
-                                            <svg
-                                                className="h-3.5 w-3.5 flex-shrink-0 text-blue-600"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                stroke="currentColor"
-                                                strokeWidth={3}
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="m4.5 12.75 6 6 9-13.5"
-                                                />
-                                            </svg>
-                                        )}
-                                    </button>
-                                ))
-                            )}
-                        </div>
-                    </div>,
-                    document.body,
-                )}
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

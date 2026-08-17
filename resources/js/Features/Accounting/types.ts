@@ -10,8 +10,8 @@ export type NormalBalance = 'debit' | 'credit';
 export type FiscalModeContext = 'all' | 'ppn_only' | 'non_ppn_only';
 
 export interface ChartOfAccount {
-    id: number;
-    parent_id: number | null;
+    id: string | number;
+    parent_id: string | number | null;
     code: string;
     name: string;
     display_name: string;
@@ -28,11 +28,11 @@ export interface ChartOfAccount {
 }
 
 export interface AccountingSetting {
-    id: number;
+    id: string | number;
     key: string;
     description: string | null;
-    chart_of_account_id: number;
-    chart_of_account: ChartOfAccount;
+    chart_of_account_id: string | number | null;
+    chart_of_account?: ChartOfAccount;
 }
 
 export interface EnumOption {
@@ -43,7 +43,7 @@ export interface EnumOption {
 // ─── Form Types ───────────────────────────────────────────────────────────────
 
 export interface CreateChartOfAccountForm {
-    parent_id: number | null;
+    parent_id: string | number | null;
     code: string;
     name: string;
     type: AccountType | '';
