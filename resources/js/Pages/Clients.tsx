@@ -11,7 +11,7 @@ import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown from '@/Components/UI/ActionDropdown';
 import StatusBadge from '@/Components/UI/StatusBadge';
 import Toast, { ToastType } from '@/Components/UI/Toast';
-import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
+import AppLayout from '@/Layouts/AppLayout';
 import { PageProps } from '@/types';
 import { getWhatsAppUrl } from '@/Utils/formatters';
 import { router, usePage } from '@inertiajs/react';
@@ -59,12 +59,7 @@ const formatDate = (isoString?: string) => {
     }
 };
 
-export default function Clients({
-    clients,
-    metrics,
-    filters,
-}: ClientsProps) {
-    const fiscalMode = useFiscalMode();
+export default function Clients({ clients, metrics, filters }: ClientsProps) {
     const { flash } =
         usePage<PageProps<{ flash?: { success?: string; error?: string } }>>()
             .props;
@@ -169,7 +164,10 @@ export default function Clients({
         if (sortBy === column) {
             nextDirection = sortDirection === 'asc' ? 'desc' : 'asc';
         } else {
-            nextDirection = column === 'updated_at' || column === 'created_at' ? 'desc' : 'asc';
+            nextDirection =
+                column === 'updated_at' || column === 'created_at'
+                    ? 'desc'
+                    : 'asc';
         }
         setSortBy(column);
         setSortDirection(nextDirection);
@@ -313,18 +311,20 @@ export default function Clients({
         return (
             <span
                 className={`inline-flex flex-col text-[9px] transition-colors ${
-                    isActive ? 'text-blue-600' : 'text-slate-300 group-hover:text-slate-400'
+                    isActive
+                        ? 'text-blue-600'
+                        : 'text-slate-300 group-hover:text-slate-400'
                 }`}
             >
                 <svg
-                    className={`h-2.5 w-2.5 -mb-1 ${isActive && sortDirection === 'asc' ? 'text-blue-600 font-black' : ''}`}
+                    className={`-mb-1 h-2.5 w-2.5 ${isActive && sortDirection === 'asc' ? 'font-black text-blue-600' : ''}`}
                     fill="currentColor"
                     viewBox="0 0 24 24"
                 >
                     <path d="M12 4l-6 6h12z" />
                 </svg>
                 <svg
-                    className={`h-2.5 w-2.5 ${isActive && sortDirection === 'desc' ? 'text-blue-600 font-black' : ''}`}
+                    className={`h-2.5 w-2.5 ${isActive && sortDirection === 'desc' ? 'font-black text-blue-600' : ''}`}
                     fill="currentColor"
                     viewBox="0 0 24 24"
                 >
@@ -356,7 +356,9 @@ export default function Clients({
                     type={toast.type}
                     title={toast.title}
                     message={toast.message}
-                    onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+                    onClose={() =>
+                        setToast((prev) => ({ ...prev, show: false }))
+                    }
                     position="bottom-right"
                     duration={4000}
                 />
@@ -368,7 +370,8 @@ export default function Clients({
                             Direktori Client Mitra
                         </h2>
                         <p className="mt-1 text-xs font-medium text-slate-500 sm:text-sm">
-                            Kelola data mitra pengiklan untuk penerbitan Invoice dan Kontrak Proyek
+                            Kelola data mitra pengiklan untuk penerbitan Invoice
+                            dan Kontrak Proyek
                         </p>
                     </div>
                     <PrimaryButton onClick={() => setIsAddModalOpen(true)}>
@@ -498,7 +501,7 @@ export default function Clients({
                                 onChange={(e) =>
                                     handleSearchChange(e.target.value)
                                 }
-                                className="block w-full rounded-2xl border-slate-200 bg-slate-50/50 py-2.5 pr-4 pl-10 text-xs text-slate-800 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                                className="block w-full rounded-2xl border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-4 text-xs text-slate-800 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
                             />
                             {searchQuery && (
                                 <button
@@ -522,7 +525,7 @@ export default function Clients({
                                     }
                                     className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
                                         statusTab === 'active'
-                                            ? 'bg-white text-blue-600 shadow-xs'
+                                            ? 'shadow-xs bg-white text-blue-600'
                                             : 'text-slate-500 hover:text-slate-700'
                                     }`}
                                 >
@@ -535,7 +538,7 @@ export default function Clients({
                                     }
                                     className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
                                         statusTab === 'archived'
-                                            ? 'bg-white text-blue-600 shadow-xs'
+                                            ? 'shadow-xs bg-white text-blue-600'
                                             : 'text-slate-500 hover:text-slate-700'
                                     }`}
                                 >
@@ -546,7 +549,7 @@ export default function Clients({
                                     onClick={() => handleStatusTabChange('all')}
                                     className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
                                         statusTab === 'all'
-                                            ? 'bg-white text-blue-600 shadow-xs'
+                                            ? 'shadow-xs bg-white text-blue-600'
                                             : 'text-slate-500 hover:text-slate-700'
                                     }`}
                                 >
@@ -584,12 +587,12 @@ export default function Clients({
                     <div className="mt-4 overflow-hidden rounded-2xl border border-slate-100 bg-white">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs">
-                                <thead className="border-b border-slate-100 bg-slate-50/40 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                                <thead className="border-b border-slate-100 bg-slate-50/40 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                                     <tr>
                                         {/* Sortable: Nama Client */}
                                         <th
                                             scope="col"
-                                            className="group cursor-pointer px-6 py-4 transition-colors hover:bg-slate-100/60 select-none"
+                                            className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/60"
                                             onClick={() => handleSort('name')}
                                         >
                                             <div className="flex items-center gap-2">
@@ -601,7 +604,7 @@ export default function Clients({
                                         {/* Sortable: NPWP */}
                                         <th
                                             scope="col"
-                                            className="group cursor-pointer px-6 py-4 transition-colors hover:bg-slate-100/60 select-none"
+                                            className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/60"
                                             onClick={() => handleSort('npwp')}
                                         >
                                             <div className="flex items-center gap-2">
@@ -613,7 +616,7 @@ export default function Clients({
                                         {/* Status Pajak */}
                                         <th
                                             scope="col"
-                                            className="px-6 py-4 select-none"
+                                            className="select-none px-6 py-4"
                                         >
                                             Status Pajak
                                         </th>
@@ -621,7 +624,7 @@ export default function Clients({
                                         {/* Contact & WhatsApp */}
                                         <th
                                             scope="col"
-                                            className="px-6 py-4 select-none"
+                                            className="select-none px-6 py-4"
                                         >
                                             Telepon / WhatsApp
                                         </th>
@@ -629,7 +632,7 @@ export default function Clients({
                                         {/* Address */}
                                         <th
                                             scope="col"
-                                            className="px-6 py-4 select-none"
+                                            className="select-none px-6 py-4"
                                         >
                                             Alamat Kantor
                                         </th>
@@ -637,7 +640,7 @@ export default function Clients({
                                         {/* Sortable: Terakhir Update */}
                                         <th
                                             scope="col"
-                                            className="group cursor-pointer px-6 py-4 transition-colors hover:bg-slate-100/60 select-none"
+                                            className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/60"
                                             onClick={() =>
                                                 handleSort('updated_at')
                                             }
@@ -651,7 +654,7 @@ export default function Clients({
                                         {/* Actions */}
                                         <th
                                             scope="col"
-                                            className="px-6 py-4 text-center select-none"
+                                            className="select-none px-6 py-4 text-center"
                                         >
                                             Aksi
                                         </th>
@@ -681,7 +684,8 @@ export default function Clients({
                                                 : null;
 
                                             const isNearBottom =
-                                                index >= clientList.length - 2 &&
+                                                index >=
+                                                    clientList.length - 2 &&
                                                 clientList.length > 3;
 
                                             return (
@@ -699,10 +703,13 @@ export default function Clients({
                                                             </div>
                                                             <div>
                                                                 <span className="block text-xs font-bold text-slate-900">
-                                                                    {client.name}
+                                                                    {
+                                                                        client.name
+                                                                    }
                                                                 </span>
                                                                 <span className="block text-[11px] text-slate-400">
-                                                                    {client.email || '—'}
+                                                                    {client.email ||
+                                                                        '—'}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -735,7 +742,7 @@ export default function Clients({
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 title={`Chat WhatsApp ke ${client.phone}`}
-                                                                className="group/wa inline-flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 transition-all hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-950 hover:shadow-xs"
+                                                                className="group/wa hover:shadow-xs inline-flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 transition-all hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-950"
                                                             >
                                                                 <svg
                                                                     className="h-3.5 w-3.5 fill-emerald-600 transition-transform group-hover/wa:scale-110"
@@ -744,7 +751,9 @@ export default function Clients({
                                                                     <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
                                                                 </svg>
                                                                 <span className="font-mono text-[11px]">
-                                                                    {client.phone}
+                                                                    {
+                                                                        client.phone
+                                                                    }
                                                                 </span>
                                                             </a>
                                                         ) : (
@@ -783,7 +792,9 @@ export default function Clients({
                                                                             fill="none"
                                                                             viewBox="0 0 24 24"
                                                                             stroke="currentColor"
-                                                                            strokeWidth={2}
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
                                                                         >
                                                                             <path
                                                                                 strokeLinecap="round"
@@ -806,7 +817,9 @@ export default function Clients({
                                                                             fill="none"
                                                                             viewBox="0 0 24 24"
                                                                             stroke="currentColor"
-                                                                            strokeWidth={2}
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
                                                                         >
                                                                             <path
                                                                                 strokeLinecap="round"
@@ -815,11 +828,18 @@ export default function Clients({
                                                                             />
                                                                         </svg>
                                                                     ),
-                                                                    onClick: () => {
-                                                                        router.get(route('projects'), {
-                                                                            client_id: client.id,
-                                                                        });
-                                                                    },
+                                                                    onClick:
+                                                                        () => {
+                                                                            router.get(
+                                                                                route(
+                                                                                    'projects',
+                                                                                ),
+                                                                                {
+                                                                                    client_id:
+                                                                                        client.id,
+                                                                                },
+                                                                            );
+                                                                        },
                                                                 },
                                                                 {
                                                                     label:
@@ -833,7 +853,9 @@ export default function Clients({
                                                                             fill="none"
                                                                             viewBox="0 0 24 24"
                                                                             stroke="currentColor"
-                                                                            strokeWidth={2}
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
                                                                         >
                                                                             <path
                                                                                 strokeLinecap="round"
@@ -850,14 +872,17 @@ export default function Clients({
                                                                 },
                                                                 {
                                                                     label: 'Hapus Client',
-                                                                    variant: 'danger',
+                                                                    variant:
+                                                                        'danger',
                                                                     icon: (
                                                                         <svg
                                                                             className="h-3.5 w-3.5 text-rose-500"
                                                                             fill="none"
                                                                             viewBox="0 0 24 24"
                                                                             stroke="currentColor"
-                                                                            strokeWidth={2}
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
                                                                         >
                                                                             <path
                                                                                 strokeLinecap="round"

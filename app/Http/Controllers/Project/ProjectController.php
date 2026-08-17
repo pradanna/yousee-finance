@@ -29,12 +29,17 @@ class ProjectController extends Controller
     public function index(Request $request): Response
     {
         $clientId = $request->query('client_id');
+        $salesId = $request->query('sales_id');
         $search = $request->query('search');
 
         $query = Project::with(['client', 'sales']);
 
         if (! empty($clientId)) {
             $query->where('client_id', $clientId);
+        }
+
+        if (! empty($salesId)) {
+            $query->where('sales_id', $salesId);
         }
 
         if (! empty($search)) {
@@ -55,6 +60,7 @@ class ProjectController extends Controller
             'sales' => SalesOptionResource::collection($sales)->resolve(),
             'filters' => [
                 'client_id' => (string) ($clientId ?? ''),
+                'sales_id' => (string) ($salesId ?? ''),
                 'search' => (string) ($search ?? ''),
             ],
         ]);

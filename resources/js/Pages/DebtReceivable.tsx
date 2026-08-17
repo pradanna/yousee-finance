@@ -340,11 +340,11 @@ export default function DebtReceivable() {
     const [paymentModal, setPaymentModal] = useState<{
         isOpen: boolean;
         type: 'receivable' | 'payable';
-        item: any;
+        item: ReceivableItem | PayableItem;
     } | null>(null);
     const [termsModal, setTermsModal] = useState<{
         isOpen: boolean;
-        item: any;
+        item: ReceivableItem | PayableItem;
     } | null>(null);
     const [payAmountInput, setPayAmountInput] = useState('');
     const [payMethodInput, setPayMethodInput] = useState('Transfer BCA');
@@ -470,7 +470,10 @@ export default function DebtReceivable() {
     }, [filteredPayables, payablesPage]);
 
     // Open Catat Pembayaran Modal
-    const handleOpenPayment = (type: 'receivable' | 'payable', item: any) => {
+    const handleOpenPayment = (
+        type: 'receivable' | 'payable',
+        item: ReceivableItem | PayableItem,
+    ) => {
         const remaining = item.total - item.paid;
         const milestoneInfo = getNearestMilestoneInfo(item);
         const milestoneAmt = milestoneInfo.nearestMilestone
@@ -507,6 +510,10 @@ export default function DebtReceivable() {
         }
 
         if (paymentModal.type === 'receivable') {
+            const partnerName =
+                'client' in paymentModal.item
+                    ? paymentModal.item.client
+                    : 'Klien';
             setReceivables((prev) =>
                 prev.map((item) => {
                     if (item.id === paymentModal.item.id) {
@@ -519,9 +526,13 @@ export default function DebtReceivable() {
                 }),
             );
             setSuccessAlert(
-                `Sukses! Pembayaran piutang dari ${paymentModal.item.client} sebesar ${fmt(amount)} berhasil dicatat.`,
+                `Sukses! Pembayaran piutang dari ${partnerName} sebesar ${fmt(amount)} berhasil dicatat.`,
             );
         } else {
+            const partnerName =
+                'vendor' in paymentModal.item
+                    ? paymentModal.item.vendor
+                    : 'Vendor';
             setPayables((prev) =>
                 prev.map((item) => {
                     if (item.id === paymentModal.item.id) {
@@ -534,7 +545,7 @@ export default function DebtReceivable() {
                 }),
             );
             setSuccessAlert(
-                `Sukses! Pembayaran hutang ke ${paymentModal.item.vendor} sebesar ${fmt(amount)} berhasil dicatat.`,
+                `Sukses! Pembayaran hutang ke ${partnerName} sebesar ${fmt(amount)} berhasil dicatat.`,
             );
         }
 
@@ -1585,9 +1596,12 @@ export default function DebtReceivable() {
                                         Mitra Partner:
                                     </span>
                                     <span className="font-bold text-slate-900">
-                                        {paymentModal.type === 'receivable'
+                                        {paymentModal.type === 'receivable' &&
+                                        'client' in paymentModal.item
                                             ? paymentModal.item.client
-                                            : paymentModal.item.vendor}
+                                            : 'vendor' in paymentModal.item
+                                              ? paymentModal.item.vendor
+                                              : '-'}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -1762,8 +1776,11 @@ export default function DebtReceivable() {
                                 </h3>
                                 <p className="mt-0.5 text-xs font-medium text-slate-400">
                                     {termsModal.item.id} ·{' '}
-                                    {termsModal.item.client ||
-                                        termsModal.item.vendor}
+                                    {'client' in termsModal.item
+                                        ? termsModal.item.client
+                                        : 'vendor' in termsModal.item
+                                          ? termsModal.item.vendor
+                                          : '-'}
                                 </p>
                             </div>
                             <button
