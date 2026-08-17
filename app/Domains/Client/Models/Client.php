@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domains\Client\Models;
 
 use App\Domains\Billing\Models\Invoice;
+use App\Domains\Project\Models\Project;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -50,10 +53,15 @@ class Client extends Model
         });
 
         static::deleting(function (Client $client) {
-            if ($client->invoices()->exists()) {
-                throw new \DomainException("Client tidak bisa dihapus secara permanen (hard-delete) karena sudah digunakan di Invoice. Silakan archive.");
+            if ($client->invoices()->exists() || $client->projects()->exists()) {
+                throw new \DomainException("Client tidak bisa dihapus secara permanen (hard-delete) karena sudah digunakan di Proyek atau Invoice. Silakan archive.");
             }
         });
+    }
+
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
     }
 
     public function invoices(): HasMany

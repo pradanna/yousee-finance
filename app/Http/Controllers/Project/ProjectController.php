@@ -17,6 +17,7 @@ use App\Http\Resources\Client\ClientOptionResource;
 use App\Http\Resources\Project\ProjectResource;
 use App\Http\Resources\Sales\SalesOptionResource;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,9 +26,26 @@ class ProjectController extends Controller
     /**
      * Display a listing of the projects.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $projects = Project::with(['client', 'sales'])->orderByDesc('created_at')->paginate(10);
+        $clientId = $request->query('client_id');
+        $search = $request->query('search');
+
+        $query = Project::with(['client', 'sales']);
+
+        if (! empty($clientId)) {
+            $query->where('client_id', $clientId);
+        }
+
+        if (! empty($search)) {
+            $searchTerm = '%' . trim((string) $search) . '%';
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'like', $searchTerm)
+                  ->orWhere('code', 'like', $searchTerm);
+            });
+        }
+
+        $projects = $query->orderByDesc('created_at')->paginate(10)->withQueryString();
         $clients = Client::active()->orderBy('name')->get(['id', 'name']);
         $sales = Sales::orderBy('name')->get(['id', 'name']);
 
@@ -35,6 +53,10 @@ class ProjectController extends Controller
             'projects' => ProjectResource::collection($projects),
             'clients' => ClientOptionResource::collection($clients)->resolve(),
             'sales' => SalesOptionResource::collection($sales)->resolve(),
+            'filters' => [
+                'client_id' => (string) ($clientId ?? ''),
+                'search' => (string) ($search ?? ''),
+            ],
         ]);
     }
 

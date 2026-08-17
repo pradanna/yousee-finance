@@ -5,19 +5,22 @@ import InputError from '@/Components/Form/InputError';
 import InputLabel from '@/Components/Form/InputLabel';
 import TextInput from '@/Components/Form/TextInput';
 import Modal from '@/Components/UI/Modal';
+import { formatNpwp } from '@/Utils/formatters';
 import React, { useEffect, useState } from 'react';
 
 export interface ClientItem {
-    id: number;
+    id: string | number;
     name: string;
-    npwp: string;
-    email: string;
-    phone: string;
-    address: string;
+    npwp?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
     pkp: boolean;
     status: 'active' | 'archived';
     count: number;
-    total: string;
+    total: number | string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 interface ClientEditModalProps {
@@ -34,7 +37,7 @@ export default function ClientEditModal({
     onSubmit,
 }: ClientEditModalProps) {
     const [form, setForm] = useState<ClientItem>({
-        id: 0,
+        id: '',
         name: '',
         npwp: '',
         email: '',
@@ -43,14 +46,25 @@ export default function ClientEditModal({
         pkp: false,
         status: 'active',
         count: 0,
-        total: 'IDR 0',
+        total: 0,
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (client && isOpen) {
-            setForm({ ...client });
+            setForm({
+                id: client.id,
+                name: client.name || '',
+                npwp: client.npwp || '',
+                email: client.email || '',
+                phone: client.phone || '',
+                address: client.address || '',
+                pkp: Boolean(client.pkp || (client.npwp && client.npwp.trim().length > 0)),
+                status: client.status || 'active',
+                count: client.count || 0,
+                total: client.total || 0,
+            });
             setErrors({});
         }
     }, [client, isOpen]);
@@ -63,7 +77,7 @@ export default function ClientEditModal({
             newErrors.name = 'Nama lengkap client wajib diisi.';
         }
 
-        if (form.npwp.trim()) {
+        if (form.npwp && form.npwp.trim()) {
             const cleanNpwp = form.npwp.replace(/[^0-9]/g, '');
             if (cleanNpwp.length !== 15 && cleanNpwp.length !== 16) {
                 newErrors.npwp =
@@ -71,7 +85,7 @@ export default function ClientEditModal({
             }
         }
 
-        if (form.email.trim()) {
+        if (form.email && form.email.trim()) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(form.email)) {
                 newErrors.email = 'Format email tidak valid.';
@@ -86,10 +100,6 @@ export default function ClientEditModal({
         onSubmit(form);
         onClose();
     };
-
-    if (!client) return null;
-
-    const isClientActive = form.status === 'active';
 
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="xl">
@@ -108,19 +118,16 @@ export default function ClientEditModal({
                                 <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 210.3H3v-3.5L16.732 3.732z"
+                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                                 />
                             </svg>
                         </div>
                         <div>
                             <h3 className="text-base font-bold tracking-tight text-slate-800">
-                                Edit Data Client
+                                Edit Profil Client
                             </h3>
                             <p className="mt-0.5 text-xs text-slate-500">
-                                Ubah rincian profil & status perpajakan client{' '}
-                                <span className="font-bold text-slate-700">
-                                    {client.name}
-                                </span>
+                                Perbarui informasi kontak atau legalitas client mitra Yousee Indonesia.
                             </p>
                         </div>
                     </div>
@@ -134,11 +141,11 @@ export default function ClientEditModal({
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
+                            strokeWidth={2}
                         >
                             <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                strokeWidth={2}
                                 d="M6 18L18 6M6 6l12 12"
                             />
                         </svg>
@@ -178,10 +185,15 @@ export default function ClientEditModal({
                             <TextInput
                                 id="edit-client-npwp"
                                 type="text"
-                                value={form.npwp}
-                                onChange={(e) =>
-                                    setForm({ ...form, npwp: e.target.value })
-                                }
+                                value={form.npwp || ''}
+                                onChange={(e) => {
+                                    const formatted = formatNpwp(e.target.value);
+                                    setForm({
+                                        ...form,
+                                        npwp: formatted,
+                                        pkp: formatted.trim().length > 0,
+                                    });
+                                }}
                                 className="mt-1 block w-full font-mono text-xs"
                                 placeholder="01.234.567.8-901.000"
                             />
@@ -192,17 +204,17 @@ export default function ClientEditModal({
                         </div>
                     </div>
 
-                    {/* Grid: Email & Telepon */}
+                    {/* Grid: Email & No Telp */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <InputLabel
                                 htmlFor="edit-client-email"
-                                value="Email Kontak Finance"
+                                value="Alamat Email PIC / Finance"
                             />
                             <TextInput
                                 id="edit-client-email"
                                 type="email"
-                                value={form.email}
+                                value={form.email || ''}
                                 onChange={(e) =>
                                     setForm({ ...form, email: e.target.value })
                                 }
@@ -218,110 +230,79 @@ export default function ClientEditModal({
                         <div>
                             <InputLabel
                                 htmlFor="edit-client-phone"
-                                value="Telepon / WhatsApp"
+                                value="No. Telepon / WhatsApp"
                             />
                             <TextInput
                                 id="edit-client-phone"
                                 type="text"
-                                value={form.phone}
+                                value={form.phone || ''}
                                 onChange={(e) =>
                                     setForm({ ...form, phone: e.target.value })
                                 }
                                 className="mt-1 block w-full text-xs"
-                                placeholder="021-xxxx-xxxx"
+                                placeholder="081234567890"
                             />
                         </div>
                     </div>
 
-                    {/* Alamat Lengkap */}
+                    {/* Alamat Kantor */}
                     <div>
                         <InputLabel
                             htmlFor="edit-client-address"
-                            value="Alamat Kantor Client"
+                            value="Alamat Kantor / Domisili Pajak"
                         />
                         <textarea
                             id="edit-client-address"
-                            value={form.address}
+                            rows={3}
+                            value={form.address || ''}
                             onChange={(e) =>
                                 setForm({ ...form, address: e.target.value })
                             }
-                            className="focus:ring-primary/20 mt-1 block h-20 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition-all focus:border-primary focus:outline-none focus:ring-2"
-                            placeholder="Masukkan alamat lengkap..."
+                            className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-800 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            placeholder="Jl. Jend. Sudirman Kav. 52-53, SCBD, Jakarta Selatan"
                         />
                     </div>
 
-                    {/* Bottom Status Toggles Section */}
-                    <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2">
-                        {/* Status Usaha Toggle Switch Card */}
-                        <div className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                            <div className="space-y-1">
-                                <span className="block text-xs font-bold text-slate-700">
-                                    Status Client
-                                </span>
-                                <span className="block text-[10px] font-semibold leading-tight text-slate-400">
-                                    {isClientActive
-                                        ? 'Client Aktif & dapat bertransaksi Invoice'
-                                        : 'Client Diarsipkan (Non-aktif)'}
-                                </span>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setForm({
-                                        ...form,
-                                        status: isClientActive
-                                            ? 'archived'
-                                            : 'active',
-                                    })
-                                }
-                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    isClientActive
-                                        ? 'bg-primary'
-                                        : 'bg-slate-300'
-                                }`}
-                            >
-                                <span
-                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                                        isClientActive
-                                            ? 'translate-x-5'
-                                            : 'translate-x-0'
-                                    }`}
-                                />
-                            </button>
-                        </div>
-
-                        {/* PKP Checkbox Card */}
-                        <div className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    {/* Checkbox PKP */}
+                    <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+                        <label className="flex cursor-pointer items-start gap-3">
                             <Checkbox
-                                id="edit-client-pkp-checkbox"
+                                name="pkp"
                                 checked={form.pkp}
                                 onChange={(e) =>
-                                    setForm({ ...form, pkp: e.target.checked })
+                                    setForm({
+                                        ...form,
+                                        pkp: e.target.checked,
+                                    })
                                 }
-                                className="mt-0.5"
+                                className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
                             />
-                            <div className="space-y-0.5">
-                                <label
-                                    htmlFor="edit-client-pkp-checkbox"
-                                    className="block cursor-pointer text-xs font-bold text-slate-700"
-                                >
-                                    Status PKP (Bisa PPN)
-                                </label>
-                                <span className="block text-[10px] font-semibold leading-tight text-slate-400">
-                                    Centang jika menerbitkan Faktur Pajak PPN
-                                    (11%).
+                            <div>
+                                <span className="text-xs font-bold text-slate-800">
+                                    Status Pengusaha Kena Pajak (PKP)
                                 </span>
+                                <p className="mt-0.5 text-[11px] text-slate-500">
+                                    Centang jika client berstatus PKP dan berhak
+                                    diterbitkan Faktur Pajak Keluaran (PPN).
+                                </p>
                             </div>
-                        </div>
+                        </label>
                     </div>
                 </div>
 
-                {/* Footer Action Buttons */}
+                {/* Footer Buttons */}
                 <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-                    <SecondaryButton type="button" onClick={onClose}>
+                    <SecondaryButton
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-xl px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                    >
                         Batal
                     </SecondaryButton>
-                    <PrimaryButton type="submit">
+                    <PrimaryButton
+                        type="submit"
+                        className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold tracking-wider text-white uppercase shadow-md shadow-blue-600/20 hover:bg-blue-700"
+                    >
                         Simpan Perubahan
                     </PrimaryButton>
                 </div>
