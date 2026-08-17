@@ -14,7 +14,6 @@ import {
     PaymentTermStatus,
     Project,
     PurchaseOrderWithPlan,
-    VendorPaymentPlan,
     VendorPaymentPlanTerm,
 } from './projectTypes';
 
@@ -275,22 +274,25 @@ export default function Show({
                               total_amount: Number(plan.total_amount) || 0,
                               notes: plan.notes ?? null,
                               terms: (plan.terms ?? []).map(
-                                  (term: DbPaymentTerm): VendorPaymentPlanTerm => {
-                                      const settlements = (term.settlements ?? []).map(
-                                          (s) => ({
-                                              id: s.id,
-                                              amount: Number(s.amount) || 0,
-                                              paid_at: s.paid_at ?? '',
-                                              payment_method: s.payment_method,
-                                              payment_ref: s.payment_ref ?? null,
-                                              notes: s.notes ?? null,
-                                          }),
-                                      );
+                                  (
+                                      term: DbPaymentTerm,
+                                  ): VendorPaymentPlanTerm => {
+                                      const settlements = (
+                                          term.settlements ?? []
+                                      ).map((s) => ({
+                                          id: s.id,
+                                          amount: Number(s.amount) || 0,
+                                          paid_at: s.paid_at ?? '',
+                                          payment_method: s.payment_method,
+                                          payment_ref: s.payment_ref ?? null,
+                                          notes: s.notes ?? null,
+                                      }));
                                       const totalPaid = settlements.reduce(
                                           (sum, s) => sum + s.amount,
                                           0,
                                       );
-                                      const termAmount = Number(term.amount) || 0;
+                                      const termAmount =
+                                          Number(term.amount) || 0;
                                       return {
                                           id: term.id,
                                           sort_order: term.sort_order ?? 0,
@@ -322,6 +324,7 @@ export default function Show({
     const locations = displayedProject.locations || [];
 
     const onUpdateProject = (_updated?: Project) => {
+        void _updated;
         router.reload();
     };
 
@@ -352,10 +355,7 @@ export default function Show({
 
     // Issue Invoice Modal State
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [modalScheme, setModalScheme] = useState<PaymentScheme>('termin');
-    const [modalDpPercent, setModalDpPercent] = useState<number>(30);
-    const [modalTerminCount, setModalTerminCount] = useState<number>(3);
     const [modalTerminPercents, setModalTerminPercents] = useState<number[]>([
         30, 40, 30,
     ]);
@@ -382,23 +382,6 @@ export default function Show({
     const prj = displayedProject;
     const isPPN = fiscalMode === 'ppn';
     const fin = calcFinancials(prj, locations, fiscalMode);
-
-    // Filter unpaid terms approaching due date (within 7 days or overdue)
-    const dueAlerts = prj.clientPaymentPlan
-        ? prj.clientPaymentPlan.terms.filter((t) => {
-              if (t.status === 'paid') return false;
-              const today = new Date();
-              const due = new Date(t.dueDate);
-              const diffDays = Math.ceil(
-                  (due.getTime() - today.getTime()) / (1000 * 3600 * 24),
-              );
-              return diffDays <= 7;
-          })
-        : [];
-
-    const hasPaidTerm = prj.clientPaymentPlan
-        ? prj.clientPaymentPlan.terms.some((t) => t.status === 'paid')
-        : false;
 
     const tabs = [
         {
@@ -488,136 +471,6 @@ export default function Show({
             ),
         },
     ];
-
-    const poCount = locations.filter((l) => l.poIssued).length;
-
-    const triggerInvoicePdf = (term?: PaymentTerm) => {
-        const now = new Date();
-        const monthStr = String(now.getMonth() + 1).padStart(2, '0');
-        const yearStr = String(now.getFullYear()).slice(-2);
-        const seqStr = String(Math.floor(Math.random() * 899) + 100).padStart(
-            3,
-            '0',
-        );
-        const newInvNumber =
-            prj.invoiceNumber ||
-            (isPPN
-                ? `INV-${monthStr}/${yearStr}/${seqStr}`
-                : `INV-NP-${monthStr}/${yearStr}/${seqStr}`);
-
-        if (!prj.invoiceIssued) {
-            onUpdateProject({
-                ...prj,
-                invoiceIssued: true,
-                invoiceNumber: newInvNumber,
-            });
-        }
-
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/client-invoice-pdf';
-        form.target = '_blank';
-
-        const csrfToken =
-            (
-                document.querySelector(
-                    'meta[name="csrf-token"]',
-                ) as HTMLMetaElement
-            )?.content || '';
-
-        const appendInput = (name: string, value: string) => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = name;
-            input.value = value;
-            form.appendChild(input);
-        };
-
-        const ratio = term ? term.percent / 100 : 1;
-        const termTitle = term
-            ? `${term.label} (${term.percent}%)`
-            : 'Lunas Sekaligus (100%)';
-
-        appendInput('_token', csrfToken);
-        appendInput('clientName', prj.clientName || 'PT. Pakuwon Jati Tbk');
-        appendInput(
-            'clientSubName',
-            prj.salesPIC ? `Attn: ${prj.salesPIC}` : '',
-        );
-        appendInput('invoiceNumber', newInvNumber);
-        appendInput(
-            'invoiceDate',
-            now.toLocaleDateString('id-ID', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            }),
-        );
-        appendInput('isPPN', isPPN ? 'true' : 'false');
-        appendInput('stream', 'true');
-        appendInput('termLabel', termTitle);
-
-        const sumVendorCost = locations.reduce(
-            (s, l) => s + (l.vendorCost || 0),
-            0,
-        );
-        const itemsToExport =
-            locations.length > 0
-                ? locations.map((loc) => {
-                      const clientItemDpp =
-                          (sumVendorCost > 0
-                              ? (loc.vendorCost / sumVendorCost) *
-                                prj.contractValue
-                              : prj.contractValue / locations.length) * ratio;
-                      return {
-                          type: loc.type || 'Billboard',
-                          size: loc.size || '4x6m',
-                          orientation: loc.orientation || 'V',
-                          description: term
-                              ? `${term.label} – ${loc.description || prj.name}`
-                              : loc.description || prj.name,
-                          area: loc.area || '',
-                          qty: loc.qty || 1,
-                          clientPrice: clientItemDpp,
-                          vendorCost: clientItemDpp,
-                      };
-                  })
-                : [
-                      {
-                          type: 'Sewa Media Iklan',
-                          size: '-',
-                          orientation: 'V',
-                          description: term
-                              ? `${term.label} – ${prj.name}`
-                              : prj.name || 'Kontrak Kampanye Iklan',
-                          area: '',
-                          qty: 1,
-                          clientPrice: prj.contractValue * ratio,
-                          vendorCost: prj.contractValue * ratio,
-                      },
-                  ];
-
-        itemsToExport.forEach((loc, idx) => {
-            appendInput(`locations[${idx}][type]`, loc.type);
-            appendInput(`locations[${idx}][size]`, loc.size);
-            appendInput(`locations[${idx}][orientation]`, loc.orientation);
-            appendInput(`locations[${idx}][description]`, loc.description);
-            appendInput(`locations[${idx}][area]`, loc.area);
-            appendInput(`locations[${idx}][qty]`, loc.qty.toString());
-            appendInput(
-                `locations[${idx}][clientPrice]`,
-                loc.clientPrice.toString(),
-            );
-            appendInput(
-                `locations[${idx}][vendorCost]`,
-                loc.vendorCost.toString(),
-            );
-        });
-
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
-    };
 
     return (
         <AppLayout
@@ -855,7 +708,6 @@ export default function Show({
                                 <VendorPOTab
                                     locations={locations}
                                     isPPN={isPPN}
-                                    projectCode={prj.code}
                                     project={prj}
                                     projectId={prj.id}
                                     purchaseOrders={prj.purchaseOrders ?? []}
@@ -893,7 +745,8 @@ export default function Show({
                                                     vendorTermScheme || 'full',
                                                 term_percents:
                                                     vendorTermPercents &&
-                                                    vendorTermPercents.length > 0
+                                                    vendorTermPercents.length >
+                                                        0
                                                         ? vendorTermPercents
                                                         : [100],
                                                 term_due_dates:
@@ -903,7 +756,9 @@ export default function Show({
                                                         : [
                                                               new Date()
                                                                   .toISOString()
-                                                                  .split('T')[0],
+                                                                  .split(
+                                                                      'T',
+                                                                  )[0],
                                                           ],
                                             },
                                             {
@@ -938,7 +793,6 @@ export default function Show({
                                         );
                                         setPayMethodInput('Transfer Bank');
                                         setPayRefInput('');
-                                        setShowPaymentModal?.(true);
                                     }}
                                 />
                             )}

@@ -179,7 +179,6 @@ interface ProjectPaymentProps {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectPayment({
-    projectId,
     project: dbProject,
 }: ProjectPaymentProps) {
     const defaultProject: Project = {

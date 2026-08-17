@@ -13,7 +13,6 @@ import {
 export default function VendorPOTab({
     locations,
     isPPN,
-    projectCode,
     project,
     projectId,
     purchaseOrders,
@@ -22,7 +21,6 @@ export default function VendorPOTab({
 }: {
     locations: BillboardLocation[];
     isPPN: boolean;
-    projectCode: string;
     project: Project;
     projectId: string;
     purchaseOrders: PurchaseOrderWithPlan[];
@@ -129,7 +127,6 @@ export default function VendorPOTab({
         vendorName: string,
         poNumber: string,
         items: BillboardLocation[],
-        triggerPrint: boolean = false,
     ) => {
         const form = document.createElement('form');
         form.method = 'POST';
@@ -516,15 +513,13 @@ export default function VendorPOTab({
                             dbSettlements.length > 0
                                 ? dbSettlements
                                 : (project.vendorPayments || []).filter(
-                                      (vp) => vp.vendorName === group.vendorName,
+                                      (vp) =>
+                                          vp.vendorName === group.vendorName,
                                   );
 
                         const totalVendorPaid = dbTerms
                             ? dbTerms.reduce((sum, t) => sum + t.totalPaid, 0)
-                            : vendorRecords.reduce(
-                                  (s, r) => s + r.amount,
-                                  0,
-                              );
+                            : vendorRecords.reduce((s, r) => s + r.amount, 0);
                         const vendorRemaining = Math.max(
                             0,
                             vendorGrandTotal - totalVendorPaid,
@@ -718,7 +713,8 @@ export default function VendorPOTab({
                                                       label: term.label,
                                                       percent: term.percent,
                                                       targetAmount: term.amount,
-                                                      paidAmount: term.totalPaid,
+                                                      paidAmount:
+                                                          term.totalPaid,
                                                       remainingAmount:
                                                           term.remaining,
                                                       dueDate: term.due_date,
@@ -746,7 +742,9 @@ export default function VendorPOTab({
                                                           firstIssuedLoc?.vendorTermDates || [
                                                               new Date()
                                                                   .toISOString()
-                                                                  .split('T')[0],
+                                                                  .split(
+                                                                      'T',
+                                                                  )[0],
                                                               new Date(
                                                                   Date.now() +
                                                                       30 *
@@ -756,7 +754,9 @@ export default function VendorPOTab({
                                                                           1000,
                                                               )
                                                                   .toISOString()
-                                                                  .split('T')[0],
+                                                                  .split(
+                                                                      'T',
+                                                                  )[0],
                                                               new Date(
                                                                   Date.now() +
                                                                       60 *
@@ -766,7 +766,9 @@ export default function VendorPOTab({
                                                                           1000,
                                                               )
                                                                   .toISOString()
-                                                                  .split('T')[0],
+                                                                  .split(
+                                                                      'T',
+                                                                  )[0],
                                                           ];
 
                                                       let runningPaid =
@@ -798,9 +800,11 @@ export default function VendorPOTab({
                                                               const isPaid =
                                                                   paidAmount >=
                                                                       targetAmount &&
-                                                                  targetAmount > 0;
+                                                                  targetAmount >
+                                                                      0;
                                                               const isPartial =
-                                                                  paidAmount > 0 &&
+                                                                  paidAmount >
+                                                                      0 &&
                                                                   !isPaid;
                                                               const dueDate =
                                                                   schemeDates[
@@ -808,13 +812,16 @@ export default function VendorPOTab({
                                                                   ] ||
                                                                   new Date()
                                                                       .toISOString()
-                                                                      .split('T')[0];
+                                                                      .split(
+                                                                          'T',
+                                                                      )[0];
 
                                                               const label =
                                                                   schemePercents.length ===
                                                                   1
                                                                       ? 'Pelunasan Total Vendor'
-                                                                      : idx === 0
+                                                                      : idx ===
+                                                                          0
                                                                         ? 'Termin 1 – Uang Muka (DP)'
                                                                         : idx ===
                                                                             schemePercents.length -
@@ -1062,7 +1069,6 @@ export default function VendorPOTab({
                                                                         group.vendorName,
                                                                         loc.poNumber,
                                                                         [loc],
-                                                                        false,
                                                                     )
                                                                 }
                                                                 className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-blue-700"
@@ -1134,11 +1140,11 @@ export default function VendorPOTab({
                                         // Fallback ke komputasi lokal jika PO belum punya payment_plan.
                                         const vendorPo = purchaseOrders.find(
                                             (po) =>
-                                                po.vendor_id ===
-                                                group.vendorId,
+                                                po.vendor_id === group.vendorId,
                                         );
                                         const dbTerms =
-                                            vendorPo?.payment_plan?.terms ?? null;
+                                            vendorPo?.payment_plan?.terms ??
+                                            null;
 
                                         // vendorSchedule: preferensikan data DB, fallback ke komputasi lokal.
                                         const vendorSchedule: Array<{
@@ -1227,7 +1233,9 @@ export default function VendorPOTab({
                                                               ] ||
                                                               new Date()
                                                                   .toISOString()
-                                                                  .split('T')[0];
+                                                                  .split(
+                                                                      'T',
+                                                                  )[0];
                                                           const label =
                                                               schemePercents.length ===
                                                               1
@@ -1520,8 +1528,7 @@ export default function VendorPOTab({
                                                                                                     group.vendorName,
                                                                                                 poNumber:
                                                                                                     firstPoNum,
-                                                                                                poId:
-                                                                                                    vendorPo?.id,
+                                                                                                poId: vendorPo?.id,
                                                                                                 totalAmount:
                                                                                                     vendorGrandTotal,
                                                                                                 remainingAmount:
@@ -2008,7 +2015,11 @@ export default function VendorPOTab({
                                         )?.id;
 
                                     // Jika termin dan PO terdaftar di database, kirim via endpoint backend
-                                    if (poId && termId && !termId.startsWith('vterm-')) {
+                                    if (
+                                        poId &&
+                                        termId &&
+                                        !termId.startsWith('vterm-')
+                                    ) {
                                         router.post(
                                             `/projects/${projectId}/purchase-orders/${poId}/payment-terms/${termId}/settle`,
                                             {
@@ -2026,7 +2037,9 @@ export default function VendorPOTab({
                                             {
                                                 preserveScroll: true,
                                                 onSuccess: () => {
-                                                    setSelectedVendorForPay(null);
+                                                    setSelectedVendorForPay(
+                                                        null,
+                                                    );
                                                     router.reload();
                                                 },
                                             },
