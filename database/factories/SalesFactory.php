@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Domains\Sales\Models\Sales;
@@ -22,6 +24,9 @@ class SalesFactory extends Factory
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
+            'phone' => '0812' . fake()->numerify('########'),
+            'commission_rate' => fake()->randomElement([1.5, 2.0, 2.5, 3.0]),
+            'is_archived' => false,
         ];
     }
 }

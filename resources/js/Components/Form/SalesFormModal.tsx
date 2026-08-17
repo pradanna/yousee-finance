@@ -10,7 +10,7 @@ export interface SalesFormData {
     name: string;
     email: string;
     phone: string;
-    commissionRate: number;
+    commission_rate: number;
 }
 
 interface SalesFormModalProps {
@@ -28,7 +28,7 @@ export default function SalesFormModal({
         name: '',
         email: '',
         phone: '',
-        commissionRate: 2.0,
+        commission_rate: 2.0,
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -38,10 +38,12 @@ export default function SalesFormModal({
         const newErrors: Record<string, string> = {};
 
         if (!form.name.trim()) {
-            newErrors.name = 'Nama lengkap sales executive wajib diisi.';
+            newErrors.name = 'Nama lengkap personil sales wajib diisi.';
         }
 
-        if (form.email.trim()) {
+        if (!form.email.trim()) {
+            newErrors.email = 'Email resmi kantor wajib diisi.';
+        } else {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(form.email)) {
                 newErrors.email = 'Format email tidak valid.';
@@ -54,7 +56,7 @@ export default function SalesFormModal({
         }
 
         onSubmit(form);
-        setForm({ name: '', email: '', phone: '', commissionRate: 2.0 });
+        setForm({ name: '', email: '', phone: '', commission_rate: 2.0 });
         setErrors({});
         onClose();
     };
@@ -76,17 +78,16 @@ export default function SalesFormModal({
                                 <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                                 />
                             </svg>
                         </div>
                         <div>
                             <h3 className="text-base font-bold tracking-tight text-slate-800">
-                                Daftarkan Sales Executive Baru
+                                Daftarkan Personil Sales Baru
                             </h3>
                             <p className="mt-0.5 text-xs text-slate-500">
-                                Tambahkan profil tim sales marketing billboard
-                                Yousee Indonesia untuk perhitungan komisi omset.
+                                Tambahkan data profil Sales Team Yousee Indonesia untuk penugasan proyek & pencatatan komisi.
                             </p>
                         </div>
                     </div>
@@ -100,116 +101,124 @@ export default function SalesFormModal({
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
+                            strokeWidth={2}
                         >
                             <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                strokeWidth={2}
                                 d="M6 18L18 6M6 6l12 12"
                             />
                         </svg>
                     </button>
                 </div>
 
-                {/* Form Fields Grid */}
+                {/* Form Fields */}
                 <div className="space-y-4">
-                    {/* Nama Sales Executive */}
+                    {/* Nama Sales */}
                     <div>
                         <InputLabel
-                            htmlFor="sales-name"
-                            value="Nama Lengkap Sales Executive *"
+                            htmlFor="name"
+                            value="Nama Lengkap Personil Sales *"
                         />
                         <TextInput
-                            id="sales-name"
+                            id="name"
                             type="text"
+                            placeholder="Contoh: Rian Hidayat"
                             value={form.name}
                             onChange={(e) =>
-                                setForm({ ...form, name: e.target.value })
+                                setForm((prev) => ({
+                                    ...prev,
+                                    name: e.target.value,
+                                }))
                             }
-                            className="mt-1 block w-full text-xs font-semibold"
-                            placeholder="Contoh: Rian Hidayat"
-                            required
+                            className="mt-1.5 block w-full"
                         />
-                        <InputError message={errors.name} className="mt-1" />
+                        {errors.name && <InputError message={errors.name} />}
                     </div>
 
-                    {/* Grid: Email & Telepon */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                            <InputLabel
-                                htmlFor="sales-email"
-                                value="Email Perusahaan / Pribadi"
-                            />
-                            <TextInput
-                                id="sales-email"
-                                type="email"
-                                value={form.email}
-                                onChange={(e) =>
-                                    setForm({ ...form, email: e.target.value })
-                                }
-                                className="mt-1 block w-full text-xs"
-                                placeholder="rian@youseeads.id"
-                            />
-                            <InputError
-                                message={errors.email}
-                                className="mt-1"
-                            />
-                        </div>
-
-                        <div>
-                            <InputLabel
-                                htmlFor="sales-phone"
-                                value="Telepon / WhatsApp"
-                            />
-                            <TextInput
-                                id="sales-phone"
-                                type="text"
-                                value={form.phone}
-                                onChange={(e) =>
-                                    setForm({ ...form, phone: e.target.value })
-                                }
-                                className="mt-1 block w-full text-xs"
-                                placeholder="0812-xxxx-xxxx"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Persentase Rate Komisi */}
+                    {/* Email Kantor */}
                     <div>
                         <InputLabel
-                            htmlFor="sales-commission-rate"
-                            value="Persentase Rate Komisi (%)"
+                            htmlFor="email"
+                            value="Email Resmi Kantor *"
                         />
                         <TextInput
-                            id="sales-commission-rate"
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="10"
-                            value={form.commissionRate}
+                            id="email"
+                            type="email"
+                            placeholder="contoh: rian.hidayat@youseeads.id"
+                            value={form.email}
                             onChange={(e) =>
-                                setForm({
-                                    ...form,
-                                    commissionRate:
-                                        parseFloat(e.target.value) || 0,
-                                })
+                                setForm((prev) => ({
+                                    ...prev,
+                                    email: e.target.value,
+                                }))
                             }
-                            className="mt-1 block w-full font-mono text-xs font-bold text-slate-800"
+                            className="mt-1.5 block w-full"
                         />
-                        <span className="mt-1 block text-[10px] font-semibold text-slate-400">
-                            Nilai default adalah 2.0% dari total nominal deal
-                            penawaran yang dibayarkan.
-                        </span>
+                        {errors.email && <InputError message={errors.email} />}
+                    </div>
+
+                    {/* Telepon / WhatsApp */}
+                    <div>
+                        <InputLabel
+                            htmlFor="phone"
+                            value="Nomor Telepon / WhatsApp"
+                        />
+                        <TextInput
+                            id="phone"
+                            type="text"
+                            placeholder="Contoh: 081211112222"
+                            value={form.phone}
+                            onChange={(e) =>
+                                setForm((prev) => ({
+                                    ...prev,
+                                    phone: e.target.value,
+                                }))
+                            }
+                            className="mt-1.5 block w-full"
+                        />
+                    </div>
+
+                    {/* Komisi Rate (%) */}
+                    <div>
+                        <InputLabel
+                            htmlFor="commission_rate"
+                            value="Standard Komisi Sales (%) *"
+                        />
+                        <div className="relative mt-1.5">
+                            <TextInput
+                                id="commission_rate"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                placeholder="2.0"
+                                value={form.commission_rate}
+                                onChange={(e) =>
+                                    setForm((prev) => ({
+                                        ...prev,
+                                        commission_rate: parseFloat(e.target.value) || 0,
+                                    }))
+                                }
+                                className="block w-full pr-10"
+                            />
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 font-mono text-xs font-bold text-slate-400">
+                                %
+                            </div>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                            Persentase standard estimasi komisi per nilai kontrak proyek yang dicapai.
+                        </p>
                     </div>
                 </div>
 
-                {/* Footer Action Buttons */}
+                {/* Footer Actions */}
                 <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
                     <SecondaryButton type="button" onClick={onClose}>
                         Batal
                     </SecondaryButton>
                     <PrimaryButton type="submit">
-                        Simpan Sales Executive
+                        Simpan Personil Sales
                     </PrimaryButton>
                 </div>
             </form>

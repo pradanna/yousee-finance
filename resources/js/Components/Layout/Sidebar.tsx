@@ -119,7 +119,7 @@ export default function Sidebar({
                 },
                 {
                     id: 'sales',
-                    label: 'Data Sales',
+                    label: 'Sales Team',
                     href: '/sales',
                     icon: (
                         <svg

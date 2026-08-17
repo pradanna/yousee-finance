@@ -44,8 +44,8 @@ export default function SalesDealsModal({
     // All hooks MUST be declared before any early returns to prevent "Rendered more hooks" React error
     const allTransactions = useMemo<SalesDealTransaction[]>(() => {
         if (!sales) return [];
-        switch (sales.id) {
-            case 1:
+        switch (String(sales.id)) {
+            case '1':
                 return [
                     {
                         id: 'DEAL-2026-001',
@@ -74,7 +74,7 @@ export default function SalesDealsModal({
                         status: 'finished',
                     },
                 ];
-            case 2:
+            case '2':
                 return [
                     {
                         id: 'DEAL-2026-002',
@@ -90,7 +90,7 @@ export default function SalesDealsModal({
                         status: 'paid',
                     },
                 ];
-            case 3:
+            case '3':
                 return [
                     {
                         id: 'DEAL-2026-003',
@@ -169,7 +169,7 @@ export default function SalesDealsModal({
                                     {sales.name}
                                 </h3>
                                 <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700">
-                                    Rate Komisi: {sales.commissionRate}%
+                                    Rate Komisi: {sales.commission_rate}%
                                 </span>
                             </div>
                             <p className="mt-1 text-xs font-medium text-slate-500">
@@ -245,7 +245,8 @@ export default function SalesDealsModal({
                                                 Nominal Omset
                                             </th>
                                             <th className="px-6 py-4 text-right">
-                                                Komisi ({sales.commissionRate}%)
+                                                Komisi ({sales.commission_rate}
+                                                %)
                                             </th>
                                             <th className="px-6 py-4 text-center">
                                                 Status

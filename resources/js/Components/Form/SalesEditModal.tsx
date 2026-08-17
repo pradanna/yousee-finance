@@ -7,16 +7,16 @@ import Modal from '@/Components/UI/Modal';
 import React, { useEffect, useState } from 'react';
 
 export interface SalesItem {
-    id: number;
+    id: string;
     name: string;
     email: string;
-    phone: string;
-    commissionRate: number;
+    phone?: string;
+    commission_rate: number;
+    is_archived: boolean;
     status: 'active' | 'archived';
-    achieved: string;
-    achievedVal: number;
-    commission: string;
-    dealsCount: number;
+    projects_count?: number;
+    created_at?: string;
+    updated_at?: string;
 }
 
 interface SalesEditModalProps {
@@ -33,23 +33,25 @@ export default function SalesEditModal({
     onSubmit,
 }: SalesEditModalProps) {
     const [form, setForm] = useState<SalesItem>({
-        id: 0,
+        id: '',
         name: '',
         email: '',
         phone: '',
-        commissionRate: 2.0,
+        commission_rate: 2.0,
+        is_archived: false,
         status: 'active',
-        achieved: 'Rp 0',
-        achievedVal: 0,
-        commission: 'Rp 0',
-        dealsCount: 0,
+        projects_count: 0,
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (sales && isOpen) {
-            setForm({ ...sales });
+            setForm({
+                ...sales,
+                phone: sales.phone || '',
+                commission_rate: sales.commission_rate ?? 2.0,
+            });
             setErrors({});
         }
     }, [sales, isOpen]);
@@ -59,10 +61,12 @@ export default function SalesEditModal({
         const newErrors: Record<string, string> = {};
 
         if (!form.name.trim()) {
-            newErrors.name = 'Nama lengkap sales executive wajib diisi.';
+            newErrors.name = 'Nama lengkap personil sales wajib diisi.';
         }
 
-        if (form.email.trim()) {
+        if (!form.email.trim()) {
+            newErrors.email = 'Email resmi kantor wajib diisi.';
+        } else {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(form.email)) {
                 newErrors.email = 'Format email tidak valid.';
@@ -79,8 +83,6 @@ export default function SalesEditModal({
     };
 
     if (!sales) return null;
-
-    const isSalesActive = form.status === 'active';
 
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="xl">
@@ -99,19 +101,16 @@ export default function SalesEditModal({
                                 <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 210.3H3v-3.5L16.732 3.732z"
+                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.03H3v-3.5L16.732 3.732z"
                                 />
                             </svg>
                         </div>
                         <div>
                             <h3 className="text-base font-bold tracking-tight text-slate-800">
-                                Edit Data Sales Executive
+                                Edit Profil Sales Executive
                             </h3>
                             <p className="mt-0.5 text-xs text-slate-500">
-                                Ubah rincian profil & komisi insentif sales{' '}
-                                <span className="font-bold text-slate-700">
-                                    {sales.name}
-                                </span>
+                                Perbarui data personil sales, nomor kontak, atau persentase rate komisi.
                             </p>
                         </div>
                     </div>
@@ -125,146 +124,112 @@ export default function SalesEditModal({
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
+                            strokeWidth={2}
                         >
                             <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                strokeWidth={2}
                                 d="M6 18L18 6M6 6l12 12"
                             />
                         </svg>
                     </button>
                 </div>
 
-                {/* Form Fields Grid */}
+                {/* Form Fields */}
                 <div className="space-y-4">
                     {/* Nama Sales */}
                     <div>
                         <InputLabel
-                            htmlFor="edit-sales-name"
-                            value="Nama Lengkap Sales Executive *"
+                            htmlFor="edit_name"
+                            value="Nama Lengkap Personil Sales *"
                         />
                         <TextInput
-                            id="edit-sales-name"
+                            id="edit_name"
                             type="text"
                             value={form.name}
                             onChange={(e) =>
-                                setForm({ ...form, name: e.target.value })
+                                setForm((prev) => ({
+                                    ...prev,
+                                    name: e.target.value,
+                                }))
                             }
-                            className="mt-1 block w-full text-xs font-semibold"
-                            required
+                            className="mt-1.5 block w-full"
                         />
-                        <InputError message={errors.name} className="mt-1" />
+                        {errors.name && <InputError message={errors.name} />}
                     </div>
 
-                    {/* Grid: Email & Telepon */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                            <InputLabel
-                                htmlFor="edit-sales-email"
-                                value="Email Perusahaan / Pribadi"
-                            />
-                            <TextInput
-                                id="edit-sales-email"
-                                type="email"
-                                value={form.email}
-                                onChange={(e) =>
-                                    setForm({ ...form, email: e.target.value })
-                                }
-                                className="mt-1 block w-full text-xs"
-                                placeholder="sales@youseeads.id"
-                            />
-                            <InputError
-                                message={errors.email}
-                                className="mt-1"
-                            />
-                        </div>
-
-                        <div>
-                            <InputLabel
-                                htmlFor="edit-sales-phone"
-                                value="Telepon / WhatsApp"
-                            />
-                            <TextInput
-                                id="edit-sales-phone"
-                                type="text"
-                                value={form.phone}
-                                onChange={(e) =>
-                                    setForm({ ...form, phone: e.target.value })
-                                }
-                                className="mt-1 block w-full text-xs"
-                                placeholder="0812-xxxx-xxxx"
-                            />
-                        </div>
+                    {/* Email Kantor */}
+                    <div>
+                        <InputLabel
+                            htmlFor="edit_email"
+                            value="Email Resmi Kantor *"
+                        />
+                        <TextInput
+                            id="edit_email"
+                            type="email"
+                            value={form.email}
+                            onChange={(e) =>
+                                setForm((prev) => ({
+                                    ...prev,
+                                    email: e.target.value,
+                                }))
+                            }
+                            className="mt-1.5 block w-full"
+                        />
+                        {errors.email && <InputError message={errors.email} />}
                     </div>
 
-                    {/* Rate Komisi & Status Switch Grid */}
-                    <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2">
-                        {/* Rate Komisi */}
-                        <div>
-                            <InputLabel
-                                htmlFor="edit-sales-rate"
-                                value="Rate Komisi (%)"
-                            />
+                    {/* Telepon / WhatsApp */}
+                    <div>
+                        <InputLabel
+                            htmlFor="edit_phone"
+                            value="Nomor Telepon / WhatsApp"
+                        />
+                        <TextInput
+                            id="edit_phone"
+                            type="text"
+                            placeholder="Contoh: 081211112222"
+                            value={form.phone || ''}
+                            onChange={(e) =>
+                                setForm((prev) => ({
+                                    ...prev,
+                                    phone: e.target.value,
+                                }))
+                            }
+                            className="mt-1.5 block w-full"
+                        />
+                    </div>
+
+                    {/* Komisi Rate (%) */}
+                    <div>
+                        <InputLabel
+                            htmlFor="edit_commission_rate"
+                            value="Standard Komisi Sales (%) *"
+                        />
+                        <div className="relative mt-1.5">
                             <TextInput
-                                id="edit-sales-rate"
+                                id="edit_commission_rate"
                                 type="number"
                                 step="0.1"
                                 min="0"
-                                max="10"
-                                value={form.commissionRate}
+                                max="100"
+                                value={form.commission_rate}
                                 onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        commissionRate:
-                                            parseFloat(e.target.value) || 0,
-                                    })
+                                    setForm((prev) => ({
+                                        ...prev,
+                                        commission_rate: parseFloat(e.target.value) || 0,
+                                    }))
                                 }
-                                className="mt-1 block w-full font-mono text-xs font-bold text-slate-800"
+                                className="block w-full pr-10"
                             />
-                        </div>
-
-                        {/* Status Sales Toggle Switch Card */}
-                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                            <div className="space-y-0.5">
-                                <span className="block text-xs font-bold text-slate-700">
-                                    Status Sales
-                                </span>
-                                <span className="block text-[10px] font-semibold leading-tight text-slate-400">
-                                    {isSalesActive
-                                        ? 'Aktif & Menerima Deals'
-                                        : 'Diarsipkan (Non-aktif)'}
-                                </span>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 font-mono text-xs font-bold text-slate-400">
+                                %
                             </div>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setForm({
-                                        ...form,
-                                        status: isSalesActive
-                                            ? 'archived'
-                                            : 'active',
-                                    })
-                                }
-                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    isSalesActive
-                                        ? 'bg-primary'
-                                        : 'bg-slate-300'
-                                }`}
-                            >
-                                <span
-                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                                        isSalesActive
-                                            ? 'translate-x-5'
-                                            : 'translate-x-0'
-                                    }`}
-                                />
-                            </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Footer Action Buttons */}
+                {/* Footer Actions */}
                 <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
                     <SecondaryButton type="button" onClick={onClose}>
                         Batal

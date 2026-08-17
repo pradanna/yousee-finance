@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\Sales;
 
 use Illuminate\Foundation\Http\FormRequest;
@@ -22,11 +24,14 @@ class UpdateSalesRequest extends FormRequest
      */
     public function rules(): array
     {
-        $saleId = $this->route('sale') ? $this->route('sale')->id : null;
+        $sale = $this->route('sale') ?? $this->route('sales');
+        $saleId = is_object($sale) ? $sale->id : $sale;
 
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('sales', 'email')->ignore($saleId)],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];
     }
 }

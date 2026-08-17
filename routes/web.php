@@ -40,10 +40,12 @@ Route::middleware('auth')->group(function () {
     Route::post('clients/{client}/archive', [\App\Http\Controllers\Client\ClientController::class, 'archive'])->name('clients.archive');
     Route::post('clients/{client}/unarchive', [\App\Http\Controllers\Client\ClientController::class, 'unarchive'])->name('clients.unarchive');
 
-    Route::get('/sales', function () {
-        return Inertia::render('Sales');
-    })->name('sales');
-    Route::resource('sales', \App\Http\Controllers\Sales\SalesController::class)->only(['store', 'update', 'destroy']);
+    Route::resource('sales', \App\Http\Controllers\Sales\SalesController::class)->except(['create', 'edit', 'show'])->names([
+        'index' => 'sales',
+    ]);
+    Route::get('/sales-list', [\App\Http\Controllers\Sales\SalesController::class, 'index'])->name('sales.index');
+    Route::post('sales/{sale}/archive', [\App\Http\Controllers\Sales\SalesController::class, 'archive'])->name('sales.archive');
+    Route::post('sales/{sale}/unarchive', [\App\Http\Controllers\Sales\SalesController::class, 'unarchive'])->name('sales.unarchive');
 
     // Project Domain
     Route::get('/projects', [\App\Http\Controllers\Project\ProjectController::class, 'index'])->name('projects');
