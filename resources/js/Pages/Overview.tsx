@@ -2,12 +2,17 @@ import CashflowChartCard from '@/Components/Card/CashflowChartCard';
 import MetricCard from '@/Components/Card/MetricCard';
 import PpnStatusCard from '@/Components/Card/PpnStatusCard';
 import RecentTransactionsCard from '@/Components/Card/RecentTransactionsCard';
-import UpcomingDebtsWidget from '@/Components/Card/UpcomingDebtsWidget';
-import UpcomingReceivablesWidget from '@/Components/Card/UpcomingReceivablesWidget';
+import UpcomingDebtsWidget, {
+    DebtItem,
+} from '@/Components/Card/UpcomingDebtsWidget';
+import UpcomingReceivablesWidget, {
+    ReceivableItem,
+} from '@/Components/Card/UpcomingReceivablesWidget';
 import MonthPicker from '@/Components/Form/MonthPicker';
 import PaymentModal, { PaymentModalData } from '@/Components/UI/PaymentModal';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
-import { useState } from 'react';
+import { router } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
 const formatDateIndo = (dateStr: string) => {
     if (!dateStr) return '-';
@@ -34,73 +39,104 @@ const formatRupiah = (num: number) => {
     return `Rp ${Math.round(num).toLocaleString('id-ID')}`;
 };
 
-const parseRupiah = (valStr: string) => {
-    return parseInt(valStr.replace(/[^0-9]/g, ''), 10) || 0;
-};
+interface MetricData {
+    totalSaldo: number;
+    totalPemasukan: number;
+    totalPengeluaran: number;
+    taxOrDebt: number;
+    ppnKeluaranNominal?: number;
+    ppnKeluaranPercent?: string;
+    ppnMasukanNominal?: number;
+    ppnMasukanPercent?: string;
+}
 
-export default function Overview() {
+interface ChartBar {
+    month: string;
+    inflow: { val: string; h: number };
+    outflow: { val: string; h: number };
+}
+
+interface UpcomingReceivableItem {
+    id: string;
+    invoiceNumber: string;
+    client: string;
+    project: string;
+    dueDate: string;
+    amount: number;
+    status: string;
+    fiscalMode: 'ppn' | 'non-ppn';
+    notes?: string;
+}
+
+interface UpcomingDebtItem {
+    id: string;
+    poNumber: string;
+    vendor: string;
+    project: string;
+    dueDate: string;
+    amount: number;
+    status: string;
+    fiscalMode: 'ppn' | 'non-ppn';
+    notes?: string;
+}
+
+interface RecentTransactionItem {
+    id: string;
+    type: 'invoice' | 'purchase_order';
+    doc: string;
+    desc: string;
+    client: string;
+    amount: number;
+    date: string;
+    status: string;
+    fiscalMode: 'ppn' | 'non-ppn';
+}
+
+interface OverviewProps {
+    filters: {
+        month: string;
+        year: string;
+    };
+    metrics: {
+        ppn: MetricData;
+        nonPpn: MetricData;
+    };
+    chartData: {
+        ppn: ChartBar[];
+        nonPpn: ChartBar[];
+    };
+    upcomingReceivables: UpcomingReceivableItem[];
+    upcomingDebts: UpcomingDebtItem[];
+    recentTransactions: RecentTransactionItem[];
+}
+
+export default function Overview({
+    filters,
+    metrics,
+    chartData,
+    upcomingReceivables,
+    upcomingDebts,
+    recentTransactions,
+}: OverviewProps) {
     const fiscalMode = useFiscalMode();
 
-    // Dynamic initial state based on current real date
-    const now = new Date();
-    const initialYear = now.getFullYear().toString();
-    const initialMonth = (now.getMonth() + 1).toString().padStart(2, '0');
+    const [selectedMonth, setSelectedMonth] = useState(
+        filters?.month ||
+            (new Date().getMonth() + 1).toString().padStart(2, '0'),
+    );
+    const [selectedYear, setSelectedYear] = useState(
+        filters?.year || new Date().getFullYear().toString(),
+    );
 
-    const [selectedMonth, setSelectedMonth] = useState(initialMonth);
-    const [selectedYear, setSelectedYear] = useState(initialYear);
+    useEffect(() => {
+        if (filters?.month) setSelectedMonth(filters.month);
+        if (filters?.year) setSelectedYear(filters.year);
+    }, [filters?.month, filters?.year]);
 
-    // Dynamic states for upcoming debts
-    const [upcomingDebts, setUpcomingDebts] = useState([
-        {
-            id: 'PO-PPN-003',
-            idNonPpn: 'PO-NP-003',
-            vendor: 'PT. Megah Billboard Jaya',
-            project: 'Samsung S27 Launching',
-            dueDate: '2026-07-04',
-            amount: 4500000,
-            amountNonPpn: 4050000,
-            status: 'unpaid',
-            notes: 'Pelunasan sewa spot Sudirman Tahap 2',
-        },
-        {
-            id: 'PO-PPN-004',
-            idNonPpn: 'PO-NP-004',
-            vendor: 'CV. Media Ad Perkasa',
-            project: 'Campaign Honda GIIAS 2026',
-            dueDate: '2026-07-02',
-            amount: 2500000,
-            amountNonPpn: 2250000,
-            status: 'unpaid',
-            notes: 'Jasa printing MMT Baliho besar',
-        },
-    ]);
-
-    // Dynamic states for upcoming receivables (piutang)
-    const [upcomingReceivables, setUpcomingReceivables] = useState([
-        {
-            id: 'INV-PPN-004',
-            idNonPpn: 'INV-NP-004',
-            client: 'Traveloka Corp',
-            project: 'Videotron Bandara Ahmad Yani',
-            dueDate: '2026-07-03',
-            amount: 7770000,
-            amountNonPpn: 7000000,
-            status: 'unpaid',
-            notes: 'Pelunasan sewa videotron',
-        },
-        {
-            id: 'INV-PPN-005',
-            idNonPpn: 'INV-NP-005',
-            client: 'PT. Gojek Tokopedia',
-            project: 'Billboard Sudirman Yogyakarta',
-            dueDate: '2026-07-01',
-            amount: 5550000,
-            amountNonPpn: 5000000,
-            status: 'unpaid',
-            notes: 'Termin 1 Pemasangan Baliho',
-        },
-    ]);
-
+    const [debtsList, setDebtsList] = useState(upcomingDebts || []);
+    const [receivablesList, setReceivablesList] = useState(
+        upcomingReceivables || [],
+    );
     const [paidAdjustment, setPaidAdjustment] = useState(0);
     const [receivedAdjustment, setReceivedAdjustment] = useState(0);
     const [successAlert, setSuccessAlert] = useState<string | null>(null);
@@ -109,13 +145,30 @@ export default function Overview() {
         data: PaymentModalData | null;
     }>({ show: false, data: null });
 
+    useEffect(() => {
+        setDebtsList(upcomingDebts || []);
+        setReceivablesList(upcomingReceivables || []);
+        setPaidAdjustment(0);
+        setReceivedAdjustment(0);
+    }, [upcomingDebts, upcomingReceivables]);
+
+    const handleMonthChange = (
+        _val: string,
+        year: string,
+        month: string,
+    ) => {
+        setSelectedYear(year);
+        setSelectedMonth(month);
+        router.get(
+            route('overview'),
+            { month, year },
+            { preserveState: true, preserveScroll: true },
+        );
+    };
+
     const handlePayDebt = (debtId: string, amount: number, vendor: string) => {
-        const debtObj = upcomingDebts.find((d) => d.id === debtId);
-        const titleDoc = debtObj
-            ? fiscalMode === 'ppn'
-                ? debtObj.id
-                : debtObj.idNonPpn
-            : 'Hutang / PO';
+        const debtObj = debtsList.find((d) => d.id === debtId);
+        const titleDoc = debtObj?.poNumber || 'Hutang / PO';
         setPaymentModalState({
             show: true,
             data: {
@@ -133,12 +186,8 @@ export default function Overview() {
         amount: number,
         client: string,
     ) => {
-        const recObj = upcomingReceivables.find((r) => r.id === receivableId);
-        const titleDoc = recObj
-            ? fiscalMode === 'ppn'
-                ? recObj.id
-                : recObj.idNonPpn
-            : 'Piutang / Invoice';
+        const recObj = receivablesList.find((r) => r.id === receivableId);
+        const titleDoc = recObj?.invoiceNumber || 'Piutang / Invoice';
         setPaymentModalState({
             show: true,
             data: {
@@ -162,7 +211,7 @@ export default function Overview() {
         partyName: string;
     }) => {
         if (result.type === 'pay') {
-            setUpcomingDebts((prev) =>
+            setDebtsList((prev) =>
                 prev.map((debt) =>
                     debt.id === result.id ? { ...debt, status: 'paid' } : debt,
                 ),
@@ -172,7 +221,7 @@ export default function Overview() {
                 `Sukses! Pembayaran hutang ke ${result.partyName} sebesar ${formatRupiah(result.amount)} via ${result.account} berhasil dicatat.`,
             );
         } else {
-            setUpcomingReceivables((prev) =>
+            setReceivablesList((prev) =>
                 prev.map((rec) =>
                     rec.id === result.id ? { ...rec, status: 'paid' } : rec,
                 ),
@@ -185,141 +234,39 @@ export default function Overview() {
         setTimeout(() => setSuccessAlert(null), 5000);
     };
 
-    const getUpcomingDebts = () => {
-        return upcomingDebts.map((debt) => {
-            const dayOffset = debt.dueDate.split('-')[2];
-            let nextMonth = parseInt(selectedMonth, 10) + 1;
-            let nextYear = parseInt(selectedYear, 10);
-            if (nextMonth > 12) {
-                nextMonth = 1;
-                nextYear += 1;
-            }
-            const monthStr = nextMonth.toString().padStart(2, '0');
-            const yearStr = nextYear.toString();
-            return {
-                ...debt,
-                dueDate: `${yearStr}-${monthStr}-${dayOffset}`,
-                actualAmount:
-                    fiscalMode === 'ppn' ? debt.amount : debt.amountNonPpn,
-                actualId: fiscalMode === 'ppn' ? debt.id : debt.idNonPpn,
-            };
-        });
-    };
-
-    const getUpcomingReceivables = () => {
-        return upcomingReceivables.map((rec) => {
-            const dayOffset = rec.dueDate.split('-')[2];
-            let nextMonth = parseInt(selectedMonth, 10) + 1;
-            let nextYear = parseInt(selectedYear, 10);
-            if (nextMonth > 12) {
-                nextMonth = 1;
-                nextYear += 1;
-            }
-            const monthStr = nextMonth.toString().padStart(2, '0');
-            const yearStr = nextYear.toString();
-            return {
-                ...rec,
-                dueDate: `${yearStr}-${monthStr}-${dayOffset}`,
-                actualAmount:
-                    fiscalMode === 'ppn' ? rec.amount : rec.amountNonPpn,
-                actualId: fiscalMode === 'ppn' ? rec.id : rec.idNonPpn,
-            };
-        });
-    };
-
-    // Data mapped by Month + Year
-    const dataByPeriod = {
-        '05-2026': {
-            ppn: {
-                totalSaldo: 'Rp 390.500.000',
-                totalPemasukan: 'Rp 480.000.000',
-                totalPengeluaran: 'Rp 110.000.000',
-                taxOrDebt: 'Rp 38.500.000',
-                ppnKeluaranNominal: 'Rp 72.000.000',
-                ppnKeluaranPercent: '68.2%',
-                ppnMasukanNominal: 'Rp 33.500.000',
-                ppnMasukanPercent: '31.8%',
-            },
-            nonPpn: {
-                totalSaldo: 'Rp 195.400.000',
-                totalPemasukan: 'Rp 290.000.000',
-                totalPengeluaran: 'Rp 105.000.000',
-                taxOrDebt: 'Rp 28.000.000',
-            },
-        },
-        '06-2026': {
-            ppn: {
-                totalSaldo: 'Rp 430.715.000',
-                totalPemasukan: 'Rp 552.950.000',
-                totalPengeluaran: 'Rp 122.235.000',
-                taxOrDebt: 'Rp 43.065.000',
-                ppnKeluaranNominal: 'Rp 86.001.000',
-                ppnKeluaranPercent: '66.7%',
-                ppnMasukanNominal: 'Rp 42.936.000',
-                ppnMasukanPercent: '33.3%',
-            },
-            nonPpn: {
-                totalSaldo: 'Rp 230.800.000',
-                totalPemasukan: 'Rp 350.000.000',
-                totalPengeluaran: 'Rp 119.200.000',
-                taxOrDebt: 'Rp 32.500.000',
-            },
-        },
-        '07-2026': {
-            ppn: {
-                totalSaldo: 'Rp 460.900.000',
-                totalPemasukan: 'Rp 580.000.000',
-                totalPengeluaran: 'Rp 140.000.000',
-                taxOrDebt: 'Rp 48.400.000',
-                ppnKeluaranNominal: 'Rp 91.200.000',
-                ppnKeluaranPercent: '68.0%',
-                ppnMasukanNominal: 'Rp 42.800.000',
-                ppnMasukanPercent: '32.0%',
-            },
-            nonPpn: {
-                totalSaldo: 'Rp 262.500.000',
-                totalPemasukan: 'Rp 385.000.000',
-                totalPengeluaran: 'Rp 135.000.000',
-                taxOrDebt: 'Rp 36.800.000',
-            },
-        },
-    };
-
-    const periodKey = `${selectedMonth}-${selectedYear}`;
-    const periodData =
-        dataByPeriod[periodKey as keyof typeof dataByPeriod] ||
-        dataByPeriod['06-2026'];
-
-    const baseSaldo = parseRupiah(
+    // Calculate current metrics based on active fiscal mode
+    const currentModeMetric =
         fiscalMode === 'ppn'
-            ? periodData.ppn.totalSaldo
-            : periodData.nonPpn.totalSaldo,
-    );
-    const basePemasukan = parseRupiah(
-        fiscalMode === 'ppn'
-            ? periodData.ppn.totalPemasukan
-            : periodData.nonPpn.totalPemasukan,
-    );
-    const basePengeluaran = parseRupiah(
-        fiscalMode === 'ppn'
-            ? periodData.ppn.totalPengeluaran
-            : periodData.nonPpn.totalPengeluaran,
-    );
-    const baseTaxOrDebt = parseRupiah(
-        fiscalMode === 'ppn'
-            ? periodData.ppn.taxOrDebt
-            : periodData.nonPpn.taxOrDebt,
-    );
+            ? metrics?.ppn || {
+                  totalSaldo: 0,
+                  totalPemasukan: 0,
+                  totalPengeluaran: 0,
+                  taxOrDebt: 0,
+                  ppnKeluaranNominal: 0,
+                  ppnKeluaranPercent: '0%',
+                  ppnMasukanNominal: 0,
+                  ppnMasukanPercent: '0%',
+              }
+            : metrics?.nonPpn || {
+                  totalSaldo: 0,
+                  totalPemasukan: 0,
+                  totalPengeluaran: 0,
+                  taxOrDebt: 0,
+              };
+
+    const baseSaldo = currentModeMetric.totalSaldo;
+    const basePemasukan = currentModeMetric.totalPemasukan;
+    const basePengeluaran = currentModeMetric.totalPengeluaran;
+    const baseTaxOrDebt = currentModeMetric.taxOrDebt;
 
     const dynamicSaldo = baseSaldo - paidAdjustment + receivedAdjustment;
-    const dynamicPemasukan = basePemasukan + receivedAdjustment;
     const dynamicPengeluaran = basePengeluaran + paidAdjustment;
     const dynamicTaxOrDebt =
         fiscalMode === 'ppn'
             ? baseTaxOrDebt
             : baseTaxOrDebt + paidAdjustment - receivedAdjustment;
 
-    const metrics =
+    const displayMetrics =
         fiscalMode === 'ppn'
             ? {
                   totalSaldo: formatRupiah(dynamicSaldo),
@@ -327,7 +274,8 @@ export default function Overview() {
                   totalPengeluaran: formatRupiah(dynamicPengeluaran),
                   taxOrDebt: formatRupiah(dynamicTaxOrDebt),
                   taxOrDebtTitle: 'PPN Bersih Terhutang',
-                  taxOrDebtBadge: 'Kurang Bayar',
+                  taxOrDebtBadge:
+                      dynamicTaxOrDebt >= 0 ? 'Kurang Bayar' : 'Lebih Bayar',
                   taxOrDebtCardBg:
                       'bg-amber-50/60 border-amber-200/60 shadow-xs hover:border-amber-300/80',
                   taxOrDebtBadgeColor:
@@ -335,10 +283,16 @@ export default function Overview() {
                   taxOrDebtIconBg:
                       'bg-white text-amber-600 border-amber-100 shadow-2xs',
                   taxOrDebtValueColor: 'text-amber-950',
-                  ppnKeluaranNominal: periodData.ppn.ppnKeluaranNominal,
-                  ppnKeluaranPercent: periodData.ppn.ppnKeluaranPercent,
-                  ppnMasukanNominal: periodData.ppn.ppnMasukanNominal,
-                  ppnMasukanPercent: periodData.ppn.ppnMasukanPercent,
+                  ppnKeluaranNominal: formatRupiah(
+                      currentModeMetric.ppnKeluaranNominal || 0,
+                  ),
+                  ppnKeluaranPercent:
+                      currentModeMetric.ppnKeluaranPercent || '0%',
+                  ppnMasukanNominal: formatRupiah(
+                      currentModeMetric.ppnMasukanNominal || 0,
+                  ),
+                  ppnMasukanPercent:
+                      currentModeMetric.ppnMasukanPercent || '0%',
               }
             : {
                   totalSaldo: formatRupiah(dynamicSaldo),
@@ -354,264 +308,55 @@ export default function Overview() {
                   taxOrDebtIconBg:
                       'bg-white text-indigo-600 border-indigo-100 shadow-2xs',
                   taxOrDebtValueColor: 'text-indigo-950',
+                  ppnKeluaranNominal: 'Rp 0',
+                  ppnKeluaranPercent: '0%',
+                  ppnMasukanNominal: 'Rp 0',
+                  ppnMasukanPercent: '0%',
               };
 
-    const rawTransactions =
+    // Filter upcoming items by active fiscal mode
+    const displayedDebts: DebtItem[] = debtsList
+        .filter((debt) => debt.fiscalMode === fiscalMode)
+        .map((debt) => ({
+            id: debt.id,
+            actualId: debt.poNumber,
+            vendor: debt.vendor,
+            project: debt.project,
+            notes: debt.notes,
+            dueDate: debt.dueDate,
+            actualAmount: debt.amount,
+            status: debt.status,
+        }));
+
+    const displayedReceivables: ReceivableItem[] = receivablesList
+        .filter((rec) => rec.fiscalMode === fiscalMode)
+        .map((rec) => ({
+            id: rec.id,
+            actualId: rec.invoiceNumber,
+            client: rec.client,
+            project: rec.project,
+            notes: rec.notes,
+            dueDate: rec.dueDate,
+            actualAmount: rec.amount,
+            status: rec.status,
+        }));
+
+    // Transactions list
+    const displayedTransactions = (recentTransactions || [])
+        .filter((t) => t.fiscalMode === fiscalMode)
+        .map((tx) => ({
+            date: tx.date,
+            doc: tx.doc,
+            desc: tx.desc,
+            client: tx.client,
+            status: tx.status,
+            amount: formatRupiah(tx.amount),
+        }));
+
+    const currentChartData =
         fiscalMode === 'ppn'
-            ? [
-                  {
-                      dateOffset: 25,
-                      doc: 'INV-PPN-001',
-                      desc: 'Sewa Billboard Bunderan HI (4x8m) - 1 Bulan',
-                      client: 'PT. Gojek Tokopedia',
-                      amount: 'IDR 11.100.000',
-                      status: 'paid',
-                  },
-                  {
-                      dateOffset: 24,
-                      doc: 'PO-PPN-001',
-                      desc: 'Sewa Lahan Billboard Sudirman',
-                      client: 'PT. Megah Billboard Jaya',
-                      amount: 'IDR 3.330.000',
-                      status: 'received',
-                  },
-                  {
-                      dateOffset: 22,
-                      doc: 'INV-PPN-002',
-                      desc: 'Sewa Videotron Led Gatot Subroto - 2 Minggu',
-                      client: 'Traveloka Corp',
-                      amount: 'IDR 5.550.000',
-                      status: 'issued',
-                  },
-                  {
-                      dateOffset: 20,
-                      doc: 'PO-PPN-002',
-                      desc: 'Jasa Konstruksi & Pasang Besi Billboard',
-                      client: 'PT. Promosi Outdoor Kreasindo',
-                      amount: 'IDR 8.880.000',
-                      status: 'received',
-                  },
-              ]
-            : [
-                  {
-                      dateOffset: 25,
-                      doc: 'INV-NP-001',
-                      desc: 'Sewa Space Billboard Jl. Kemang Raya - 1 Bulan',
-                      client: 'Shopee Indonesia',
-                      amount: 'IDR 10.000.000',
-                      status: 'paid',
-                  },
-                  {
-                      dateOffset: 24,
-                      doc: 'PO-NP-001',
-                      desc: 'Jasa Konstruksi Billboard Kayu',
-                      client: 'CV. Media Ad Perkasa',
-                      amount: 'IDR 1.200.000',
-                      status: 'received',
-                  },
-                  {
-                      dateOffset: 22,
-                      doc: 'INV-NP-002',
-                      desc: 'Pemasangan Banner Billboard Mini - 10 Titik',
-                      client: 'PT. Citra Digital',
-                      amount: 'IDR 5.000.000',
-                      status: 'issued',
-                  },
-                  {
-                      dateOffset: 20,
-                      doc: 'PO-NP-002',
-                      desc: 'Cetak Banner MMT Baliho Super (6x12m)',
-                      client: 'PT. Promosi Outdoor Kreasindo',
-                      amount: 'IDR 2.000.000',
-                      status: 'received',
-                  },
-              ];
-
-    const transactions = rawTransactions.map((tx) => ({
-        ...tx,
-        date: `${selectedYear}-${selectedMonth}-${tx.dateOffset.toString().padStart(2, '0')}`,
-    }));
-
-    const chartDataByMonth = {
-        '05':
-            fiscalMode === 'ppn'
-                ? [
-                      {
-                          month: 'Des',
-                          inflow: { val: 'Rp 85jt', h: 85 },
-                          outflow: { val: 'Rp 55jt', h: 55 },
-                      },
-                      {
-                          month: 'Jan',
-                          inflow: { val: 'Rp 90jt', h: 90 },
-                          outflow: { val: 'Rp 60jt', h: 60 },
-                      },
-                      {
-                          month: 'Feb',
-                          inflow: { val: 'Rp 110jt', h: 110 },
-                          outflow: { val: 'Rp 70jt', h: 70 },
-                      },
-                      {
-                          month: 'Mar',
-                          inflow: { val: 'Rp 140jt', h: 140 },
-                          outflow: { val: 'Rp 80jt', h: 80 },
-                      },
-                      {
-                          month: 'Apr',
-                          inflow: { val: 'Rp 100jt', h: 100 },
-                          outflow: { val: 'Rp 50jt', h: 50 },
-                      },
-                  ]
-                : [
-                      {
-                          month: 'Des',
-                          inflow: { val: 'Rp 76jt', h: 76 },
-                          outflow: { val: 'Rp 49jt', h: 49 },
-                      },
-                      {
-                          month: 'Jan',
-                          inflow: { val: 'Rp 81jt', h: 81 },
-                          outflow: { val: 'Rp 54jt', h: 54 },
-                      },
-                      {
-                          month: 'Feb',
-                          inflow: { val: 'Rp 99jt', h: 99 },
-                          outflow: { val: 'Rp 63jt', h: 63 },
-                      },
-                      {
-                          month: 'Mar',
-                          inflow: { val: 'Rp 126jt', h: 126 },
-                          outflow: { val: 'Rp 72jt', h: 72 },
-                      },
-                      {
-                          month: 'Apr',
-                          inflow: { val: 'Rp 90jt', h: 90 },
-                          outflow: { val: 'Rp 45jt', h: 45 },
-                      },
-                  ],
-        '06':
-            fiscalMode === 'ppn'
-                ? [
-                      {
-                          month: 'Jan',
-                          inflow: { val: 'Rp 90jt', h: 90 },
-                          outflow: { val: 'Rp 60jt', h: 60 },
-                      },
-                      {
-                          month: 'Feb',
-                          inflow: { val: 'Rp 110jt', h: 110 },
-                          outflow: { val: 'Rp 70jt', h: 70 },
-                      },
-                      {
-                          month: 'Mar',
-                          inflow: { val: 'Rp 140jt', h: 140 },
-                          outflow: { val: 'Rp 80jt', h: 80 },
-                      },
-                      {
-                          month: 'Apr',
-                          inflow: { val: 'Rp 100jt', h: 100 },
-                          outflow: { val: 'Rp 50jt', h: 50 },
-                      },
-                      {
-                          month: 'Mei',
-                          inflow: { val: 'Rp 135jt', h: 135 },
-                          outflow: { val: 'Rp 90jt', h: 90 },
-                      },
-                  ]
-                : [
-                      {
-                          month: 'Jan',
-                          inflow: { val: 'Rp 81jt', h: 81 },
-                          outflow: { val: 'Rp 54jt', h: 54 },
-                      },
-                      {
-                          month: 'Feb',
-                          inflow: { val: 'Rp 99jt', h: 99 },
-                          outflow: { val: 'Rp 63jt', h: 63 },
-                      },
-                      {
-                          month: 'Mar',
-                          inflow: { val: 'Rp 126jt', h: 126 },
-                          outflow: { val: 'Rp 72jt', h: 72 },
-                      },
-                      {
-                          month: 'Apr',
-                          inflow: { val: 'Rp 90jt', h: 90 },
-                          outflow: { val: 'Rp 45jt', h: 45 },
-                      },
-                      {
-                          month: 'Mei',
-                          inflow: { val: 'Rp 121jt', h: 121 },
-                          outflow: { val: 'Rp 81jt', h: 81 },
-                      },
-                  ],
-        '07':
-            fiscalMode === 'ppn'
-                ? [
-                      {
-                          month: 'Feb',
-                          inflow: { val: 'Rp 110jt', h: 110 },
-                          outflow: { val: 'Rp 70jt', h: 70 },
-                      },
-                      {
-                          month: 'Mar',
-                          inflow: { val: 'Rp 140jt', h: 140 },
-                          outflow: { val: 'Rp 80jt', h: 80 },
-                      },
-                      {
-                          month: 'Apr',
-                          inflow: { val: 'Rp 100jt', h: 100 },
-                          outflow: { val: 'Rp 50jt', h: 50 },
-                      },
-                      {
-                          month: 'Mei',
-                          inflow: { val: 'Rp 135jt', h: 135 },
-                          outflow: { val: 'Rp 90jt', h: 90 },
-                      },
-                      {
-                          month: 'Jun',
-                          inflow: { val: 'Rp 150jt', h: 150 },
-                          outflow: { val: 'Rp 95jt', h: 95 },
-                      },
-                  ]
-                : [
-                      {
-                          month: 'Feb',
-                          inflow: { val: 'Rp 99jt', h: 99 },
-                          outflow: { val: 'Rp 63jt', h: 63 },
-                      },
-                      {
-                          month: 'Mar',
-                          inflow: { val: 'Rp 126jt', h: 126 },
-                          outflow: { val: 'Rp 72jt', h: 72 },
-                      },
-                      {
-                          month: 'Apr',
-                          inflow: { val: 'Rp 90jt', h: 90 },
-                          outflow: { val: 'Rp 45jt', h: 45 },
-                      },
-                      {
-                          month: 'Mei',
-                          inflow: { val: 'Rp 121jt', h: 121 },
-                          outflow: { val: 'Rp 81jt', h: 81 },
-                      },
-                      {
-                          month: 'Jun',
-                          inflow: { val: 'Rp 135jt', h: 135 },
-                          outflow: { val: 'Rp 85jt', h: 85 },
-                      },
-                  ],
-    };
-
-    interface ChartBar {
-        month: string;
-        inflow: { val: string; h: number };
-        outflow: { val: string; h: number };
-    }
-
-    const chartData = (chartDataByMonth[
-        selectedMonth as keyof typeof chartDataByMonth
-    ] || chartDataByMonth['06']) as ChartBar[];
+            ? chartData?.ppn || []
+            : chartData?.nonPpn || [];
 
     return (
         <AppLayout
@@ -657,10 +402,7 @@ export default function Overview() {
                     <div className="flex items-center gap-2">
                         <MonthPicker
                             value={`${selectedYear}-${selectedMonth}`}
-                            onChange={(_val, year, month) => {
-                                setSelectedYear(year);
-                                setSelectedMonth(month);
-                            }}
+                            onChange={handleMonthChange}
                         />
                     </div>
                 </div>
@@ -669,7 +411,7 @@ export default function Overview() {
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
                     <MetricCard
                         title="Saldo Kas & Bank"
-                        value={metrics.totalSaldo}
+                        value={displayMetrics.totalSaldo}
                         badgeText="Total Saldo"
                         cardBgClass="bg-blue-50/60 border-blue-200/60 shadow-xs hover:border-blue-300/80"
                         badgeColorClass="bg-white/90 text-blue-800 border-blue-200/60"
@@ -693,7 +435,7 @@ export default function Overview() {
                     />
                     <MetricCard
                         title="Total Pemasukan (Gross)"
-                        value={metrics.totalPemasukan}
+                        value={displayMetrics.totalPemasukan}
                         badgeText="Pemasukan"
                         cardBgClass="bg-emerald-50/60 border-emerald-200/60 shadow-xs hover:border-emerald-300/80"
                         badgeColorClass="bg-white/90 text-emerald-800 border-emerald-200/60"
@@ -717,7 +459,7 @@ export default function Overview() {
                     />
                     <MetricCard
                         title="Total Pengeluaran (Gross)"
-                        value={metrics.totalPengeluaran}
+                        value={displayMetrics.totalPengeluaran}
                         badgeText="Pengeluaran"
                         cardBgClass="bg-rose-50/60 border-rose-200/60 shadow-xs hover:border-rose-300/80"
                         badgeColorClass="bg-white/90 text-rose-800 border-rose-200/60"
@@ -740,11 +482,11 @@ export default function Overview() {
                         valueColorClass="text-rose-950"
                     />
                     <MetricCard
-                        title={metrics.taxOrDebtTitle}
-                        value={metrics.taxOrDebt}
-                        badgeText={metrics.taxOrDebtBadge}
-                        cardBgClass={metrics.taxOrDebtCardBg}
-                        badgeColorClass={metrics.taxOrDebtBadgeColor}
+                        title={displayMetrics.taxOrDebtTitle}
+                        value={displayMetrics.taxOrDebt}
+                        badgeText={displayMetrics.taxOrDebtBadge}
+                        cardBgClass={displayMetrics.taxOrDebtCardBg}
+                        badgeColorClass={displayMetrics.taxOrDebtBadgeColor}
                         icon={
                             <svg
                                 className="h-5 w-5"
@@ -760,28 +502,28 @@ export default function Overview() {
                                 />
                             </svg>
                         }
-                        iconColorClass={metrics.taxOrDebtIconBg}
-                        valueColorClass={metrics.taxOrDebtValueColor}
+                        iconColorClass={displayMetrics.taxOrDebtIconBg}
+                        valueColorClass={displayMetrics.taxOrDebtValueColor}
                     />
                 </div>
 
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    <CashflowChartCard chartData={chartData} />
+                    <CashflowChartCard chartData={currentChartData} />
                     <PpnStatusCard
                         fiscalMode={fiscalMode}
-                        ppnKeluaranNominal={metrics.ppnKeluaranNominal}
-                        ppnKeluaranPercent={metrics.ppnKeluaranPercent}
-                        ppnMasukanNominal={metrics.ppnMasukanNominal}
-                        ppnMasukanPercent={metrics.ppnMasukanPercent}
-                        taxOrDebt={metrics.taxOrDebt}
+                        ppnKeluaranNominal={displayMetrics.ppnKeluaranNominal}
+                        ppnKeluaranPercent={displayMetrics.ppnKeluaranPercent}
+                        ppnMasukanNominal={displayMetrics.ppnMasukanNominal}
+                        ppnMasukanPercent={displayMetrics.ppnMasukanPercent}
+                        taxOrDebt={displayMetrics.taxOrDebt}
                     />
                 </div>
 
                 {/* Section: Hutang & Piutang Jatuh Tempo 1 Minggu */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     <UpcomingReceivablesWidget
-                        receivables={getUpcomingReceivables()}
+                        receivables={displayedReceivables}
                         selectedYear={selectedYear}
                         selectedMonth={selectedMonth}
                         onReceivePayment={handleReceivePayment}
@@ -789,7 +531,7 @@ export default function Overview() {
                         formatRupiah={formatRupiah}
                     />
                     <UpcomingDebtsWidget
-                        debts={getUpcomingDebts()}
+                        debts={displayedDebts}
                         selectedYear={selectedYear}
                         selectedMonth={selectedMonth}
                         onPayDebt={handlePayDebt}
@@ -799,7 +541,7 @@ export default function Overview() {
                 </div>
 
                 {/* Recent Transactions List */}
-                <RecentTransactionsCard transactions={transactions} />
+                <RecentTransactionsCard transactions={displayedTransactions} />
             </div>
 
             {/* Payment & Receipt Modal */}

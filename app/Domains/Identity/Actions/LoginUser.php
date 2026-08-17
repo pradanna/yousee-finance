@@ -23,7 +23,7 @@ class LoginUser
 
         // 2. Attempt Authentication
         $credentials = $request->only('email', 'password');
-        $remember = $request->boolean('remember');
+        $remember = true;
 
         if (! Auth::attempt($credentials, $remember)) {
             \Illuminate\Support\Facades\RateLimiter::hit($request->throttleKey());

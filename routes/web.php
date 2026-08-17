@@ -21,9 +21,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Dashboard Overview
-    Route::get('/overview', function () {
-        return Inertia::render('Overview'); 
-    })->name('overview');
+    Route::get('/overview', [\App\Http\Controllers\Dashboard\OverviewController::class, 'index'])->name('overview');
 
     // Master Data
     Route::get('/vendors', function () {
