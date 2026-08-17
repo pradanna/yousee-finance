@@ -10,23 +10,121 @@ import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown from '@/Components/UI/ActionDropdown';
 import StatusBadge from '@/Components/UI/StatusBadge';
+import Toast, { ToastType } from '@/Components/UI/Toast';
 import VendorTransactionsModal from '@/Components/UI/VendorTransactionsModal';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
-import { useMemo, useState } from 'react';
+import { PageProps } from '@/types';
+import { getWhatsAppUrl } from '@/Utils/formatters';
+import { router, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
-export default function Vendors() {
+interface VendorPaginationData {
+    data: VendorItem[];
+    current_page: number;
+    last_page: number;
+    from: number;
+    to: number;
+    total: number;
+    per_page: number;
+}
+
+interface VendorsProps {
+    vendors: VendorPaginationData;
+    metrics: {
+        totalVendors: number;
+        activeVendors: number;
+        archivedVendors: number;
+        pkpCount: number;
+        nonPkpCount: number;
+    };
+    filters: {
+        search: string;
+        status: 'active' | 'archived' | 'all';
+        pkp: 'all' | 'pkp' | 'non-pkp';
+        sort_by?: string;
+        sort_direction?: 'asc' | 'desc';
+    };
+}
+
+const formatDate = (isoString?: string) => {
+    if (!isoString) return '—';
+    try {
+        const d = new Date(isoString);
+        return d.toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        });
+    } catch {
+        return '—';
+    }
+};
+
+export default function Vendors({
+    vendors,
+    metrics,
+    filters,
+}: VendorsProps) {
     const fiscalMode = useFiscalMode();
+    const { flash } =
+        usePage<PageProps<{ flash?: { success?: string; error?: string } }>>()
+            .props;
+
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState(filters?.search || '');
     const [pkpFilter, setPkpFilter] = useState<'all' | 'pkp' | 'non-pkp'>(
-        'all',
+        filters?.pkp || 'all',
     );
     const [statusTab, setStatusTab] = useState<'active' | 'archived' | 'all'>(
-        'active',
+        filters?.status || 'active',
     );
-    const [alertMessage, setAlertMessage] = useState<string | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const [sortBy, setSortBy] = useState<string>(
+        filters?.sort_by || 'updated_at',
+    );
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(
+        filters?.sort_direction || 'desc',
+    );
+
+    // Toast state
+    const [toast, setToast] = useState<{
+        show: boolean;
+        type: ToastType;
+        title: string;
+        message: string;
+    }>({
+        show: false,
+        type: 'success',
+        title: '',
+        message: '',
+    });
+
+    const triggerToast = (
+        message: string,
+        type: ToastType = 'success',
+        title?: string,
+    ) => {
+        setToast({
+            show: true,
+            type,
+            title:
+                title ||
+                (type === 'success'
+                    ? 'Berhasil'
+                    : type === 'error'
+                      ? 'Terjadi Kesalahan'
+                      : 'Pemberitahuan'),
+            message,
+        });
+    };
+
+    // Sync flash message from server
+    useEffect(() => {
+        if (flash?.success) {
+            triggerToast(flash.success, 'success', 'Operasi Berhasil');
+        } else if (flash?.error) {
+            triggerToast(flash.error, 'error', 'Operasi Gagal');
+        }
+    }, [flash]);
 
     // Modals state for Edit & View POs
     const [selectedVendorForEdit, setSelectedVendorForEdit] =
@@ -37,73 +135,106 @@ export default function Vendors() {
         useState<VendorItem | null>(null);
     const [isTxModalOpen, setIsTxModalOpen] = useState(false);
 
-    const [vendors, setVendors] = useState<VendorItem[]>([
-        {
-            id: 1,
-            name: 'PT. Megah Billboard Jaya',
-            npwp: '01.234.567.8-901.000',
-            email: 'sales@megahbillboard.com',
-            phone: '021-5551234',
-            address: 'Jl. Jend. Sudirman No. 12, Jakarta Pusat',
-            pkp: true,
-            status: 'active',
-            count: 12,
-            total: 'IDR 45.000.000',
-        },
-        {
-            id: 2,
-            name: 'PT. Promosi Outdoor Kreasindo',
-            npwp: '12.345.678.9-012.000',
-            email: 'info@promosicreative.co.id',
-            phone: '021-5555678',
-            address: 'Kawasan Industri Pulogadung Blok B3, Jakarta Timur',
-            pkp: true,
-            status: 'active',
-            count: 8,
-            total: 'IDR 24.300.000',
-        },
-        {
-            id: 3,
-            name: 'CV. Media Ad Perkasa',
-            npwp: '',
-            email: 'contact@mediaadperkasa.net',
-            phone: '0812-3456-7890',
-            address: 'Jl. Kemang Raya No. 45, Jakarta Selatan',
-            pkp: false,
-            status: 'active',
-            count: 15,
-            total: 'IDR 5.200.000',
-        },
-        {
-            id: 4,
-            name: 'CV. Citra Bali Billboard',
-            npwp: '89.123.456.7-891.000',
-            email: 'bali@citrabillboard.com',
-            phone: '0361-223344',
-            address: 'Jl. Sunset Road No. 88, Kuta, Bali',
-            pkp: false,
-            status: 'archived',
-            count: 3,
-            total: 'IDR 1.500.000',
-        },
-    ]);
+    const applyFilter = (params: {
+        search?: string;
+        status?: 'active' | 'archived' | 'all';
+        pkp?: 'all' | 'pkp' | 'non-pkp';
+        sort_by?: string;
+        sort_direction?: 'asc' | 'desc';
+        page?: number;
+    }) => {
+        const activeSortBy =
+            params.sort_by !== undefined ? params.sort_by : sortBy;
+        const activeSortDirection =
+            params.sort_direction !== undefined
+                ? params.sort_direction
+                : sortDirection;
+
+        router.get(
+            route('vendors'),
+            {
+                search:
+                    params.search !== undefined ? params.search : searchQuery,
+                status: params.status !== undefined ? params.status : statusTab,
+                pkp: params.pkp !== undefined ? params.pkp : pkpFilter,
+                sort_by: activeSortBy,
+                sort_direction: activeSortDirection,
+                page: params.page !== undefined ? params.page : 1,
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+            },
+        );
+    };
+
+    const handleSearchChange = (value: string) => {
+        setSearchQuery(value);
+        applyFilter({ search: value, page: 1 });
+    };
+
+    const handleStatusChange = (value: 'active' | 'archived' | 'all') => {
+        setStatusTab(value);
+        applyFilter({ status: value, page: 1 });
+    };
+
+    const handlePkpChange = (value: 'all' | 'pkp' | 'non-pkp') => {
+        setPkpFilter(value);
+        applyFilter({ pkp: value, page: 1 });
+    };
+
+    const handleSort = (column: string) => {
+        let newDirection: 'asc' | 'desc' = 'asc';
+        if (sortBy === column) {
+            newDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            // Default sort direction for new column selection
+            newDirection =
+                column === 'updated_at' || column === 'created_at'
+                    ? 'desc'
+                    : 'asc';
+        }
+        setSortBy(column);
+        setSortDirection(newDirection);
+        applyFilter({ sort_by: column, sort_direction: newDirection, page: 1 });
+    };
+
+    const handlePageChange = (page: number) => {
+        applyFilter({ page });
+    };
 
     const handleAddVendor = (formData: VendorFormData) => {
-        const newVendor: VendorItem = {
-            id: vendors.length + 1,
-            name: formData.name,
-            npwp: formData.npwp || '—',
-            email: formData.email || '—',
-            phone: formData.phone || '—',
-            address: formData.address || '—',
-            pkp: formData.pkp,
-            status: 'active',
-            count: 0,
-            total: 'IDR 0',
-        };
-        setVendors([newVendor, ...vendors]);
-        setAlertMessage(`Vendor "${formData.name}" berhasil didaftarkan.`);
-        setTimeout(() => setAlertMessage(null), 4000);
+        router.post(
+            route('vendors.store'),
+            {
+                name: formData.name,
+                npwp: formData.npwp ? formData.npwp : null,
+                phone: formData.phone ? formData.phone : null,
+                email: formData.email ? formData.email : null,
+                address: formData.address ? formData.address : null,
+            },
+            {
+                onSuccess: () => {
+                    setIsAddModalOpen(false);
+                    triggerToast(
+                        `Vendor "${formData.name}" berhasil didaftarkan.`,
+                        'success',
+                        'Pendaftaran Berhasil',
+                    );
+                },
+                onError: (errs) => {
+                    const firstErr =
+                        Object.values(errs)[0] ||
+                        'Gagal mendaftarkan vendor. Silakan periksa kembali formulir.';
+                    triggerToast(
+                        firstErr,
+                        'error',
+                        'Pendaftaran Gagal',
+                    );
+                },
+            },
+        );
     };
 
     const handleOpenEditModal = (vendor: VendorItem) => {
@@ -112,13 +243,32 @@ export default function Vendors() {
     };
 
     const handleSaveEditedVendor = (updated: VendorItem) => {
-        setVendors((prev) =>
-            prev.map((v) => (v.id === updated.id ? updated : v)),
+        router.put(
+            route('vendors.update', updated.id),
+            {
+                name: updated.name,
+                npwp: updated.npwp ? updated.npwp : null,
+                phone: updated.phone ? updated.phone : null,
+                email: updated.email ? updated.email : null,
+                address: updated.address ? updated.address : null,
+            },
+            {
+                onSuccess: () => {
+                    setIsEditModalOpen(false);
+                    triggerToast(
+                        `Perubahan data vendor "${updated.name}" berhasil disimpan.`,
+                        'success',
+                        'Pembaruan Berhasil',
+                    );
+                },
+                onError: (errs) => {
+                    const firstErr =
+                        Object.values(errs)[0] ||
+                        'Gagal memperbarui data vendor.';
+                    triggerToast(firstErr, 'error', 'Pembaruan Gagal');
+                },
+            },
         );
-        setAlertMessage(
-            `Perubahan data vendor "${updated.name}" berhasil disimpan.`,
-        );
-        setTimeout(() => setAlertMessage(null), 4000);
     };
 
     const handleOpenTxModal = (vendor: VendorItem) => {
@@ -126,97 +276,135 @@ export default function Vendors() {
         setIsTxModalOpen(true);
     };
 
-    const handleToggleArchiveVendor = (vendorId: number) => {
-        setVendors((prev) =>
-            prev.map((v) => {
-                if (v.id === vendorId) {
-                    const newStatus: 'active' | 'archived' =
-                        v.status === 'archived' ? 'active' : 'archived';
-                    const actionText =
-                        newStatus === 'archived'
-                            ? 'diarsipkan'
-                            : 'diaktifkan kembali';
-                    setAlertMessage(
-                        `Vendor "${v.name}" berhasil ${actionText}.`,
+    const handleToggleArchiveVendor = (vendor: VendorItem) => {
+        const isArchived = vendor.status === 'archived';
+        const actionRoute = isArchived
+            ? route('vendors.unarchive', vendor.id)
+            : route('vendors.archive', vendor.id);
+        const actionText = isArchived ? 'diaktifkan kembali' : 'diarsipkan';
+
+        router.post(
+            actionRoute,
+            {},
+            {
+                onSuccess: () => {
+                    triggerToast(
+                        `Vendor "${vendor.name}" berhasil ${actionText}.`,
+                        'success',
+                        'Status Diperbarui',
                     );
-                    setTimeout(() => setAlertMessage(null), 4000);
-                    return { ...v, status: newStatus };
-                }
-                return v;
-            }),
+                },
+                onError: () => {
+                    triggerToast(
+                        `Gagal memproses status arsip vendor "${vendor.name}".`,
+                        'error',
+                        'Gagal Memproses',
+                    );
+                },
+            },
         );
     };
 
-    const getVendorStats = (vendor: VendorItem) => {
-        if (vendor.id > 4) {
-            return { count: vendor.count, total: vendor.total };
-        }
-        if (fiscalMode === 'ppn') {
-            switch (vendor.id) {
-                case 1:
-                    return { count: 12, total: 'IDR 45.000.000' };
-                case 2:
-                    return { count: 8, total: 'IDR 24.300.000' };
-                case 3:
-                    return { count: 15, total: 'IDR 5.200.000' };
-                case 4:
-                    return { count: 3, total: 'IDR 1.500.000' };
-                default:
-                    return { count: 0, total: 'IDR 0' };
-            }
-        } else {
-            switch (vendor.id) {
-                case 1:
-                    return { count: 6, total: 'IDR 18.000.000' };
-                case 2:
-                    return { count: 4, total: 'IDR 12.000.000' };
-                case 3:
-                    return { count: 10, total: 'IDR 3.500.000' };
-                case 4:
-                    return { count: 1, total: 'IDR 500.000' };
-                default:
-                    return { count: 0, total: 'IDR 0' };
-            }
+    const handleDeleteVendor = (vendor: VendorItem) => {
+        if (
+            confirm(
+                `Apakah Anda yakin ingin menghapus vendor "${vendor.name}"?`,
+            )
+        ) {
+            router.delete(route('vendors.destroy', vendor.id), {
+                onSuccess: () => {
+                    triggerToast(
+                        `Vendor "${vendor.name}" berhasil dihapus.`,
+                        'success',
+                        'Vendor Dihapus',
+                    );
+                },
+                onError: () => {
+                    triggerToast(
+                        `Gagal menghapus vendor "${vendor.name}".`,
+                        'error',
+                        'Gagal Menghapus',
+                    );
+                },
+            });
         }
     };
 
-    // Filtering
-    const filteredVendors = useMemo(() => {
-        return vendors.filter((v) => {
-            const matchesSearch =
-                v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                v.npwp.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                v.email.toLowerCase().includes(searchQuery.toLowerCase());
-
-            const matchesPkp =
-                pkpFilter === 'all' ||
-                (pkpFilter === 'pkp' && v.pkp) ||
-                (pkpFilter === 'non-pkp' && !v.pkp);
-
-            const matchesStatus =
-                statusTab === 'all' ||
-                (statusTab === 'active' && v.status === 'active') ||
-                (statusTab === 'archived' && v.status === 'archived');
-
-            return matchesSearch && matchesPkp && matchesStatus;
-        });
-    }, [vendors, searchQuery, pkpFilter, statusTab]);
-
-    // Pagination
-    const totalItems = filteredVendors.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-    const paginatedVendors = useMemo(() => {
-        return filteredVendors.slice(
-            (currentPage - 1) * itemsPerPage,
-            currentPage * itemsPerPage,
+    const renderSortIcon = (column: string) => {
+        const isActive = sortBy === column;
+        return (
+            <span className="inline-flex items-center ml-1.5 transition-colors">
+                {isActive ? (
+                    sortDirection === 'asc' ? (
+                        <svg
+                            className="h-3.5 w-3.5 text-blue-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M5 15l7-7 7 7"
+                            />
+                        </svg>
+                    ) : (
+                        <svg
+                            className="h-3.5 w-3.5 text-blue-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M19 9l-7 7-7-7"
+                            />
+                        </svg>
+                    )
+                ) : (
+                    <svg
+                        className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M8 9l4-4 4 4m0 6l-4 4-4-4"
+                        />
+                    </svg>
+                )}
+            </span>
         );
-    }, [filteredVendors, currentPage, itemsPerPage]);
+    };
 
-    // Counts
-    const totalVendorCount = vendors.length;
-    const activeCount = vendors.filter((v) => v.status === 'active').length;
-    const archivedCount = vendors.filter((v) => v.status === 'archived').length;
-    const pkpCount = vendors.filter((v) => v.pkp).length;
+    const vendorList = Array.isArray(vendors?.data) ? vendors.data : [];
+    const totalItems = vendors?.total ?? vendorList.length;
+    const currentPage = vendors?.current_page ?? 1;
+    const totalPages = vendors?.last_page ?? 1;
+    const itemsPerPage = vendors?.per_page ?? 10;
+
+    // Metrics calculations
+    const activeVendorsCount =
+        metrics?.activeVendors ??
+        (vendorList.length > 0
+            ? vendorList.filter((v) => v.status === 'active').length
+            : 0);
+
+    const pkpVendorsCount =
+        metrics?.pkpCount ??
+        (vendorList.length > 0
+            ? vendorList.filter((v) => v.pkp && v.status === 'active').length
+            : 0);
+
+    const nonPkpVendorsCount =
+        metrics?.nonPkpCount ??
+        Math.max(0, activeVendorsCount - pkpVendorsCount);
 
     return (
         <AppLayout
@@ -229,34 +417,14 @@ export default function Vendors() {
             ]}
         >
             <div className="w-full space-y-6">
-                {/* Alert Notification */}
-                {alertMessage && (
-                    <div className="animate-fade-in shadow-2xs flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-bold text-emerald-800">
-                        <div className="flex items-center gap-2.5">
-                            <svg
-                                className="h-5 w-5 text-emerald-600"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2.5}
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M5 13l4 4L19 7"
-                                />
-                            </svg>
-                            <span>{alertMessage}</span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setAlertMessage(null)}
-                            className="text-emerald-500 hover:text-emerald-800"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
+                {/* Floating Toast Notification */}
+                <Toast
+                    show={toast.show}
+                    type={toast.type}
+                    title={toast.title}
+                    message={toast.message}
+                    onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+                />
 
                 {/* Header Title & CTA */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -290,9 +458,9 @@ export default function Vendors() {
                 {/* Metric Summary Grid */}
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                     <MetricCard
-                        title="Total Vendor Terdaftar"
-                        value={`${totalVendorCount} Vendor`}
-                        badgeText="Mitra Usaha"
+                        title="Total Vendor Aktif"
+                        value={`${activeVendorsCount} Vendor`}
+                        badgeText="Siap Transaksi"
                         cardBgClass="bg-blue-50/60 border-blue-200/60 shadow-xs"
                         badgeColorClass="bg-white/90 text-blue-800 border-blue-200/60"
                         icon={
@@ -315,7 +483,7 @@ export default function Vendors() {
                     />
                     <MetricCard
                         title="Status PKP (Bisa PPN)"
-                        value={`${pkpCount} Vendor`}
+                        value={`${pkpVendorsCount} Vendor`}
                         badgeText="Faktur Pajak"
                         cardBgClass="bg-emerald-50/60 border-emerald-200/60 shadow-xs"
                         badgeColorClass="bg-white/90 text-emerald-800 border-emerald-200/60"
@@ -338,18 +506,14 @@ export default function Vendors() {
                         valueColorClass="text-emerald-950"
                     />
                     <MetricCard
-                        title="Mode Pajak Aktif"
-                        value={
-                            fiscalMode === 'ppn'
-                                ? 'Mode PPN (PKP)'
-                                : 'Mode Non-PPN'
-                        }
-                        badgeText="Fiskal"
-                        cardBgClass="bg-slate-100/80 border-slate-200/80 shadow-xs"
-                        badgeColorClass="bg-white/90 text-slate-800 border-slate-200/60"
+                        title="Status Non-PKP"
+                        value={`${nonPkpVendorsCount} Vendor`}
+                        badgeText="Tanpa PPN"
+                        cardBgClass="bg-amber-50/60 border-amber-200/60 shadow-xs"
+                        badgeColorClass="bg-white/90 text-amber-800 border-amber-200/60"
                         icon={
                             <svg
-                                className="h-5 w-5 text-slate-600"
+                                className="h-5 w-5 text-amber-600"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -358,12 +522,12 @@ export default function Vendors() {
                                 <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                                 />
                             </svg>
                         }
-                        iconColorClass="bg-white text-slate-600 border-slate-200/60 shadow-2xs"
-                        valueColorClass="text-slate-900"
+                        iconColorClass="bg-white text-amber-600 border-amber-100 shadow-2xs"
+                        valueColorClass="text-amber-950"
                     />
                 </div>
 
@@ -392,12 +556,11 @@ export default function Vendors() {
                             </div>
                             <TextInput
                                 type="text"
-                                placeholder="Cari nama vendor, NPWP, atau email..."
+                                placeholder="Cari nama vendor atau NPWP..."
                                 value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    setCurrentPage(1);
-                                }}
+                                onChange={(e) =>
+                                    handleSearchChange(e.target.value)
+                                }
                                 className="block w-full pl-9 text-xs"
                             />
                         </div>
@@ -412,21 +575,21 @@ export default function Vendors() {
                             </label>
                             <SelectInput
                                 value={statusTab}
-                                onChange={(e) => {
-                                    setStatusTab(e.target.value as any);
-                                    setCurrentPage(1);
-                                }}
+                                onChange={(e) =>
+                                    handleStatusChange(
+                                        e.target.value as
+                                            | 'active'
+                                            | 'archived'
+                                            | 'all',
+                                    )
+                                }
                                 className="w-44 text-xs"
                             >
-                                <option value="active">
-                                    Vendor Aktif ({activeCount})
-                                </option>
+                                <option value="active">Vendor Aktif</option>
                                 <option value="archived">
-                                    Vendor Diarsipkan ({archivedCount})
+                                    Vendor Diarsipkan
                                 </option>
-                                <option value="all">
-                                    Semua Vendor ({totalVendorCount})
-                                </option>
+                                <option value="all">Semua Vendor</option>
                             </SelectInput>
                         </div>
 
@@ -437,10 +600,14 @@ export default function Vendors() {
                             </label>
                             <SelectInput
                                 value={pkpFilter}
-                                onChange={(e) => {
-                                    setPkpFilter(e.target.value as any);
-                                    setCurrentPage(1);
-                                }}
+                                onChange={(e) =>
+                                    handlePkpChange(
+                                        e.target.value as
+                                            | 'all'
+                                            | 'pkp'
+                                            | 'non-pkp',
+                                    )
+                                }
                                 className="w-44 text-xs"
                             >
                                 <option value="all">Semua Status PKP</option>
@@ -453,7 +620,7 @@ export default function Vendors() {
 
                 {/* Vendors Data Table */}
                 <div className="shadow-xs overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
-                    {totalItems === 0 ? (
+                    {vendorList.length === 0 ? (
                         <EmptyState
                             title="Vendor Tidak Ditemukan"
                             description={
@@ -467,51 +634,98 @@ export default function Vendors() {
                             <div className="overflow-x-auto">
                                 <table className="w-full border-collapse">
                                     <thead>
-                                        <tr className="border-b border-slate-100 bg-slate-50/40 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                                            <th className="px-6 py-4">
-                                                Nama Vendor
+                                        <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                            {/* Nama Vendor (Sortable) */}
+                                            <th
+                                                onClick={() =>
+                                                    handleSort('name')
+                                                }
+                                                className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/70 hover:text-slate-800"
+                                            >
+                                                <div className="flex items-center">
+                                                    <span>Nama Vendor</span>
+                                                    {renderSortIcon('name')}
+                                                </div>
                                             </th>
-                                            <th className="px-6 py-4">
-                                                NPWP Resmi
+
+                                            {/* NPWP (Sortable) */}
+                                            <th
+                                                onClick={() =>
+                                                    handleSort('npwp')
+                                                }
+                                                className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/70 hover:text-slate-800"
+                                            >
+                                                <div className="flex items-center">
+                                                    <span>NPWP Resmi</span>
+                                                    {renderSortIcon('npwp')}
+                                                </div>
                                             </th>
-                                            <th className="px-6 py-4">
-                                                Kontak (Email / Telepon)
-                                            </th>
+
+                                            {/* Status PKP */}
                                             <th className="px-6 py-4">
                                                 Status PKP
                                             </th>
-                                            <th className="px-6 py-4 text-right">
-                                                Total Belanja (
-                                                {fiscalMode === 'ppn'
-                                                    ? 'PPN'
-                                                    : 'Non-PPN'}
-                                                )
+
+                                            {/* Telepon / WhatsApp */}
+                                            <th className="px-6 py-4">
+                                                Telepon / WhatsApp
                                             </th>
+
+                                            {/* Terakhir Diperbarui (Sortable) */}
+                                            <th
+                                                onClick={() =>
+                                                    handleSort('updated_at')
+                                                }
+                                                className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/70 hover:text-slate-800"
+                                            >
+                                                <div className="flex items-center">
+                                                    <span>Terakhir Update</span>
+                                                    {renderSortIcon('updated_at')}
+                                                </div>
+                                            </th>
+
+                                            {/* Aksi */}
                                             <th className="px-6 py-4 text-center">
                                                 Aksi
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                                        {paginatedVendors.map((vendor, idx) => {
-                                            const stats =
-                                                getVendorStats(vendor);
+                                        {vendorList.map((vendor, idx) => {
                                             const isNearBottom =
-                                                idx >=
-                                                paginatedVendors.length - 2;
+                                                idx >= vendorList.length - 2;
+
+                                            const isArchived =
+                                                vendor.status === 'archived';
+
+                                            const waUrl = getWhatsAppUrl(
+                                                vendor.phone,
+                                                `Halo ${vendor.name}, kami dari PT Yousee Indonesia terkait administrasi Purchase Order (PO)...`,
+                                            );
+
                                             return (
                                                 <tr
                                                     key={vendor.id}
-                                                    className="transition-colors hover:bg-slate-50/50"
+                                                    className={`transition-colors ${
+                                                        isArchived
+                                                            ? 'bg-rose-50/70 hover:bg-rose-100/70'
+                                                            : 'hover:bg-slate-50/50'
+                                                    }`}
                                                 >
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="font-bold text-slate-800">
+                                                            <span
+                                                                className={`font-bold ${
+                                                                    isArchived
+                                                                        ? 'text-rose-950'
+                                                                        : 'text-slate-800'
+                                                                }`}
+                                                            >
                                                                 {vendor.name}
                                                             </span>
-                                                            {vendor.status ===
-                                                                'archived' && (
-                                                                <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-500">
+                                                            {isArchived && (
+                                                                <span className="shadow-2xs inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-100/80 px-2 py-0.5 text-[9px] font-bold text-rose-700">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
                                                                     Diarsipkan
                                                                 </span>
                                                             )}
@@ -520,22 +734,14 @@ export default function Vendors() {
                                                             ID: VND-
                                                             {vendor.id
                                                                 .toString()
-                                                                .padStart(
-                                                                    3,
-                                                                    '0',
+                                                                .substring(
+                                                                    0,
+                                                                    8,
                                                                 )}
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 font-mono text-xs font-bold text-slate-600">
                                                         {vendor.npwp || '—'}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="text-xs font-semibold text-slate-700">
-                                                            {vendor.email}
-                                                        </div>
-                                                        <div className="mt-0.5 text-[10px] font-medium text-slate-400">
-                                                            {vendor.phone}
-                                                        </div>
                                                     </td>
                                                     <td className="whitespace-nowrap px-6 py-4">
                                                         <StatusBadge
@@ -546,14 +752,41 @@ export default function Vendors() {
                                                             }
                                                         />
                                                     </td>
-                                                    <td className="whitespace-nowrap px-6 py-4 text-right">
-                                                        <div className="font-mono text-xs font-bold text-slate-900">
-                                                            {stats.total}
-                                                        </div>
-                                                        <div className="mt-0.5 text-[10px] font-semibold text-slate-400">
-                                                            {stats.count}{' '}
-                                                            Transaksi PO
-                                                        </div>
+                                                    {/* Telepon / WhatsApp Clickable */}
+                                                    <td className="whitespace-nowrap px-6 py-4">
+                                                        {vendor.phone ? (
+                                                            <a
+                                                                href={
+                                                                    waUrl ||
+                                                                    `tel:${vendor.phone}`
+                                                                }
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="group/wa inline-flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 transition-all hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-950 hover:shadow-xs"
+                                                                title={`Chat WhatsApp ke ${vendor.phone}`}
+                                                            >
+                                                                <svg
+                                                                    className="h-3.5 w-3.5 fill-emerald-600 transition-transform group-hover/wa:scale-110"
+                                                                    viewBox="0 0 24 24"
+                                                                >
+                                                                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872-.118.571-.347 1.758-7.18 2.006-1.413.248-.694.248-1.289.173-1.413z" />
+                                                                </svg>
+                                                                <span className="font-mono text-[11px]">
+                                                                    {
+                                                                        vendor.phone
+                                                                    }
+                                                                </span>
+                                                            </a>
+                                                        ) : (
+                                                            <span className="font-mono text-xs text-slate-300">
+                                                                —
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-6 py-4 text-xs font-medium text-slate-500">
+                                                        {formatDate(
+                                                            vendor.updated_at,
+                                                        )}
                                                     </td>
                                                     <td className="whitespace-nowrap px-6 py-4 text-center">
                                                         <ActionDropdown
@@ -578,7 +811,7 @@ export default function Vendors() {
                                                                             <path
                                                                                 strokeLinecap="round"
                                                                                 strokeLinejoin="round"
-                                                                                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 210.3H3v-3.5L16.732 3.732z"
+                                                                                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.03H3v-3.5L16.732 3.732z"
                                                                             />
                                                                         </svg>
                                                                     ),
@@ -644,7 +877,34 @@ export default function Vendors() {
                                                                     onClick:
                                                                         () =>
                                                                             handleToggleArchiveVendor(
-                                                                                vendor.id,
+                                                                                vendor,
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Hapus Vendor',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-rose-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    variant:
+                                                                        'danger',
+                                                                    onClick:
+                                                                        () =>
+                                                                            handleDeleteVendor(
+                                                                                vendor,
                                                                             ),
                                                                 },
                                                             ]}
@@ -660,7 +920,7 @@ export default function Vendors() {
                             <Pagination
                                 currentPage={currentPage}
                                 totalPages={totalPages}
-                                onPageChange={(page) => setCurrentPage(page)}
+                                onPageChange={handlePageChange}
                                 totalItems={totalItems}
                                 itemsPerPage={itemsPerPage}
                             />

@@ -5,19 +5,23 @@ import InputError from '@/Components/Form/InputError';
 import InputLabel from '@/Components/Form/InputLabel';
 import TextInput from '@/Components/Form/TextInput';
 import Modal from '@/Components/UI/Modal';
+import { formatNpwp } from '@/Utils/formatters';
 import React, { useEffect, useState } from 'react';
 
 export interface VendorItem {
-    id: number;
+    id: string | number;
     name: string;
-    npwp: string;
-    email: string;
-    phone: string;
-    address: string;
+    npwp: string | null;
+    email?: string;
+    phone?: string;
+    address?: string;
     pkp: boolean;
     status: 'active' | 'archived';
     count: number;
-    total: string;
+    total: number | string;
+    is_archived?: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 interface VendorEditModalProps {
@@ -34,7 +38,7 @@ export default function VendorEditModal({
     onSubmit,
 }: VendorEditModalProps) {
     const [form, setForm] = useState<VendorItem>({
-        id: 0,
+        id: '',
         name: '',
         npwp: '',
         email: '',
@@ -50,7 +54,18 @@ export default function VendorEditModal({
 
     useEffect(() => {
         if (vendor && isOpen) {
-            setForm({ ...vendor });
+            setForm({
+                id: vendor.id,
+                name: vendor.name,
+                npwp: vendor.npwp ?? '',
+                email: vendor.email ?? '',
+                phone: vendor.phone ?? '',
+                address: vendor.address ?? '',
+                pkp: vendor.pkp,
+                status: vendor.status,
+                count: vendor.count,
+                total: vendor.total,
+            });
             setErrors({});
         }
     }, [vendor, isOpen]);
@@ -63,7 +78,7 @@ export default function VendorEditModal({
             newErrors.name = 'Nama lengkap vendor wajib diisi.';
         }
 
-        if (form.npwp.trim()) {
+        if (form.npwp && form.npwp.trim()) {
             const cleanNpwp = form.npwp.replace(/[^0-9]/g, '');
             if (cleanNpwp.length !== 15 && cleanNpwp.length !== 16) {
                 newErrors.npwp =
@@ -71,7 +86,7 @@ export default function VendorEditModal({
             }
         }
 
-        if (form.email.trim()) {
+        if (form.email && form.email.trim()) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(form.email)) {
                 newErrors.email = 'Format email tidak valid.';
@@ -175,10 +190,15 @@ export default function VendorEditModal({
                             <TextInput
                                 id="edit-vendor-npwp"
                                 type="text"
-                                value={form.npwp}
-                                onChange={(e) =>
-                                    setForm({ ...form, npwp: e.target.value })
-                                }
+                                value={form.npwp ?? ''}
+                                onChange={(e) => {
+                                    const formatted = formatNpwp(e.target.value);
+                                    setForm({
+                                        ...form,
+                                        npwp: formatted,
+                                        pkp: formatted.trim().length > 0,
+                                    });
+                                }}
                                 className="mt-1 block w-full font-mono text-xs"
                                 placeholder="01.234.567.8-901.000"
                             />

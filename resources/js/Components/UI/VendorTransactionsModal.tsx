@@ -3,7 +3,7 @@ import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
 import Modal from '@/Components/UI/Modal';
 import StatusBadge from '@/Components/UI/StatusBadge';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface VendorPoTransaction {
     id: string;
@@ -11,7 +11,7 @@ interface VendorPoTransaction {
     project: string;
     amount: string;
     fiscal: 'ppn' | 'non-ppn';
-    status: 'paid' | 'issued' | 'finished';
+    status: 'paid' | 'issued' | 'draft';
 }
 
 interface VendorTransactionsModalProps {
@@ -20,101 +20,60 @@ interface VendorTransactionsModalProps {
     vendor: VendorItem | null;
 }
 
+const formatRupiah = (num: number) => {
+    return `IDR ${Math.round(num).toLocaleString('id-ID')}`;
+};
+
 export default function VendorTransactionsModal({
     isOpen,
     onClose,
     vendor,
 }: VendorTransactionsModalProps) {
     const [currentPage, setCurrentPage] = useState(1);
+    const [loading, setLoading] = useState(false);
+    const [transactions, setTransactions] = useState<VendorPoTransaction[]>([]);
     const itemsPerPage = 5;
 
-    if (!vendor) return null;
-
-    // Mock PO transactions data based on vendor ID
-    const getPoTransactions = (): VendorPoTransaction[] => {
-        switch (vendor.id) {
-            case 1:
-                return [
-                    {
-                        id: 'PO-2026-001',
-                        date: '02 Feb 2026',
-                        project: 'Sewa Billboard Sudirman 6 Bulan',
-                        amount: 'IDR 25.000.000',
-                        fiscal: 'ppn',
-                        status: 'paid',
-                    },
-                    {
-                        id: 'PO-2026-004',
-                        date: '18 Jan 2026',
-                        project: 'Biaya Cetak Flexi Frontlite 440g',
-                        amount: 'IDR 12.000.000',
-                        fiscal: 'ppn',
-                        status: 'finished',
-                    },
-                    {
-                        id: 'PO-2026-008',
-                        date: '05 Jan 2026',
-                        project: 'Maintenance Frame Neonbox Senayan',
-                        amount: 'IDR 8.000.000',
-                        fiscal: 'ppn',
-                        status: 'finished',
-                    },
-                ];
-            case 2:
-                return [
-                    {
-                        id: 'PO-2026-002',
-                        date: '28 Jan 2026',
-                        project: 'Konstruksi Mini Megatron Pulogadung',
-                        amount: 'IDR 18.300.000',
-                        fiscal: 'ppn',
-                        status: 'paid',
-                    },
-                    {
-                        id: 'PO-2026-006',
-                        date: '12 Jan 2026',
-                        project: 'Instalasi Lampu LED Spotlight 100W',
-                        amount: 'IDR 6.000.000',
-                        fiscal: 'ppn',
-                        status: 'finished',
-                    },
-                ];
-            case 3:
-                return [
-                    {
-                        id: 'PO-2026-003',
-                        date: '25 Jan 2026',
-                        project: 'Sewa Banner Kemang Raya 1 Bulan',
-                        amount: 'IDR 3.200.000',
-                        fiscal: 'non-ppn',
-                        status: 'paid',
-                    },
-                    {
-                        id: 'PO-2026-007',
-                        date: '10 Jan 2026',
-                        project: 'Pemasangan Stiker Branding Mobil Ops',
-                        amount: 'IDR 2.000.000',
-                        fiscal: 'non-ppn',
-                        status: 'finished',
-                    },
-                ];
-            case 4:
-                return [
-                    {
-                        id: 'PO-2026-005',
-                        date: '15 Jan 2026',
-                        project: 'Biaya Izin Lokasi Sunset Road Bali',
-                        amount: 'IDR 1.500.000',
-                        fiscal: 'non-ppn',
-                        status: 'finished',
-                    },
-                ];
-            default:
-                return [];
+    useEffect(() => {
+        if (isOpen && vendor) {
+            setLoading(true);
+            setCurrentPage(1);
+            fetch(route('vendors.transactions', vendor.id))
+                .then((res) => res.json())
+                .then((data) => {
+                    const formatted = (data.transactions || []).map(
+                        (tx: {
+                            id: string;
+                            po_number: string;
+                            date: string;
+                            project_name: string;
+                            amount: number;
+                            fiscal_mode: 'ppn' | 'non-ppn';
+                            status: 'paid' | 'issued' | 'draft';
+                        }) => ({
+                            id: tx.po_number || tx.id,
+                            date: tx.date,
+                            project: tx.project_name || 'Project Umum',
+                            amount: formatRupiah(tx.amount),
+                            fiscal: tx.fiscal_mode || 'ppn',
+                            status: tx.status || 'draft',
+                        }),
+                    );
+                    setTransactions(formatted);
+                })
+                .catch((err) => {
+                    console.error('Failed to load vendor transactions', err);
+                    setTransactions([]);
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        } else {
+            setTransactions([]);
         }
-    };
+    }, [isOpen, vendor]);
 
-    const transactions = getPoTransactions();
+    if (!vendor) return null;
 
     // Pagination
     const totalItems = transactions.length;
@@ -123,6 +82,11 @@ export default function VendorTransactionsModal({
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage,
     );
+
+    const formattedTotal =
+        typeof vendor.total === 'number'
+            ? formatRupiah(vendor.total)
+            : vendor.total;
 
     return (
         <Modal show={isOpen} onClose={onClose} maxWidth="6xl" closeable={true}>
@@ -158,7 +122,7 @@ export default function VendorTransactionsModal({
                                 Riwayat Transaksi Purchase Order (PO) — Total
                                 Belanja Kumulatif:{' '}
                                 <span className="font-mono font-bold text-slate-900">
-                                    {vendor.total}
+                                    {formattedTotal}
                                 </span>
                             </p>
                         </div>
@@ -175,7 +139,16 @@ export default function VendorTransactionsModal({
 
                 {/* Transactions Table Container */}
                 <div className="shadow-xs overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
-                    {totalItems === 0 ? (
+                    {loading ? (
+                        <div className="flex items-center justify-center p-12 text-slate-400">
+                            <div className="flex items-center gap-3">
+                                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                                <span className="text-xs font-semibold">
+                                    Memuat riwayat transaksi...
+                                </span>
+                            </div>
+                        </div>
+                    ) : totalItems === 0 ? (
                         <EmptyState
                             title="Belum Ada Transaksi PO"
                             description="Vendor ini belum memiliki riwayat transaksi Purchase Order."

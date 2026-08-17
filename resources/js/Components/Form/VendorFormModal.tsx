@@ -5,6 +5,7 @@ import InputError from '@/Components/Form/InputError';
 import InputLabel from '@/Components/Form/InputLabel';
 import TextInput from '@/Components/Form/TextInput';
 import Modal from '@/Components/UI/Modal';
+import { formatNpwp } from '@/Utils/formatters';
 import React, { useEffect, useState } from 'react';
 
 export interface VendorFormData {
@@ -171,9 +172,14 @@ export default function VendorFormModal({
                                 id="vendor-npwp"
                                 type="text"
                                 value={form.npwp}
-                                onChange={(e) =>
-                                    setForm({ ...form, npwp: e.target.value })
-                                }
+                                onChange={(e) => {
+                                    const formatted = formatNpwp(e.target.value);
+                                    setForm({
+                                        ...form,
+                                        npwp: formatted,
+                                        pkp: formatted.trim().length > 0,
+                                    });
+                                }}
                                 className="mt-1 block w-full font-mono text-xs"
                                 placeholder="01.234.567.8-901.000"
                             />

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domains\Vendor\Actions;
 
 use App\Domains\Vendor\Models\Vendor;
@@ -8,10 +10,6 @@ class ArchiveVendor
 {
     /**
      * Archive or unarchive a vendor.
-     *
-     * @param \App\Domains\Vendor\Models\Vendor $vendor
-     * @param bool $isArchived
-     * @return \App\Domains\Vendor\Models\Vendor
      */
     public function execute(Vendor $vendor, bool $isArchived = true): Vendor
     {

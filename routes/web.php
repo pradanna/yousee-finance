@@ -24,10 +24,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/overview', [\App\Http\Controllers\Dashboard\OverviewController::class, 'index'])->name('overview');
 
     // Master Data
-    Route::get('/vendors', function () {
-        return Inertia::render('Vendors');
-    })->name('vendors');
-    Route::resource('vendors', \App\Http\Controllers\Vendor\VendorController::class)->only(['store', 'update', 'destroy']);
+    Route::resource('vendors', \App\Http\Controllers\Vendor\VendorController::class)->except(['create', 'edit', 'show'])->names([
+        'index' => 'vendors',
+    ]);
+    Route::get('/vendors-list', [\App\Http\Controllers\Vendor\VendorController::class, 'index'])->name('vendors.index');
+    Route::get('vendors/{vendor}/transactions', [\App\Http\Controllers\Vendor\VendorController::class, 'transactions'])->name('vendors.transactions');
     Route::post('vendors/{vendor}/archive', [\App\Http\Controllers\Vendor\VendorController::class, 'archive'])->name('vendors.archive');
     Route::post('vendors/{vendor}/unarchive', [\App\Http\Controllers\Vendor\VendorController::class, 'unarchive'])->name('vendors.unarchive');
 
