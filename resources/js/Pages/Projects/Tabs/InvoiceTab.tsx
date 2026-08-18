@@ -451,13 +451,7 @@ export default function InvoiceTab({
                                                 <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80">
                                                     {project.clientPaymentPlan.terms.map(
                                                         (term, tIdx) => {
-                                                            const termAmountWithPpn =
-                                                                isPPN
-                                                                    ? Math.round(
-                                                                          term.amount *
-                                                                              1.11,
-                                                                      )
-                                                                    : term.amount;
+                                                            const termAmountWithPpn = term.amount;
                                                             const today =
                                                                 new Date();
                                                             const due =
@@ -558,7 +552,7 @@ export default function InvoiceTab({
                                                                                             term.paidAt,
                                                                                         )}
                                                                                         {term.paidAmount &&
-                                                                                            ` (${fmt(isPPN ? Math.round(term.paidAmount * 1.11) : term.paidAmount)})`}
+                                                                                            ` (${fmt(term.paidAmount)})`}
                                                                                         {term.paymentMethod &&
                                                                                             ` via ${term.paymentMethod}`}
                                                                                     </span>
@@ -607,73 +601,52 @@ export default function InvoiceTab({
                                                                             Cetak Invoice
                                                                         </button>
 
-                                                                        {/* Tombol Cetak Kwitansi jika termin sudah lunas */}
-                                                                        {term.status === 'paid' && (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() =>
-                                                                                    handleDownloadKwitansiPdf(
-                                                                                        term,
-                                                                                    )
-                                                                                }
-                                                                                className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 transition-all hover:bg-emerald-100"
-                                                                            >
-                                                                                <svg
-                                                                                    className="h-3.5 w-3.5 text-emerald-600"
-                                                                                    fill="none"
-                                                                                    viewBox="0 0 24 24"
-                                                                                    stroke="currentColor"
-                                                                                    strokeWidth={2}
-                                                                                >
-                                                                                    <path
-                                                                                        strokeLinecap="round"
-                                                                                        strokeLinejoin="round"
-                                                                                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                                                                    />
-                                                                                </svg>
-                                                                                Cetak Kwitansi
-                                                                            </button>
-                                                                        )}
+                                                                        {term.status !== 'paid' && (() => {
+                                                                            const isPreviousTermPaid = tIdx === 0 || (() => {
+                                                                                const prevTerm = project.clientPaymentPlan?.terms?.[tIdx - 1];
+                                                                                if (!prevTerm) return true;
+                                                                                const prevTarget = prevTerm.amount;
+                                                                                const prevPaid = prevTerm.paidAmount || 0;
+                                                                                return prevTerm.status === 'paid' || prevPaid >= prevTarget;
+                                                                            })();
 
-                                                                        {term.status !== 'paid' && (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    const targetAmt =
-                                                                                        isPPN
-                                                                                            ? Math.round(
-                                                                                                  term.amount *
-                                                                                                      1.11,
-                                                                                              )
-                                                                                            : term.amount;
-                                                                                    const existingPaid =
-                                                                                        term.paidAmount
-                                                                                            ? isPPN
-                                                                                                ? Math.round(
-                                                                                                      term.paidAmount *
-                                                                                                          1.11,
-                                                                                                  )
-                                                                                                : term.paidAmount
-                                                                                            : 0;
-                                                                                    const remTarget =
-                                                                                        Math.max(
-                                                                                            0,
-                                                                                            targetAmt -
-                                                                                                existingPaid,
+                                                                            if (!isPreviousTermPaid) {
+                                                                                return (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        disabled
+                                                                                        className="shadow-2xs flex cursor-not-allowed items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-400 opacity-60"
+                                                                                        title="Harap selesaikan/lunasi termin sebelumnya terlebih dahulu"
+                                                                                    >
+                                                                                        <svg className="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                                                        </svg>
+                                                                                        Terkunci
+                                                                                    </button>
+                                                                                );
+                                                                            }
+
+                                                                            return (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        const targetAmt = term.amount;
+                                                                                        const existingPaid = term.paidAmount || 0;
+                                                                                        const remTarget = Math.max(0, targetAmt - existingPaid);
+
+                                                                                        onOpenPaymentModal(
+                                                                                            term,
+                                                                                            remTarget > 0
+                                                                                                ? remTarget
+                                                                                                : targetAmt,
                                                                                         );
-
-                                                                                    onOpenPaymentModal(
-                                                                                        term,
-                                                                                        remTarget > 0
-                                                                                            ? remTarget
-                                                                                            : targetAmt,
-                                                                                    );
-                                                                                }}
-                                                                                className="shadow-2xs cursor-pointer rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100"
-                                                                            >
-                                                                                Terima Pembayaran
-                                                                            </button>
-                                                                        )}
+                                                                                    }}
+                                                                                    className="shadow-2xs cursor-pointer rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100"
+                                                                                >
+                                                                                    Terima Pembayaran
+                                                                                </button>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 </div>
                                                             );
@@ -764,16 +737,9 @@ export default function InvoiceTab({
                                                                     term,
                                                                     pIdx,
                                                                 ) => {
-                                                                    const paidAmtDpp =
+                                                                    const paidAmtWithPpn =
                                                                         term.paidAmount ||
                                                                         term.amount;
-                                                                    const paidAmtWithPpn =
-                                                                        isPPN
-                                                                            ? Math.round(
-                                                                                  paidAmtDpp *
-                                                                                      1.11,
-                                                                              )
-                                                                            : paidAmtDpp;
                                                                     const isFullPaid =
                                                                         term.status ===
                                                                         'paid';

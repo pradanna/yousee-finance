@@ -1,3 +1,4 @@
+import { RecordInvoicePaymentModal, RecordInvoicePaymentModalSubmitData } from '@/Components/Modal/RecordInvoicePaymentModal';
 import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import { PageProps } from '@/types';
@@ -251,17 +252,42 @@ export default function Show({
                       notes: paymentPlan.notes,
                       createdAt: invoice.created_at || '',
                       terms: (paymentPlan.terms || []).map(
-                          (term: DbPaymentTerm) => ({
-                              id: term.id,
-                              label: term.label,
-                              amount: Number(term.amount) || 0,
-                              percent: Number(term.percent) || 0,
-                              dueDate: term.due_date || '',
-                              status:
-                                  (term.status as PaymentTermStatus) ||
-                                  'unpaid',
-                              notes: term.notes,
-                          }),
+                          (term: DbPaymentTerm) => {
+                              const settlements = term.settlements || [];
+                              const paidAmount = settlements.reduce(
+                                  (s: number, set: DbPaymentSettlement) =>
+                                      s + (Number(set.amount) || 0),
+                                  0,
+                              );
+                              const latestSettlement =
+                                  settlements[settlements.length - 1];
+                              const termAmount = Number(term.amount) || 0;
+                              const isPaid =
+                                  term.status === 'paid' ||
+                                  (termAmount > 0 &&
+                                      paidAmount >= termAmount - 1);
+
+                              return {
+                                  id: term.id,
+                                  label: term.label,
+                                  amount: termAmount,
+                                  percent: Number(term.percent) || 0,
+                                  dueDate: term.due_date || '',
+                                  status: isPaid
+                                      ? ('paid' as PaymentTermStatus)
+                                      : ((term.status as PaymentTermStatus) ||
+                                        'unpaid'),
+                                  paidAmount:
+                                      paidAmount > 0 ? paidAmount : undefined,
+                                  paidAt: latestSettlement?.paid_at,
+                                  paymentMethod:
+                                      latestSettlement?.payment_method,
+                                  paymentRef:
+                                      latestSettlement?.payment_ref ||
+                                      undefined,
+                                  notes: term.notes,
+                              };
+                          },
                       ),
                   }
                 : undefined,
@@ -978,21 +1004,8 @@ export default function Show({
                                     }
                                     onUpdateProject={onUpdateProject}
                                     onTriggerToast={triggerToast}
-                                    onOpenPaymentModal={(term, targetAmt) => {
+                                    onOpenPaymentModal={(term) => {
                                         setSelectedPayTerm(term);
-                                        setPayType('full');
-                                        setPayAmountInput(targetAmt);
-                                        setPayDateInput(
-                                            new Date()
-                                                .toISOString()
-                                                .split('T')[0],
-                                        );
-                                        setPayAccountId(
-                                            cashBankAccounts[0]?.id
-                                                ? String(cashBankAccounts[0].id)
-                                                : '',
-                                        );
-                                        setPayRefInput('');
                                     }}
                                 />
                             )}
@@ -1000,325 +1013,99 @@ export default function Show({
                     </div>
                 </div>
 
-                {/* Modal Catat Pembayaran Client (Full vs Partial) */}
+                {/* Modal Catat Pembayaran Client (Reusable Component) */}
                 {selectedPayTerm && (
-                    <div className="backdrop-blur-xs fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4">
-                        <div className="animate-in fade-in zoom-in w-full max-w-md space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl duration-200">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
-                                <div>
-                                    <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
-                                        Terima Pembayaran Client
-                                    </h3>
-                                    <p className="mt-0.5 text-xs text-slate-500">
-                                        {selectedPayTerm.label}
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedPayTerm(null)}
-                                    className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-400 hover:bg-slate-200 hover:text-slate-600"
-                                >
-                                    ✕
-                                </button>
-                            </div>
+                    <RecordInvoicePaymentModal
+                        isOpen={!!selectedPayTerm}
+                        invoice={{
+                            id: prj.id,
+                            invoiceNumber: prj.invoiceNumber || `INV-${prj.code}`,
+                            clientName: prj.clientName,
+                            projectName: prj.name,
+                            totalAmount: prj.contractValue,
+                            terms: (prj.clientPaymentPlan?.terms || []).map((t: PaymentTerm) => ({
+                                id: t.id,
+                                label: t.label,
+                                amount: t.amount,
+                                percent: t.percent,
+                                due_date: t.dueDate,
+                                status: t.status === 'paid' ? 'paid' : 'unpaid',
+                                paid_amount: t.paidAmount || 0,
+                                remaining_amount: Math.max(
+                                    0,
+                                    t.amount - (t.paidAmount || 0),
+                                ),
+                            })),
+                        }}
+                        initialTerm={{
+                            id: selectedPayTerm.id,
+                            label: selectedPayTerm.label,
+                            amount: selectedPayTerm.amount,
+                            percent: selectedPayTerm.percent,
+                            due_date: selectedPayTerm.dueDate,
+                            status: selectedPayTerm.status === 'paid' ? 'paid' : 'unpaid',
+                            paid_amount: selectedPayTerm.paidAmount || 0,
+                            remaining_amount: Math.max(
+                                0,
+                                selectedPayTerm.amount - (selectedPayTerm.paidAmount || 0),
+                            ),
+                        }}
+                        cashBankAccounts={cashBankAccounts}
+                        remainingAmount={
+                            Math.max(
+                                0,
+                                selectedPayTerm.amount - (selectedPayTerm.paidAmount || 0),
+                            )
+                        }
+                        onClose={() => setSelectedPayTerm(null)}
+                        onSubmit={(data: RecordInvoicePaymentModalSubmitData) => {
+                            const termId = data.term_id || selectedPayTerm.id;
+                            const dppPaidAmt = data.amount;
 
-                            {/* Summary Box */}
-                            {(() => {
-                                const targetAmt = isPPN
-                                    ? Math.round(selectedPayTerm.amount * 1.11)
-                                    : selectedPayTerm.amount;
-                                return (
-                                    <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 p-3.5">
-                                        <div>
-                                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                                Target Tagihan Termin
-                                            </div>
-                                            <div className="font-mono text-sm font-black text-slate-900">
-                                                {fmt(targetAmt)}
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                                Porsi Proyek
-                                            </div>
-                                            <div className="text-xs font-bold text-blue-600">
-                                                {selectedPayTerm.percent}%
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
+                            const selectedAccount = cashBankAccounts.find(
+                                (a) => String(a.id) === String(data.account_id),
+                            );
+                            const derivedMethod = selectedAccount
+                                ? selectedAccount.name
+                                : (data.method || 'Transfer Bank BCA');
 
-                            {/* Opsi Jenis Pembayaran: Full vs Partial */}
-                            <div className="space-y-2">
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                                    Opsi Pembayaran
-                                </label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setPayType('full');
-                                            const targetAmt = isPPN
-                                                ? Math.round(
-                                                      selectedPayTerm.amount *
-                                                          1.11,
-                                                  )
-                                                : selectedPayTerm.amount;
-                                            setPayAmountInput(targetAmt);
-                                        }}
-                                        className={`cursor-pointer rounded-2xl border p-3 text-left transition-all ${
-                                            payType === 'full'
-                                                ? 'border-emerald-600 bg-emerald-50 font-bold text-emerald-900 ring-2 ring-emerald-600/20'
-                                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        <div className="text-xs font-bold">
-                                            Lunas Sekaligus
-                                        </div>
-                                        <div className="mt-0.5 text-[10px] text-slate-500">
-                                            100% nominal termin
-                                        </div>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setPayType('partial');
-                                        }}
-                                        className={`cursor-pointer rounded-2xl border p-3 text-left transition-all ${
-                                            payType === 'partial'
-                                                ? 'border-blue-600 bg-blue-50 font-bold text-blue-900 ring-2 ring-blue-600/20'
-                                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        <div className="text-xs font-bold">
-                                            Cicil / Parsial
-                                        </div>
-                                        <div className="mt-0.5 text-[10px] text-slate-500">
-                                            Sebagian nominal
-                                        </div>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Nominal Input */}
-                            <div className="space-y-1.5">
-                                <label className="block text-xs font-bold text-slate-700">
-                                    Nominal Diterima (Rp)
-                                </label>
-                                <input
-                                    type="number"
-                                    value={payAmountInput || ''}
-                                    readOnly={payType === 'full'}
-                                    onChange={(e) =>
-                                        setPayAmountInput(
-                                            parseFloat(e.target.value) || 0,
-                                        )
-                                    }
-                                    placeholder="Masukkan nominal pembayaran..."
-                                    className={`w-full rounded-xl border px-3.5 py-2.5 font-mono text-sm font-bold focus:outline-none ${
-                                        payType === 'full'
-                                            ? 'border-slate-300 bg-slate-100 text-slate-700'
-                                            : 'border-blue-400 bg-white text-blue-950 focus:border-blue-600'
-                                    }`}
-                                />
-                                {payType === 'partial' && (
-                                    <div className="flex items-center justify-between text-[10px] text-slate-500">
-                                        <span>Sisa tagihan termin ini:</span>
-                                        <span className="font-mono font-bold text-slate-700">
-                                            {fmt(
-                                                Math.max(
-                                                    0,
-                                                    (isPPN
-                                                        ? Math.round(
-                                                              selectedPayTerm.amount *
-                                                                  1.11,
-                                                          )
-                                                        : selectedPayTerm.amount) -
-                                                        payAmountInput,
-                                                ),
-                                            )}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Tanggal Pembayaran & Rekening / Akun Kas Penerimaan */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="block text-xs font-bold text-slate-700">
-                                        Tanggal Bayar
-                                    </label>
-                                    <div className="relative flex items-center">
-                                        <div className="shadow-2xs flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs font-semibold text-slate-800 hover:border-blue-600">
-                                            <span>
-                                                {formatIndoDate(payDateInput)}
-                                            </span>
-                                            <svg
-                                                className="h-3.5 w-3.5 text-slate-400"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                stroke="currentColor"
-                                                strokeWidth={2}
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                                />
-                                            </svg>
-                                        </div>
-                                        <input
-                                            type="date"
-                                            value={payDateInput}
-                                            onChange={(e) =>
-                                                setPayDateInput(e.target.value)
-                                            }
-                                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="block text-xs font-bold text-slate-700">
-                                        Rekening / Kas Penerimaan
-                                    </label>
-                                    <select
-                                        value={payAccountId}
-                                        onChange={(e) =>
-                                            setPayAccountId(e.target.value)
-                                        }
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:outline-none"
-                                    >
-                                        {cashBankAccounts &&
-                                        cashBankAccounts.length > 0 ? (
-                                            cashBankAccounts.map((acc) => (
-                                                <option
-                                                    key={acc.id}
-                                                    value={acc.id}
-                                                >
-                                                    {acc.display_name ||
-                                                        `${acc.code} - ${acc.name}`}
-                                                </option>
-                                            ))
-                                        ) : (
-                                            <option value="">
-                                                Transfer Bank BCA (Default)
-                                            </option>
-                                        )}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Ref / Catatan */}
-                            <div className="space-y-1.5">
-                                <label className="block text-xs font-bold text-slate-700">
-                                    No. Ref / Bukti Transfer (Opsional)
-                                </label>
-                                <input
-                                    type="text"
-                                    value={payRefInput}
-                                    onChange={(e) =>
-                                        setPayRefInput(e.target.value)
-                                    }
-                                    placeholder="Contoh: TRX-884920 / BCA a/n Client"
-                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-600 focus:outline-none"
-                                />
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedPayTerm(null)}
-                                    className="cursor-pointer px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (!selectedPayTerm) return;
-                                        if (payAmountInput <= 0) {
-                                            triggerToast(
-                                                'Nominal pembayaran harus lebih dari 0.',
-                                                'error',
-                                                'Validasi Gagal',
-                                            );
-                                            return;
-                                        }
-
-                                        const targetAmt = isPPN
-                                            ? Math.round(
-                                                  selectedPayTerm.amount * 1.11,
-                                              )
-                                            : selectedPayTerm.amount;
-                                        const dppPaidAmt = isPPN
-                                            ? Math.round(payAmountInput / 1.11)
-                                            : payAmountInput;
-
-                                        const selectedAccount =
-                                            cashBankAccounts.find(
-                                                (a) =>
-                                                    String(a.id) ===
-                                                    String(payAccountId),
-                                            );
-                                        const derivedMethod = selectedAccount
-                                            ? selectedAccount.name
-                                            : 'Transfer Bank BCA';
-
-                                        router.post(
-                                            `/projects/${prj.id}/invoice/payment-terms/${selectedPayTerm.id}/settle`,
-                                            {
-                                                amount: dppPaidAmt,
-                                                paid_at:
-                                                    payDateInput ||
-                                                    new Date()
-                                                        .toISOString()
-                                                        .split('T')[0],
-                                                payment_method: derivedMethod,
-                                                account_id: payAccountId
-                                                    ? String(payAccountId)
-                                                    : undefined,
-                                                payment_ref:
-                                                    payRefInput || undefined,
-                                                notes: `Penerimaan Pembayaran ${selectedPayTerm.label} - ${prj.clientName}`,
-                                            },
-                                            {
-                                                preserveScroll: true,
-                                                preserveState: true,
-                                                onSuccess: () => {
-                                                    setSelectedPayTerm(null);
-                                                    triggerToast(
-                                                        `Pembayaran ${selectedPayTerm.label} sebesar ${fmt(payAmountInput)} berhasil dicatat & dibukukan ke jurnal akuntansi.`,
-                                                        'success',
-                                                        'Pembayaran Diterima',
-                                                    );
-                                                },
-                                                onError: (errors) => {
-                                                    const errMsg =
-                                                        errors.amount ||
-                                                        errors.paid_at ||
-                                                        Object.values(errors)[0] ||
-                                                        'Gagal mencatat pembayaran.';
-                                                    triggerToast(
-                                                        String(errMsg),
-                                                        'error',
-                                                        'Gagal Menyimpan',
-                                                    );
-                                                },
-                                            },
+                            router.post(
+                                `/projects/${prj.id}/invoice/payment-terms/${termId}/settle`,
+                                {
+                                    amount: dppPaidAmt,
+                                    paid_at: data.date || new Date().toISOString().split('T')[0],
+                                    payment_method: derivedMethod,
+                                    account_id: data.account_id ? String(data.account_id) : undefined,
+                                    payment_ref: data.referenceNo || undefined,
+                                    notes: data.notes || `Penerimaan Pembayaran ${data.termLabel} - ${prj.clientName}`,
+                                },
+                                {
+                                    preserveScroll: true,
+                                    preserveState: true,
+                                    onSuccess: () => {
+                                        setSelectedPayTerm(null);
+                                        triggerToast(
+                                            `Pembayaran ${data.termLabel} sebesar ${fmt(data.amount)} berhasil dicatat & dibukukan ke jurnal akuntansi.`,
+                                            'success',
+                                            'Pembayaran Diterima',
                                         );
-                                    }}
-                                    className="cursor-pointer rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700"
-                                >
-                                    Simpan Pembayaran
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                                    },
+                                    onError: (errors) => {
+                                        const errMsg =
+                                            errors.amount ||
+                                            errors.paid_at ||
+                                            Object.values(errors)[0] ||
+                                            'Gagal mencatat pembayaran.';
+                                        triggerToast(
+                                            String(errMsg),
+                                            'error',
+                                            'Gagal Menyimpan',
+                                        );
+                                    },
+                                },
+                            );
+                        }}
+                    />
                 )}
 
                 {/* Modal Terbitkan Invoice & Skema Penagihan */}

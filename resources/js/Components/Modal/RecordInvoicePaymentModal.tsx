@@ -1,10 +1,13 @@
 import PrimaryButton from '@/Components/Button/PrimaryButton';
 import SecondaryButton from '@/Components/Button/SecondaryButton';
+import SelectInput from '@/Components/Form/SelectInput';
+import TextInput from '@/Components/Form/TextInput';
 import Modal from '@/Components/UI/Modal';
 import React, { useEffect, useState } from 'react';
 
 export interface RecordInvoicePaymentModalSubmitData {
     invoiceNumber: string;
+    term_id?: string | number;
     termLabel: string;
     amount: number;
     date: string;
@@ -12,6 +15,18 @@ export interface RecordInvoicePaymentModalSubmitData {
     account_id?: string;
     referenceNo: string;
     notes: string;
+}
+
+export interface InvoicePaymentTermModalItem {
+    id: string | number;
+    sort_order?: number;
+    label: string;
+    amount: number;
+    percent: number;
+    due_date?: string;
+    status: 'unpaid' | 'paid' | 'overdue';
+    paid_amount?: number;
+    remaining_amount?: number;
 }
 
 interface RecordInvoicePaymentModalProps {
@@ -22,6 +37,7 @@ interface RecordInvoicePaymentModalProps {
         clientName: string;
         projectName: string;
         totalAmount: number;
+        terms?: InvoicePaymentTermModalItem[];
         paymentTerms?: {
             type: string;
             dpPercent?: number;
@@ -32,6 +48,7 @@ interface RecordInvoicePaymentModalProps {
             }>;
         };
     } | null;
+    initialTerm?: InvoicePaymentTermModalItem | null;
     cashBankAccounts?: Array<{
         id: string | number;
         code: string;
@@ -62,7 +79,9 @@ const formatIndoDate = (dateStr?: string) => {
 
 export const RecordInvoicePaymentModal: React.FC<
     RecordInvoicePaymentModalProps
-> = ({ isOpen, invoice, cashBankAccounts = [], remainingAmount, onClose, onSubmit }) => {
+> = ({ isOpen, invoice, initialTerm, cashBankAccounts = [], remainingAmount, onClose, onSubmit }) => {
+    const terms = invoice?.terms || [];
+    const [selectedTermId, setSelectedTermId] = useState<string | number>('');
     const [optionType, setOptionType] = useState<'lunas' | 'cicil'>('lunas');
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -74,53 +93,86 @@ export const RecordInvoicePaymentModal: React.FC<
     // Detect installment details from terms or set default labels
     useEffect(() => {
         if (isOpen && invoice) {
-            setAmount(remainingAmount);
+            const activeTerm =
+                (initialTerm && terms.find((t) => String(t.id) === String(initialTerm.id))) ||
+                terms.find((t) => t.status !== 'paid') ||
+                terms[0];
+
+            if (activeTerm) {
+                setSelectedTermId(activeTerm.id);
+                setTermLabel(activeTerm.label);
+                const rem = activeTerm.remaining_amount !== undefined
+                    ? activeTerm.remaining_amount
+                    : (activeTerm.status === 'paid' ? 0 : activeTerm.amount);
+                setAmount(Math.round(rem > 0 ? rem : activeTerm.amount));
+            } else {
+                setSelectedTermId('');
+                setAmount(Math.round(remainingAmount));
+                if (invoice.paymentTerms?.type === 'dp') {
+                    setTermLabel('DP / Uang Muka');
+                } else if (invoice.paymentTerms?.type === 'termin') {
+                    setTermLabel('Pembayaran Termin');
+                } else if (invoice.paymentTerms?.type === 'installment') {
+                    setTermLabel('Cicilan Bulanan');
+                } else {
+                    setTermLabel('Pelunasan Invoice');
+                }
+            }
+
             setOptionType('lunas');
             setDate(new Date().toISOString().split('T')[0]);
             setReferenceNo('');
-
-            // Build default term label based on schema type
-            if (invoice.paymentTerms?.type === 'dp') {
-                setTermLabel('DP / Uang Muka');
-            } else if (invoice.paymentTerms?.type === 'termin') {
-                setTermLabel('Pembayaran Termin');
-            } else if (invoice.paymentTerms?.type === 'installment') {
-                setTermLabel('Cicilan Bulanan');
-            } else {
-                setTermLabel('Pelunasan Invoice');
-            }
 
             if (cashBankAccounts.length > 0) {
                 setAccountId(String(cashBankAccounts[0].id));
             }
         }
-    }, [isOpen, invoice, remainingAmount, cashBankAccounts]);
+    }, [isOpen, invoice, initialTerm, remainingAmount, cashBankAccounts]);
+
+    const activeSelectedTerm = terms.find((t) => String(t.id) === String(selectedTermId));
+    const activeTargetAmount = activeSelectedTerm
+        ? (activeSelectedTerm.remaining_amount !== undefined
+            ? activeSelectedTerm.remaining_amount
+            : (activeSelectedTerm.status === 'paid' ? 0 : activeSelectedTerm.amount))
+        : remainingAmount;
+
+    const handleSelectTerm = (term: InvoicePaymentTermModalItem) => {
+        setSelectedTermId(term.id);
+        setTermLabel(term.label);
+        setOptionType('lunas');
+        const rem = term.remaining_amount !== undefined
+            ? term.remaining_amount
+            : (term.status === 'paid' ? 0 : term.amount);
+        setAmount(Math.round(rem > 0 ? rem : term.amount));
+    };
 
     const handleSelectOption = (opt: 'lunas' | 'cicil') => {
         setOptionType(opt);
         if (opt === 'lunas') {
-            setAmount(remainingAmount);
+            setAmount(Math.round(activeTargetAmount));
         } else {
-            setAmount(Math.round(remainingAmount * 0.5)); // default partial to 50% of remainder
+            setAmount(Math.round(activeTargetAmount * 0.5)); // default partial to 50% of remainder
         }
     };
 
     const handleSubmit = () => {
         if (!invoice) return;
 
-        if (amount <= 0) {
+        const roundedAmount = Math.round(Number(amount) || 0);
+        if (roundedAmount <= 0) {
             alert('Nominal pembayaran harus lebih besar dari Rp 0!');
             return;
         }
         onSubmit({
             invoiceNumber: invoice.invoiceNumber,
-            termLabel,
-            amount: Number(amount),
+            term_id: activeSelectedTerm?.id,
+            termLabel: activeSelectedTerm?.label || termLabel,
+            amount: roundedAmount,
             date,
             method,
             account_id: accountId || undefined,
             referenceNo,
-            notes: `${termLabel} via ${method}`,
+            notes: `${activeSelectedTerm?.label || termLabel} via ${method}`,
         });
     };
 
@@ -142,13 +194,13 @@ export const RecordInvoicePaymentModal: React.FC<
                             <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
                             Terima Pembayaran Client
                         </h3>
-                        <p className="mt-1.5 text-[11px] font-bold leading-tight text-slate-400">
-                            {invoice.clientName} · {invoice.projectName}
+                        <p className="mt-1 text-xs font-bold text-slate-400">
+                            {activeSelectedTerm?.label || termLabel || (invoice.clientName + ' · ' + invoice.projectName)}
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-transparent bg-slate-50 text-slate-500 transition-all hover:border-slate-200 hover:bg-slate-100 hover:text-slate-700"
+                        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-transparent bg-slate-100/80 text-slate-400 transition-all hover:bg-slate-200 hover:text-slate-700"
                     >
                         <svg
                             className="h-4 w-4"
@@ -169,21 +221,23 @@ export const RecordInvoicePaymentModal: React.FC<
                 {/* Body Content */}
                 <div className="flex-1 space-y-5 overflow-y-auto bg-white px-8 py-6">
                     {/* Top Total Amount and portion Display */}
-                    <div className="flex items-center justify-between rounded-3xl border border-slate-100 bg-slate-50 p-5">
+                    <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4">
                         <div>
-                            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                 TARGET TAGIHAN TERMIN
                             </span>
-                            <span className="mt-1 block font-mono text-base font-black text-slate-800">
-                                {fmt(remainingAmount)}
+                            <span className="mt-1 block font-mono text-base font-black text-slate-900">
+                                {fmt(activeTargetAmount)}
                             </span>
                         </div>
                         <div className="text-right">
-                            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                 PORSI PROYEK
                             </span>
-                            <span className="mt-1 block text-sm font-black text-emerald-600">
-                                {porsiTagihanPct}%
+                            <span className="mt-1 block font-mono text-sm font-black text-blue-600">
+                                {activeSelectedTerm?.percent !== undefined
+                                    ? `${activeSelectedTerm.percent}%`
+                                    : `${porsiTagihanPct}%`}
                             </span>
                         </div>
                     </div>
@@ -214,7 +268,7 @@ export const RecordInvoicePaymentModal: React.FC<
                                             opt.id as 'lunas' | 'cicil',
                                         )
                                     }
-                                    className={`cursor-pointer rounded-3xl border p-4 text-left transition-all ${
+                                    className={`cursor-pointer rounded-2xl border p-4 text-left transition-all ${
                                         optionType === opt.id
                                             ? 'shadow-2xs border-emerald-500 bg-emerald-50/50 font-bold text-slate-900 ring-2 ring-emerald-500/20'
                                             : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -231,22 +285,26 @@ export const RecordInvoicePaymentModal: React.FC<
                         </div>
                     </div>
 
-                    {/* Numeric Input */}
+                    {/* Numeric Input using TextInput Component */}
                     <div className="space-y-1.5">
                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
                             Nominal Diterima (Rp)
                         </label>
-                        <input
-                            type="number"
-                            value={amount || ''}
-                            disabled={optionType === 'lunas'}
-                            onChange={(e) =>
-                                setAmount(
-                                    Math.max(0, parseInt(e.target.value) || 0),
-                                )
+                        <TextInput
+                            type="text"
+                            inputMode="numeric"
+                            value={
+                                amount > 0
+                                    ? Math.round(amount).toLocaleString('id-ID')
+                                    : ''
                             }
+                            disabled={optionType === 'lunas'}
+                            onChange={(e) => {
+                                const cleanDigits = e.target.value.replace(/\D/g, '');
+                                setAmount(cleanDigits ? parseInt(cleanDigits, 10) : 0);
+                            }}
                             placeholder="Ketik nominal transfer..."
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-xs font-black text-slate-800 focus:border-emerald-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100/70 disabled:text-slate-500"
+                            className="w-full rounded-2xl border-slate-200 bg-slate-50/60 px-4 py-3 text-xs font-black text-slate-800 focus:border-emerald-500 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-100/70 disabled:text-slate-500"
                         />
                     </div>
 
@@ -287,48 +345,41 @@ export const RecordInvoicePaymentModal: React.FC<
                                 Rekening Kas / Bank Penerima
                             </label>
                             {cashBankAccounts.length > 0 ? (
-                                <select
+                                <SelectInput
                                     value={accountId}
                                     onChange={(e) => setAccountId(e.target.value)}
-                                    className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-800 focus:border-emerald-500 focus:outline-none"
-                                >
-                                    {cashBankAccounts.map((acc) => (
-                                        <option key={acc.id} value={acc.id}>
-                                            {acc.display_name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    options={cashBankAccounts.map((acc) => ({
+                                        value: String(acc.id),
+                                        label: acc.display_name,
+                                    }))}
+                                    className="w-full"
+                                />
                             ) : (
-                                <select
+                                <SelectInput
                                     value={method}
                                     onChange={(e) => setMethod(e.target.value)}
-                                    className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-800 focus:border-emerald-500 focus:outline-none"
-                                >
-                                    <option value="Transfer BCA">
-                                        Transfer BCA
-                                    </option>
-                                    <option value="Transfer Mandiri">
-                                        Transfer Mandiri
-                                    </option>
-                                    <option value="Cash / Tunai">
-                                        Cash / Tunai
-                                    </option>
-                                </select>
+                                    options={[
+                                        { value: 'Transfer BCA', label: 'Transfer BCA' },
+                                        { value: 'Transfer Mandiri', label: 'Transfer Mandiri' },
+                                        { value: 'Cash / Tunai', label: 'Cash / Tunai' },
+                                    ]}
+                                    className="w-full"
+                                />
                             )}
                         </div>
                     </div>
 
-                    {/* Reference text box */}
+                    {/* Reference text box using TextInput Component */}
                     <div className="space-y-1.5">
                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
                             No. Ref / Bukti Transfer (Opsional)
                         </label>
-                        <input
+                        <TextInput
                             type="text"
                             value={referenceNo}
                             onChange={(e) => setReferenceNo(e.target.value)}
                             placeholder="Contoh: TRX-884920 / BCA a/n Client"
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-800 focus:border-emerald-500 focus:outline-none"
+                            className="w-full rounded-2xl border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-800 focus:border-emerald-500 focus:ring-emerald-500/20"
                         />
                     </div>
                 </div>

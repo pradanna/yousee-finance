@@ -244,22 +244,22 @@ export function calcFinancials(
     fiscalMode: FiscalMode,
 ) {
     const isPPN = fiscalMode === 'ppn';
-    const dpp = project.contractValue;
-    const ppnKeluaran = isPPN ? dpp * PPN_RATE : 0;
+    const dpp = Math.round(project.contractValue);
+    const ppnKeluaran = isPPN ? Math.round(dpp * PPN_RATE) : 0;
     const totalInvoice = dpp + ppnKeluaran;
 
     const rawVendorSum = locations.reduce(
-        (s, l) => s + l.vendorCost * (l.qty || 1),
+        (s, l) => s + Math.round(l.vendorCost) * (l.qty || 1),
         0,
     );
 
     // In PPN Mode, check if purchaseOrders exist or treat vendorCost as DPP
     let totalDppVendor = rawVendorSum;
-    let totalPO = isPPN ? rawVendorSum * (1 + PPN_RATE) : rawVendorSum;
-    let ppnMasukan = isPPN ? rawVendorSum * PPN_RATE : 0;
+    let totalPO = isPPN ? Math.round(rawVendorSum * (1 + PPN_RATE)) : rawVendorSum;
+    let ppnMasukan = isPPN ? Math.round(rawVendorSum * PPN_RATE) : 0;
 
     if (project.purchaseOrders && project.purchaseOrders.length > 0) {
-        const poSum = project.purchaseOrders.reduce((s, po) => s + (Number(po.total) || 0), 0);
+        const poSum = project.purchaseOrders.reduce((s, po) => s + Math.round(Number(po.total) || 0), 0);
         if (poSum > 0) {
             totalPO = poSum;
             totalDppVendor = isPPN ? Math.round(poSum / (1 + PPN_RATE)) : poSum;
@@ -274,7 +274,7 @@ export function calcFinancials(
     }
 
     const commissionRate = project.salesCommissionRate ?? 0;
-    const salesCommission = (dpp * commissionRate) / 100;
+    const salesCommission = Math.round((dpp * commissionRate) / 100);
 
     const netProfit = dpp - totalDppVendor - salesCommission;
     const ppnNet = ppnKeluaran - ppnMasukan;

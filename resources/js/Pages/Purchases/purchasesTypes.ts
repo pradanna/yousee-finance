@@ -21,64 +21,7 @@ export const formatDate = (dateStr?: string): string => {
     }
 };
 
-export function formatPeriod(
-    startStr?: string,
-    endStr?: string,
-): { label: string; duration: string } {
-    if (!startStr || !endStr) return { label: '', duration: '' };
-
-    const start = new Date(startStr);
-    const end = new Date(endStr);
-
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
-        return { label: '', duration: '' };
-    }
-
-    const monthNamesShort = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'Mei',
-        'Jun',
-        'Jul',
-        'Agu',
-        'Sep',
-        'Okt',
-        'Nov',
-        'Des',
-    ];
-
-    const startDay = String(start.getDate()).padStart(2, '0');
-    const startMonth = monthNamesShort[start.getMonth()];
-    const startYear = start.getFullYear();
-
-    const endDay = String(end.getDate()).padStart(2, '0');
-    const endMonth = monthNamesShort[end.getMonth()];
-    const endYear = end.getFullYear();
-
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    const months =
-        (end.getFullYear() - start.getFullYear()) * 12 +
-        (end.getMonth() - start.getMonth()) +
-        1;
-
-    let label = '';
-    if (startYear === endYear && start.getMonth() === end.getMonth()) {
-        label = `${startDay} - ${endDay} ${startMonth} ${startYear}`;
-    } else if (startYear === endYear) {
-        label = `${startMonth} - ${endMonth} ${startYear}`;
-    } else {
-        label = `${startMonth} ${startYear} - ${endMonth} ${endYear}`;
-    }
-
-    const duration =
-        months > 1 ? `${months} Bulan (${diffDays} Hari)` : `${diffDays} Hari`;
-
-    return { label, duration };
-}
+export { formatPeriod, formatIndoPeriod } from '@/Utils/formatters';
 
 export interface VendorPaymentTerm {
     type: 'full' | 'dp' | 'termin';

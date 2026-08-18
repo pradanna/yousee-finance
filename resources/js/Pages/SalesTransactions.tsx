@@ -1,13 +1,18 @@
+import MonthPicker from '@/Components/Form/MonthPicker';
+import SelectInput from '@/Components/Form/SelectInput';
+import TextInput from '@/Components/Form/TextInput';
 import { ConfigurePaymentSchemeModal } from '@/Components/Modal/ConfigurePaymentSchemeModal';
 import type { RecordInvoicePaymentModalSubmitData } from '@/Components/Modal/RecordInvoicePaymentModal';
 import { RecordInvoicePaymentModal } from '@/Components/Modal/RecordInvoicePaymentModal';
 import Pagination from '@/Components/Table/Pagination';
+import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import type {
     InvoicePaymentRecord,
     Kwitansi,
 } from '@/Pages/Invoices/invoiceTypes';
-import { router } from '@inertiajs/react';
+import type { PageProps } from '@/types';
+import { router, usePage } from '@inertiajs/react';
 import React, { useEffect, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,6 +99,8 @@ interface Project {
     clientId: string | number;
     clientName: string;
     salesPIC: string;
+    start_date?: string;
+    end_date?: string;
     period: string;
     contractValue: number;
     status: 'Draft' | 'Active' | 'Completed' | 'Cancelled';
@@ -261,9 +268,12 @@ export default function SalesTransactions({
     // Normalize raw projects from backend to match frontend Project shape
     const formattedProjects: Project[] = rawProjects.map((p) => {
         const primaryInv = p.invoices?.[0];
-        const hasIssuedInvoice = p.invoice_issued || (primaryInv && primaryInv.status !== 'draft') || false;
+        const hasIssuedInvoice =
+            p.invoice_issued ||
+            (primaryInv && primaryInv.status !== 'draft') ||
+            false;
         const invNumber = p.invoice_number || primaryInv?.invoice_number || '';
-        
+
         let paymentTerms: InvoicePaymentTerm | undefined = undefined;
         if (primaryInv?.payment_plan) {
             const plan = primaryInv.payment_plan;
@@ -286,12 +296,23 @@ export default function SalesTransactions({
             } else if (plan.scheme === 'termin') {
                 paymentTerms = {
                     type: 'termin',
-                    installments: terms.map((t) => ({
-                        percent: t.percent,
-                        amount: t.amount,
-                        note: t.label,
-                        dueDate: t.due_date,
-                    })),
+                    installments: terms.map((t) => {
+                        const targetTotal =
+                            Number(p.contract_value || 0) *
+                            (p.fiscal_mode === 'ppn' ? 1.11 : 1);
+                        const calculatedAmount = Math.round(
+                            targetTotal * (Number(t.percent || 0) / 100),
+                        );
+                        return {
+                            percent: t.percent,
+                            amount:
+                                Number(t.amount) > 0
+                                    ? Number(t.amount)
+                                    : calculatedAmount,
+                            note: t.label,
+                            dueDate: t.due_date,
+                        };
+                    }),
                     notes: plan.notes || undefined,
                 };
             } else if (plan.scheme === 'installment') {
@@ -310,9 +331,13 @@ export default function SalesTransactions({
             clientId: p.client_id,
             clientName: p.client?.name || p.client_name || 'Client',
             salesPIC: p.sales?.name || p.sales_pic || '-',
+            start_date: p.start_date,
+            end_date: p.end_date,
             period: `${p.start_date || ''} - ${p.end_date || ''}`,
             contractValue: Number(p.contract_value || 0),
-            status: (p.status ? (p.status.charAt(0).toUpperCase() + p.status.slice(1)) : 'Draft') as Project['status'],
+            status: (p.status
+                ? p.status.charAt(0).toUpperCase() + p.status.slice(1)
+                : 'Draft') as Project['status'],
             locations: (p.locations || []).map((loc) => ({
                 id: loc.id,
                 code: loc.code,
@@ -337,8 +362,11 @@ export default function SalesTransactions({
         };
     });
 
-    // Filter projects based on active fiscal mode
+    // Filter projects based on active fiscal mode and exclude cancelled projects
     const projects = formattedProjects.filter((p) => {
+        if (p.status === 'Cancelled') {
+            return false;
+        }
         if (p.fiscal_mode) {
             return p.fiscal_mode === fiscalMode;
         }
@@ -346,7 +374,9 @@ export default function SalesTransactions({
     });
 
     // Initial state from URL query parameters (?project=103&tab=issued)
-    const [selectedProjectId, setSelectedProjectIdState] = useState<string | number | null>(() => {
+    const [selectedProjectId, setSelectedProjectIdState] = useState<
+        string | number | null
+    >(() => {
         if (typeof window === 'undefined') return null;
         const params = new URLSearchParams(window.location.search);
         const pId = params.get('project');
@@ -410,6 +440,12 @@ export default function SalesTransactions({
         string | null
     >(null);
     const [filterSalesPIC, setFilterSalesPIC] = useState<string>('all');
+    const [clientFilter, setClientFilter] = useState<string>('all');
+    const [filterBasis, setFilterBasis] = useState<
+        'created_at' | 'active_period' | 'start_date'
+    >('active_period');
+    const [filterYear, setFilterYear] = useState<string>('all');
+    const [filterMonth, setFilterMonth] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [showInvoiceForm, setShowInvoiceForm] = useState(false);
 
@@ -440,7 +476,9 @@ export default function SalesTransactions({
                     date: set.paid_at,
                     method: set.payment_method,
                     referenceNo: set.payment_ref || '',
-                    notes: set.notes || `Pembayaran ${term.label} (${set.payment_method})`,
+                    notes:
+                        set.notes ||
+                        `Pembayaran ${term.label} (${set.payment_method})`,
                 });
             });
         });
@@ -454,7 +492,9 @@ export default function SalesTransactions({
                 kwitansiByInvoice[invNum] = {
                     receiptNumber: `KW-${invNum}`,
                     amount: totalInvVal,
-                    paidAt: latestPaid?.date || new Date().toISOString().split('T')[0],
+                    paidAt:
+                        latestPaid?.date ||
+                        new Date().toISOString().split('T')[0],
                     receivedFrom: p.clientName,
                     forPaymentOf: `Pelunasan Sewa Media Iklan - ${p.name}`,
                 };
@@ -469,7 +509,47 @@ export default function SalesTransactions({
         useState<PaymentPlanTermItem | null>(null);
     const [successMessage, setSuccessMessage] = useState('');
 
-    const activeProject = projects.find((p) => String(p.id) === String(selectedProjectId));
+    // Toast state
+    const [toast, setToast] = useState<{
+        show: boolean;
+        type: ToastType;
+        title?: string;
+        message: string;
+    }>({
+        show: false,
+        type: 'success',
+        message: '',
+    });
+
+    const triggerToast = (
+        message: string,
+        type: ToastType = 'success',
+        title?: string,
+    ) => {
+        setToast({
+            show: true,
+            type,
+            title,
+            message,
+        });
+    };
+
+    // Flash Message Listener
+    const { flash } =
+        usePage<PageProps<{ flash?: { success?: string; error?: string } }>>()
+            .props;
+
+    useEffect(() => {
+        if (flash?.success) {
+            triggerToast(flash.success, 'success', 'Operasi Berhasil');
+        } else if (flash?.error) {
+            triggerToast(flash.error, 'error', 'Operasi Gagal');
+        }
+    }, [flash]);
+
+    const activeProject = projects.find(
+        (p) => String(p.id) === String(selectedProjectId),
+    );
 
     // ── Derived data ──────────────────────────────────────────────────────────
     const allSalesPICs = Array.from(
@@ -483,9 +563,84 @@ export default function SalesTransactions({
             p.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
             p.salesPIC.toLowerCase().includes(searchQuery.toLowerCase()) ||
             p.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase());
+        if (!matchSearch) return false;
+
         const matchSales =
             filterSalesPIC === 'all' || p.salesPIC === filterSalesPIC;
-        return matchSearch && matchSales;
+        if (!matchSales) return false;
+
+        const matchClient =
+            clientFilter === 'all' ||
+            String(p.clientId) === String(clientFilter);
+        if (!matchClient) return false;
+
+        // Month / Year Period Filter
+        if (filterYear === 'all' && filterMonth === 'all') {
+            return true;
+        }
+
+        const startStr = p.start_date || '';
+        const endStr = p.end_date || startStr;
+
+        // Basis: start_date (Bulan Mulai)
+        if (filterBasis === 'start_date') {
+            if (!startStr) return false;
+            const pYear = startStr.substring(0, 4);
+            const pMonth = startStr.substring(5, 7);
+            const matchesYear = filterYear === 'all' || pYear === filterYear;
+            const matchesMonth =
+                filterMonth === 'all' ||
+                pMonth === filterMonth.padStart(2, '0');
+            return matchesYear && matchesMonth;
+        }
+
+        // Basis: created_at / invoice issued date
+        if (filterBasis === 'created_at') {
+            const invDates = (p.invoices || [])
+                .map((inv) => inv.transaction_date || '')
+                .filter(Boolean);
+
+            const refDates =
+                invDates.length > 0 ? invDates : [startStr].filter(Boolean);
+            if (refDates.length === 0) return false;
+
+            return refDates.some((dateRef) => {
+                const pYear = dateRef.substring(0, 4);
+                const pMonth = dateRef.substring(5, 7);
+                const matchesYear =
+                    filterYear === 'all' || pYear === filterYear;
+                const matchesMonth =
+                    filterMonth === 'all' ||
+                    pMonth === filterMonth.padStart(2, '0');
+                return matchesYear && matchesMonth;
+            });
+        }
+
+        // Default: 'active_period' (Masa Tayang Overlap test)
+        const targetYear = filterYear === 'all' ? null : Number(filterYear);
+        const targetMonth = filterMonth === 'all' ? null : Number(filterMonth);
+
+        let periodStart: string;
+        let periodEnd: string;
+
+        if (targetYear !== null && targetMonth !== null) {
+            const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+            periodStart = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
+            periodEnd = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        } else if (targetYear !== null) {
+            periodStart = `${targetYear}-01-01`;
+            periodEnd = `${targetYear}-12-31`;
+        } else if (targetMonth !== null) {
+            const currentYear = new Date().getFullYear();
+            const lastDay = new Date(currentYear, targetMonth, 0).getDate();
+            periodStart = `${currentYear}-${String(targetMonth).padStart(2, '0')}-01`;
+            periodEnd = `${currentYear}-${String(targetMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        } else {
+            return true;
+        }
+
+        if (!startStr) return false;
+        return startStr <= periodEnd && endStr >= periodStart;
     });
 
     const issuedProjects = filteredProjects.filter((p) => p.invoiceIssued);
@@ -570,10 +725,13 @@ export default function SalesTransactions({
         // Find target payment term id from invoice
         const primaryInv = selectedInvoiceForPayment.invoices?.[0];
         const terms = primaryInv?.payment_plan?.terms || [];
-        
+
         let targetTerm = selectedPaymentTerm;
         if (!targetTerm) {
-            targetTerm = terms.find((t: PaymentPlanTermItem) => t.status !== 'paid') || terms[0] || null;
+            targetTerm =
+                terms.find((t: PaymentPlanTermItem) => t.status !== 'paid') ||
+                terms[0] ||
+                null;
         }
 
         if (!targetTerm) {
@@ -593,14 +751,24 @@ export default function SalesTransactions({
             },
             {
                 preserveScroll: true,
+                preserveState: true,
                 onSuccess: () => {
                     setShowRecordPaymentModal(false);
                     setSelectedInvoiceForPayment(null);
                     setSelectedPaymentTerm(null);
-                    setSuccessMessage(
-                        `Berhasil mencatat penerimaan ${fmt(data.amount)}!`,
+                    triggerToast(
+                        `Pembayaran ${data.termLabel} sebesar ${fmt(data.amount)} berhasil dicatat.`,
+                        'success',
+                        'Pembayaran Diterima',
                     );
-                    setTimeout(() => setSuccessMessage(''), 4000);
+                },
+                onError: (errs) => {
+                    const errMsg =
+                        errs.amount ||
+                        errs.paid_at ||
+                        Object.values(errs)[0] ||
+                        'Gagal mencatat pembayaran.';
+                    triggerToast(String(errMsg), 'error', 'Gagal Menyimpan');
                 },
             },
         );
@@ -615,10 +783,15 @@ export default function SalesTransactions({
     const activeKwitansi = kwitansiByInvoice[activeInvNum];
     const activeTotalPaid = activePayments.reduce((s, p) => s + p.amount, 0);
     const activeRemaining = Math.max(0, activeTotalAmount - activeTotalPaid);
+    const activePrimaryInv = activeProject?.invoices?.[0];
+    const activeTermsList = activePrimaryInv?.payment_plan?.terms || [];
     const activeInvoiceStatus: 'draft' | 'issued' | 'partial' | 'paid' =
         !activeProject?.invoiceIssued
             ? 'draft'
-            : activeTotalPaid >= activeTotalAmount
+            : activePrimaryInv?.status === 'paid' ||
+                (activeTermsList.length > 0 &&
+                    activeTermsList.every((t) => t.status === 'paid')) ||
+                activeTotalPaid >= activeTotalAmount - 1.0
               ? 'paid'
               : activeTotalPaid > 0
                 ? 'partial'
@@ -668,12 +841,17 @@ export default function SalesTransactions({
                   ];
               }
               if (terms.type === 'termin' && terms.installments) {
-                  return terms.installments.map((inst, i) => ({
-                      label: inst.note || `Termin ${i + 1}`,
-                      percent: inst.percent,
-                      dueDate: inst.dueDate,
-                      amount: inst.amount,
-                  }));
+                  return terms.installments.map((inst, i) => {
+                      const calculatedAmount = Math.round(
+                          total * (inst.percent / 100),
+                      );
+                      return {
+                          label: inst.note || `Termin ${i + 1}`,
+                          percent: inst.percent,
+                          dueDate: inst.dueDate,
+                          amount: calculatedAmount,
+                      };
+                  });
               }
               if (terms.type === 'installment') {
                   return [
@@ -701,12 +879,23 @@ export default function SalesTransactions({
         p: Project,
     ): 'draft' | 'issued' | 'partial' | 'paid' => {
         if (!p.invoiceIssued) return 'draft';
+        const primaryInv = p.invoices?.[0];
+        if (primaryInv?.status === 'paid') return 'paid';
+
+        const termsList = primaryInv?.payment_plan?.terms || [];
+        if (
+            termsList.length > 0 &&
+            termsList.every((t) => t.status === 'paid')
+        ) {
+            return 'paid';
+        }
+
         const paid = (paymentsByInvoice[p.invoiceNumber] || []).reduce(
             (s, pay) => s + pay.amount,
             0,
         );
         const total = p.contractValue * (isPPN ? 1 + PPN_RATE : 1);
-        if (paid >= total) return 'paid';
+        if (paid >= total - 1.0) return 'paid';
         if (paid > 0) return 'partial';
         return 'issued';
     };
@@ -831,11 +1020,28 @@ export default function SalesTransactions({
     };
 
     // ── Download Invoice PDF ──────────────────────────────────────────────────
-    const handleDownloadInvoicePdf = (p: Project) => {
+    const handleDownloadInvoicePdf = (
+        p: Project,
+        term?: {
+            label: string;
+            percent: number;
+            amount: number;
+            dueDate?: string;
+        } | null,
+    ) => {
         const total = p.contractValue * (isPPN ? 1 + PPN_RATE : 1);
         const payments = paymentsByInvoice[p.invoiceNumber] || [];
         const paidSoFar = payments.reduce((s, pay) => s + pay.amount, 0);
-        const dpAmount = Math.max(0, paidSoFar);
+
+        // If specific term is requested:
+        const isTermInvoice = !!term;
+        const targetDpp = isTermInvoice
+            ? Math.round(term.amount / (isPPN ? 1 + PPN_RATE : 1))
+            : p.contractValue;
+        const termLabel = isTermInvoice
+            ? `Tagihan ${term.label} (${term.percent}%)`
+            : p.paymentTerms?.notes || 'Pelunasan Kontrak Penuh';
+        const dpAmount = isTermInvoice ? 0 : Math.max(0, paidSoFar);
 
         const csrfToken =
             (
@@ -859,29 +1065,49 @@ export default function SalesTransactions({
         appendInput('_token', csrfToken);
         appendInput('clientName', p.clientName);
         appendInput('clientSubName', 'Attn: Finance & Procurement');
-        appendInput('invoiceNumber', p.invoiceNumber);
+        appendInput(
+            'invoiceNumber',
+            isTermInvoice
+                ? `${p.invoiceNumber}-${term.label.replace(/\s+/g, '')}`
+                : p.invoiceNumber,
+        );
         appendInput('invoiceDate', new Date().toLocaleDateString('id-ID'));
+        if (isTermInvoice && term.dueDate) {
+            appendInput('dueDate', formatDate(term.dueDate));
+        } else if (p.paymentTerms?.fullDueDate) {
+            appendInput('dueDate', formatDate(p.paymentTerms.fullDueDate));
+        } else if (p.paymentTerms?.dpDueDate) {
+            appendInput('dueDate', formatDate(p.paymentTerms.dpDueDate));
+        } else if (p.paymentTerms?.installments?.[0]?.dueDate) {
+            appendInput(
+                'dueDate',
+                formatDate(p.paymentTerms.installments[0].dueDate),
+            );
+        } else if (p.invoices?.[0]?.payment_plan?.terms?.[0]?.due_date) {
+            appendInput(
+                'dueDate',
+                formatDate(p.invoices[0].payment_plan.terms[0].due_date),
+            );
+        }
         appendInput('isPPN', isPPN ? 'true' : 'false');
+        appendInput('subtotal', String(targetDpp));
         appendInput('dpAmount', String(dpAmount));
         appendInput('contractTotalDpp', String(p.contractValue));
         appendInput('contractTotalInvoice', String(total));
-        appendInput('termLabel', p.paymentTerms?.notes || '');
+        appendInput('termLabel', termLabel);
         appendInput('stream', 'true');
 
         p.locations.forEach((loc, i) => {
+            const locClientPrice = isTermInvoice
+                ? Math.round(targetDpp / p.locations.length)
+                : Math.round(p.contractValue / p.locations.length);
             appendInput(`locations[${i}][type]`, loc.type);
             appendInput(`locations[${i}][size]`, loc.size);
             appendInput(`locations[${i}][description]`, loc.description);
             appendInput(`locations[${i}][area]`, loc.area);
             appendInput(`locations[${i}][qty]`, String(loc.qty ?? 1));
-            appendInput(
-                `locations[${i}][clientPrice]`,
-                String(p.contractValue / p.locations.length),
-            );
-            appendInput(
-                `locations[${i}][vendorCost]`,
-                String(p.contractValue / p.locations.length),
-            );
+            appendInput(`locations[${i}][clientPrice]`, String(locClientPrice));
+            appendInput(`locations[${i}][vendorCost]`, String(locClientPrice));
         });
 
         document.body.appendChild(form);
@@ -1156,9 +1382,170 @@ export default function SalesTransactions({
                             ))}
                         </div>
 
-                        {/* Tab Filter + Search */}
-                        <div className="shadow-2xs rounded-2xl border border-slate-200/90 bg-white p-3.5">
-                            <div className="flex flex-col items-stretch justify-between gap-3 lg:flex-row lg:items-center">
+                        {/* Unified Filter & Search Container */}
+                        <div className="shadow-xs space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4">
+                            {/* Top Row: Search Input, Client Filter, Sales PIC, Period Basis & Month Picker */}
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+                                {/* Search Input */}
+                                <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Cari Invoice / Proyek / Client
+                                    </label>
+                                    <div className="relative">
+                                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                            <svg
+                                                className="h-4 w-4"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <TextInput
+                                            type="text"
+                                            placeholder="Cari invoice, proyek, client..."
+                                            value={searchQuery}
+                                            onChange={(e) => {
+                                                setSearchQuery(e.target.value);
+                                                setAllPage(1);
+                                                setPendingPage(1);
+                                                setIssuedPage(1);
+                                                setArPage(1);
+                                            }}
+                                            className="block w-full pl-9 text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Client Filter Dropdown */}
+                                <div className="space-y-1 sm:col-span-1 lg:col-span-2">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Client
+                                    </label>
+                                    <SelectInput
+                                        value={clientFilter}
+                                        onChange={(e) => {
+                                            setClientFilter(e.target.value);
+                                            setAllPage(1);
+                                            setPendingPage(1);
+                                            setIssuedPage(1);
+                                            setArPage(1);
+                                        }}
+                                        options={[
+                                            {
+                                                value: 'all',
+                                                label: 'Semua Client',
+                                            },
+                                            ...clients.map((c) => ({
+                                                value: String(c.id),
+                                                label: c.name,
+                                            })),
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* Sales PIC Filter Dropdown */}
+                                <div className="space-y-1 sm:col-span-1 lg:col-span-2">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Sales PIC
+                                    </label>
+                                    <SelectInput
+                                        value={filterSalesPIC}
+                                        onChange={(e) => {
+                                            setFilterSalesPIC(e.target.value);
+                                            setAllPage(1);
+                                            setPendingPage(1);
+                                            setIssuedPage(1);
+                                            setArPage(1);
+                                        }}
+                                        options={[
+                                            {
+                                                value: 'all',
+                                                label: 'Semua Sales PIC',
+                                            },
+                                            ...allSalesPICs.map((pic) => ({
+                                                value: pic,
+                                                label: pic,
+                                            })),
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* Filter Basis Selector */}
+                                <div className="space-y-1 sm:col-span-1 lg:col-span-2">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Acuan Periode
+                                    </label>
+                                    <SelectInput
+                                        value={filterBasis}
+                                        onChange={(e) => {
+                                            setFilterBasis(
+                                                e.target.value as
+                                                    | 'created_at'
+                                                    | 'active_period'
+                                                    | 'start_date',
+                                            );
+                                            setAllPage(1);
+                                            setPendingPage(1);
+                                            setIssuedPage(1);
+                                            setArPage(1);
+                                        }}
+                                        options={[
+                                            {
+                                                value: 'active_period',
+                                                label: 'Masa Tayang',
+                                            },
+                                            {
+                                                value: 'start_date',
+                                                label: 'Bulan Mulai',
+                                            },
+                                            {
+                                                value: 'created_at',
+                                                label: 'Tgl Terbit Invoice',
+                                            },
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* Month & Year Picker Component */}
+                                <div className="space-y-1 sm:col-span-1 lg:col-span-3">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Bulan &amp; Tahun
+                                    </label>
+                                    <MonthPicker
+                                        value={
+                                            filterYear !== 'all' &&
+                                            filterMonth !== 'all'
+                                                ? `${filterYear}-${filterMonth.padStart(2, '0')}`
+                                                : 'all'
+                                        }
+                                        onChange={(val, yr, mo) => {
+                                            setFilterYear(yr);
+                                            setFilterMonth(
+                                                mo === 'all'
+                                                    ? 'all'
+                                                    : String(Number(mo)),
+                                            );
+                                            setAllPage(1);
+                                            setPendingPage(1);
+                                            setIssuedPage(1);
+                                            setArPage(1);
+                                        }}
+                                        allowAll={true}
+                                        allLabel="Semua Periode"
+                                        className="w-full [&>button]:w-full [&>button]:justify-between"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Bottom Row: Tab Filter Navigation */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                                 <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1">
                                     {[
                                         {
@@ -1172,21 +1559,6 @@ export default function SalesTransactions({
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
                                                     d="M4 6h16M4 10h16M4 14h16M4 18h16"
-                                                />
-                                            ),
-                                            isSpecial: false,
-                                        },
-                                        {
-                                            key: 'issued' as const,
-                                            label: 'Invoice Resmi Terbit',
-                                            badge: String(
-                                                issuedProjects.length,
-                                            ),
-                                            icon: (
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                                                 />
                                             ),
                                             isSpecial: false,
@@ -1269,84 +1641,6 @@ export default function SalesTransactions({
                                             </span>
                                         )}
                                     </button>
-                                </div>
-                                <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
-                                    {/* Filter Sales PIC */}
-                                    <div className="relative">
-                                        <select
-                                            value={filterSalesPIC}
-                                            onChange={(e) => {
-                                                setFilterSalesPIC(
-                                                    e.target.value,
-                                                );
-                                                setAllPage(1);
-                                                setPendingPage(1);
-                                                setIssuedPage(1);
-                                                setArPage(1);
-                                            }}
-                                            className="shadow-2xs cursor-pointer appearance-none rounded-xl border border-slate-200 bg-white py-2 pl-8 pr-7 text-xs font-semibold text-slate-700 transition-all focus:border-primary focus:outline-none"
-                                        >
-                                            <option value="all">
-                                                Semua Sales PIC
-                                            </option>
-                                            {allSalesPICs.map((pic) => (
-                                                <option key={pic} value={pic}>
-                                                    {pic}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <svg
-                                            className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                            />
-                                        </svg>
-                                        <svg
-                                            className="pointer-events-none absolute right-2 top-3 h-3 w-3 text-slate-400"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                            strokeWidth={2.5}
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M19 9l-7 7-7-7"
-                                            />
-                                        </svg>
-                                    </div>
-                                    {/* Search bar */}
-                                    <div className="relative w-56">
-                                        <input
-                                            type="text"
-                                            value={searchQuery}
-                                            onChange={(e) =>
-                                                setSearchQuery(e.target.value)
-                                            }
-                                            placeholder="Cari proyek, client, invoice..."
-                                            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-xs font-semibold text-slate-700 placeholder-slate-400 transition-all focus:border-primary focus:bg-white focus:outline-none"
-                                        />
-                                        <svg
-                                            className="absolute left-3 top-2.5 h-4 w-4 text-slate-400"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                            strokeWidth={2.5}
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                            />
-                                        </svg>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1565,10 +1859,23 @@ export default function SalesTransactions({
                                                     (isPPN ? 1 + PPN_RATE : 1);
                                                 const isDraft =
                                                     p.status === 'Draft';
+                                                const isSelected =
+                                                    String(
+                                                        activeProject?.id,
+                                                    ) === String(p.id);
                                                 return (
                                                     <div
                                                         key={p.id}
-                                                        className="flex flex-wrap items-center justify-between gap-4 p-4 transition-colors hover:bg-slate-50/40"
+                                                        onClick={() =>
+                                                            setSelectedProjectId(
+                                                                p.id,
+                                                            )
+                                                        }
+                                                        className={`flex cursor-pointer flex-wrap items-center justify-between gap-4 p-4 transition-colors ${
+                                                            isSelected
+                                                                ? 'border-l-4 border-l-primary bg-blue-50/70'
+                                                                : 'hover:bg-slate-50/60'
+                                                        }`}
                                                     >
                                                         <div className="min-w-0 flex-1 space-y-1.5">
                                                             <div className="flex flex-wrap items-center gap-2">
@@ -1646,7 +1953,8 @@ export default function SalesTransactions({
                                                             </div>
                                                         </div>
                                                         <button
-                                                            onClick={() => {
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 setSelectedProjectId(
                                                                     p.id,
                                                                 );
@@ -1654,13 +1962,8 @@ export default function SalesTransactions({
                                                                     true,
                                                                 );
                                                             }}
-                                                            disabled={isDraft}
-                                                            title={
-                                                                isDraft
-                                                                    ? 'Tidak dapat tetapkan skema pembayaran untuk proyek Draft'
-                                                                    : 'Tetapkan Skema Pembayaran'
-                                                            }
-                                                            className={`shadow-2xs flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-[11px] font-bold transition-all ${isDraft ? 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400' : 'cursor-pointer bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                            title="Tetapkan Skema Pembayaran"
+                                                            className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-blue-700 active:scale-95"
                                                         >
                                                             <svg
                                                                 className="h-3.5 w-3.5"
@@ -1699,33 +2002,88 @@ export default function SalesTransactions({
                             </div>
                         )}
 
-                        {/* ── TAB 3: INVOICE RESMI TERBIT ── */}
-                        {activeTab === 'issued' && (
+                        {/* ── TAB 4: JADWAL PENERIMAAN KAS (AR SCHEDULE - GROUPED BY PROJECT) ── */}
+                        {activeTab === 'ar_schedule' && (
                             <div className="shadow-2xs space-y-4 rounded-3xl border border-slate-200/90 bg-white p-6">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-800">
-                                            <span className="h-2 w-2 rounded-full bg-blue-500" />
-                                            Invoice Resmi Terbit
+                                            <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+                                            Jadwal Penerimaan Kas (Group by
+                                            Proyek)
                                         </h3>
                                         <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-                                            Dokumen invoice resmi beserta status
-                                            & riwayat penerimaan
+                                            Monitoring jadwal termin dan piutang
+                                            per proyek · Klik proyek untuk
+                                            melihat/mengelola rincian invoice
                                         </p>
                                     </div>
-                                    <span className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-800">
-                                        {issuedProjects.length} Dokumen Invoice
+                                    <span className="bg-primary/10 border-primary/20 rounded-xl border px-2.5 py-1 text-[10px] font-bold text-primary">
+                                        {issuedProjects.length} Proyek Berjalan
                                     </span>
                                 </div>
-                                <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80">
-                                    {issuedProjects
+                                <div className="space-y-3">
+                                    {[...issuedProjects]
+                                        .sort((a, b) => {
+                                            // Helper function to get earliest unpaid due date timestamp
+                                            const getEarliestUnpaidDueDate = (
+                                                prj: Project,
+                                            ) => {
+                                                const dbTerms =
+                                                    prj.invoices?.[0]
+                                                        ?.payment_plan?.terms ||
+                                                    [];
+                                                const unpaidTerms =
+                                                    dbTerms.filter((t) => {
+                                                        const paid = (
+                                                            t.settlements || []
+                                                        ).reduce(
+                                                            (s, st) =>
+                                                                s +
+                                                                Number(
+                                                                    st.amount,
+                                                                ),
+                                                            0,
+                                                        );
+                                                        return (
+                                                            t.status !==
+                                                                'paid' &&
+                                                            paid <
+                                                                Number(t.amount)
+                                                        );
+                                                    });
+
+                                                if (unpaidTerms.length === 0) {
+                                                    // Jika semua lunas, tempatkan di urutan paling bawah
+                                                    return 9999999999999;
+                                                }
+
+                                                // Ambil due date terlama/terlewat (terkecil) dari termin yang belum lunas
+                                                const dates = unpaidTerms
+                                                    .map((t) =>
+                                                        t.due_date
+                                                            ? new Date(
+                                                                  t.due_date,
+                                                              ).getTime()
+                                                            : 8888888888888,
+                                                    )
+                                                    .filter(Boolean);
+
+                                                return dates.length > 0
+                                                    ? Math.min(...dates)
+                                                    : 8888888888888;
+                                            };
+
+                                            return (
+                                                getEarliestUnpaidDueDate(a) -
+                                                getEarliestUnpaidDueDate(b)
+                                            );
+                                        })
                                         .slice(
-                                            (issuedPage - 1) * ITEMS_PER_PAGE,
-                                            issuedPage * ITEMS_PER_PAGE,
+                                            (arPage - 1) * ITEMS_PER_PAGE,
+                                            arPage * ITEMS_PER_PAGE,
                                         )
                                         .map((p) => {
-                                            const invStatus =
-                                                getProjectInvoiceStatus(p);
                                             const total =
                                                 p.contractValue *
                                                 (isPPN ? 1 + PPN_RATE : 1);
@@ -1741,564 +2099,319 @@ export default function SalesTransactions({
                                                 0,
                                                 total - paid,
                                             );
-                                            const pct =
-                                                total > 0
-                                                    ? Math.min(
-                                                          100,
-                                                          Math.round(
-                                                              (paid / total) *
-                                                                  100,
-                                                          ),
-                                                      )
-                                                    : 0;
-                                            const isExpanded =
-                                                expandedInvoicePayment ===
-                                                p.invoiceNumber;
-                                            const kwitansi =
-                                                kwitansiByInvoice[
-                                                    p.invoiceNumber
+                                            const invStatus =
+                                                getProjectInvoiceStatus(p);
+                                            const isSelected =
+                                                String(activeProject?.id) ===
+                                                String(p.id);
+
+                                            // Get terms list for this project
+                                            const projectTerms = (() => {
+                                                const terms = p.paymentTerms;
+                                                if (!terms) {
+                                                    return [
+                                                        {
+                                                            label: 'Pembayaran Invoice',
+                                                            dueDate: undefined,
+                                                            amount: total,
+                                                            percent: 100,
+                                                        },
+                                                    ];
+                                                }
+                                                if (terms.type === 'full') {
+                                                    return [
+                                                        {
+                                                            label: 'Full Payment (100%)',
+                                                            dueDate:
+                                                                terms.fullDueDate,
+                                                            amount: total,
+                                                            percent: 100,
+                                                        },
+                                                    ];
+                                                }
+                                                if (terms.type === 'dp') {
+                                                    const dpPct =
+                                                        terms.dpPercent || 50;
+                                                    const dpAmt =
+                                                        terms.dpAmount ||
+                                                        Math.round(
+                                                            total *
+                                                                (dpPct / 100),
+                                                        );
+                                                    return [
+                                                        {
+                                                            label: `Uang Muka (DP ${dpPct}%)`,
+                                                            dueDate:
+                                                                terms.dpDueDate,
+                                                            amount: dpAmt,
+                                                            percent: dpPct,
+                                                        },
+                                                        {
+                                                            label: `Pelunasan (${100 - dpPct}%)`,
+                                                            dueDate:
+                                                                terms.pelunasanDueDate,
+                                                            amount:
+                                                                total - dpAmt,
+                                                            percent:
+                                                                100 - dpPct,
+                                                        },
+                                                    ];
+                                                }
+                                                if (
+                                                    terms.type === 'termin' &&
+                                                    terms.installments
+                                                ) {
+                                                    return terms.installments.map(
+                                                        (inst, i) => ({
+                                                            label:
+                                                                inst.note ||
+                                                                `Termin ${i + 1}`,
+                                                            dueDate:
+                                                                inst.dueDate,
+                                                            amount: inst.amount,
+                                                            percent:
+                                                                inst.percent,
+                                                        }),
+                                                    );
+                                                }
+                                                if (
+                                                    terms.type === 'installment'
+                                                ) {
+                                                    return [
+                                                        {
+                                                            label: 'Cicilan Bulanan',
+                                                            dueDate:
+                                                                terms.fullDueDate,
+                                                            amount: total,
+                                                            percent: 100,
+                                                        },
+                                                    ];
+                                                }
+                                                return [
+                                                    {
+                                                        label: 'Pembayaran Invoice',
+                                                        dueDate: undefined,
+                                                        amount: total,
+                                                        percent: 100,
+                                                    },
                                                 ];
+                                            })();
+
+                                            const dbTerms =
+                                                p.invoices?.[0]?.payment_plan
+                                                    ?.terms || [];
+
                                             return (
                                                 <div
                                                     key={p.id}
-                                                    className="divide-y divide-slate-100 bg-white transition-colors hover:bg-slate-50/40"
+                                                    onClick={() =>
+                                                        setSelectedProjectId(
+                                                            p.id,
+                                                        )
+                                                    }
+                                                    className={`cursor-pointer overflow-hidden rounded-2xl border transition-all ${
+                                                        isSelected
+                                                            ? 'ring-primary/20 border-primary bg-blue-50/30 shadow-sm ring-2'
+                                                            : 'hover:shadow-xs border-slate-200/90 bg-white hover:border-slate-300'
+                                                    }`}
                                                 >
-                                                    <div className="flex flex-wrap items-center justify-between gap-4 p-4">
-                                                        <div className="min-w-0 flex-1 space-y-1.5">
+                                                    {/* Project Header Summary */}
+                                                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/50 p-4">
+                                                        <div className="min-w-0 space-y-1">
                                                             <div className="flex flex-wrap items-center gap-2">
-                                                                <span className="bg-primary/10 border-primary/20 rounded-lg border px-2.5 py-0.5 font-mono text-xs font-bold text-primary">
+                                                                <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                                                                    {p.code}
+                                                                </span>
+                                                                <span className="font-mono text-[10px] font-bold text-primary">
                                                                     {
                                                                         p.invoiceNumber
                                                                     }
                                                                 </span>
                                                                 <span className="text-xs font-bold text-slate-900">
-                                                                    {
-                                                                        p.clientName
-                                                                    }
+                                                                    {p.name}
                                                                 </span>
                                                                 <InvoiceStatusBadge
                                                                     status={
                                                                         invStatus
                                                                     }
                                                                 />
-                                                                {kwitansi &&
-                                                                    invStatus ===
-                                                                        'paid' && (
-                                                                        <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                                                                            ✓
-                                                                            Kwitansi
-                                                                            Terbit
-                                                                        </span>
-                                                                    )}
                                                             </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-100">
-                                                                    <div
-                                                                        className={`h-full transition-all duration-500 ${invStatus === 'paid' ? 'bg-emerald-500' : 'bg-primary'}`}
-                                                                        style={{
-                                                                            width: `${pct}%`,
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                                                            <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-slate-500">
                                                                 <span>
-                                                                    Terbit:{' '}
+                                                                    Client:{' '}
                                                                     <strong className="text-slate-700">
-                                                                        {formatDate(
-                                                                            p.invoiceIssuedAt,
-                                                                        )}
+                                                                        {
+                                                                            p.clientName
+                                                                        }
                                                                     </strong>
                                                                 </span>
                                                                 <span>·</span>
                                                                 <span>
-                                                                    Proyek:{' '}
-                                                                    <strong className="font-mono text-slate-700">
-                                                                        {p.code}
-                                                                    </strong>{' '}
-                                                                    {p.name}
-                                                                </span>
-                                                                <span>·</span>
-                                                                <span>
-                                                                    Skema:{' '}
+                                                                    Sales:{' '}
                                                                     <strong className="text-slate-700">
-                                                                        {p
-                                                                            .paymentTerms
-                                                                            ?.notes ||
-                                                                            p
-                                                                                .paymentTerms
-                                                                                ?.type ||
-                                                                            '-'}
+                                                                        {
+                                                                            p.salesPIC
+                                                                        }
                                                                     </strong>
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                        <div className="flex flex-shrink-0 items-center gap-3">
-                                                            <div className="text-right">
-                                                                <div className="font-mono text-xs font-bold text-slate-900">
+                                                        <div className="flex flex-shrink-0 items-center gap-4 text-right">
+                                                            <div>
+                                                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                                                    Total
+                                                                    Tagihan
+                                                                </div>
+                                                                <div className="font-mono text-xs font-black text-slate-900">
                                                                     {fmt(total)}
                                                                 </div>
-                                                                <div className="text-[9.5px] font-medium text-slate-500">
-                                                                    Terbayar:{' '}
-                                                                    <strong className="font-mono text-emerald-700">
-                                                                        {fmt(
-                                                                            paid,
-                                                                        )}
-                                                                    </strong>{' '}
-                                                                    · Sisa:{' '}
-                                                                    <strong className="font-mono text-rose-600">
-                                                                        {fmt(
-                                                                            remaining,
-                                                                        )}
-                                                                    </strong>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                                                    Sisa Piutang
+                                                                </div>
+                                                                <div className="font-mono text-xs font-black text-amber-700">
+                                                                    {fmt(
+                                                                        remaining,
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                            {remaining > 0 && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setSelectedInvoiceForPayment(
-                                                                            p,
-                                                                        );
-                                                                        setShowRecordPaymentModal(
-                                                                            true,
-                                                                        );
-                                                                    }}
-                                                                    className="shadow-2xs flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-emerald-700"
-                                                                >
-                                                                    <svg
-                                                                        className="h-3.5 w-3.5"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                        strokeWidth={
-                                                                            2.5
-                                                                        }
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                                                        />
-                                                                    </svg>
-                                                                    <span>
-                                                                        Catat
-                                                                        Terima
-                                                                        Bayar
-                                                                    </span>
-                                                                </button>
-                                                            )}
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setExpandedInvoicePayment(
-                                                                        isExpanded
-                                                                            ? null
-                                                                            : p.invoiceNumber,
-                                                                    )
-                                                                }
-                                                                className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-all ${isExpanded ? 'border-slate-300 bg-slate-200 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
-                                                            >
-                                                                <span>
-                                                                    Riwayat (
-                                                                    {
-                                                                        (
-                                                                            paymentsByInvoice[
-                                                                                p
-                                                                                    .invoiceNumber
-                                                                            ] ||
-                                                                            []
-                                                                        ).length
-                                                                    }
-                                                                    )
-                                                                </span>
-                                                                <svg
-                                                                    className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                                                    fill="none"
-                                                                    viewBox="0 0 24 24"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth={
-                                                                        2.5
-                                                                    }
-                                                                >
-                                                                    <path
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        d="M19 9l-7 7-7-7"
-                                                                    />
-                                                                </svg>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleDownloadInvoicePdf(
-                                                                        p,
-                                                                    )
-                                                                }
-                                                                className="flex items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-700 transition-all hover:bg-indigo-100"
-                                                            >
-                                                                <svg
-                                                                    className="h-3.5 w-3.5"
-                                                                    fill="none"
-                                                                    viewBox="0 0 24 24"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth={
-                                                                        2.5
-                                                                    }
-                                                                >
-                                                                    <path
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                    />
-                                                                </svg>
-                                                                <span>PDF</span>
-                                                            </button>
-                                                            {kwitansi && (
-                                                                <span
-                                                                    className="flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700"
-                                                                    title={`Kwitansi: ${kwitansi.receiptNumber}`}
-                                                                >
-                                                                    <svg
-                                                                        className="h-3.5 w-3.5"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                        strokeWidth={
-                                                                            2.5
-                                                                        }
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-                                                                        />
-                                                                    </svg>
-                                                                    Kwitansi
-                                                                </span>
-                                                            )}
                                                         </div>
                                                     </div>
-                                                    {isExpanded && (
-                                                        <div className="animate-in slide-in-from-top-1 space-y-3 border-t border-slate-100 bg-slate-50/80 p-4 duration-200">
-                                                            <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                                                <span>
-                                                                    Riwayat
-                                                                    Penerimaan
-                                                                    Kas (
-                                                                    {
-                                                                        p.invoiceNumber
-                                                                    }
-                                                                    )
-                                                                </span>
-                                                            </div>
-                                                            {(
-                                                                paymentsByInvoice[
-                                                                    p
-                                                                        .invoiceNumber
-                                                                ] || []
-                                                            ).length > 0 ? (
-                                                                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-xs">
-                                                                    <table className="w-full border-collapse text-left">
-                                                                        <thead>
-                                                                            <tr className="border-b border-slate-200 bg-slate-100 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                                                                                <th className="px-3 py-2">
-                                                                                    Tanggal
-                                                                                </th>
-                                                                                <th className="px-3 py-2">
-                                                                                    Label
-                                                                                    /
-                                                                                    Termin
-                                                                                </th>
-                                                                                <th className="px-3 py-2">
-                                                                                    Metode
-                                                                                </th>
-                                                                                <th className="px-3 py-2">
-                                                                                    No.
-                                                                                    Referensi
-                                                                                </th>
-                                                                                <th className="px-3 py-2 text-right">
-                                                                                    Nominal
-                                                                                </th>
-                                                                                <th className="px-3 py-2 text-center">
-                                                                                    Aksi
-                                                                                </th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody className="divide-y divide-slate-100">
-                                                                            {(
-                                                                                paymentsByInvoice[
-                                                                                    p
-                                                                                        .invoiceNumber
-                                                                                ] ||
-                                                                                []
-                                                                            ).map(
-                                                                                (
-                                                                                    pmt,
-                                                                                ) => (
-                                                                                    <tr
-                                                                                        key={
-                                                                                            pmt.id
+
+                                                    {/* Terms List inside Project Group */}
+                                                    <div className="divide-y divide-slate-100 bg-white">
+                                                        {projectTerms.map(
+                                                            (term, tIdx) => {
+                                                                const dbTerm =
+                                                                    dbTerms[
+                                                                        tIdx
+                                                                    ];
+                                                                const termPaid =
+                                                                    dbTerm
+                                                                        ? (
+                                                                              dbTerm.settlements ||
+                                                                              []
+                                                                          ).reduce(
+                                                                              (
+                                                                                  s,
+                                                                                  st,
+                                                                              ) =>
+                                                                                  s +
+                                                                                  Number(
+                                                                                      st.amount,
+                                                                                  ),
+                                                                              0,
+                                                                          )
+                                                                        : 0;
+                                                                const isTermPaid =
+                                                                    dbTerm
+                                                                        ? dbTerm.status ===
+                                                                              'paid' ||
+                                                                          termPaid >=
+                                                                              Number(
+                                                                                  dbTerm.amount,
+                                                                              )
+                                                                        : false;
+                                                                const dueDateStatus =
+                                                                    getDueDateStatus(
+                                                                        term.dueDate,
+                                                                    );
+
+                                                                return (
+                                                                    <div
+                                                                        key={
+                                                                            tIdx
+                                                                        }
+                                                                        className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-xs transition-colors hover:bg-slate-50/60"
+                                                                    >
+                                                                        <div className="flex min-w-0 items-center gap-3">
+                                                                            <span
+                                                                                className={`h-2 w-2 flex-shrink-0 rounded-full ${
+                                                                                    isTermPaid
+                                                                                        ? 'bg-emerald-500'
+                                                                                        : dueDateStatus.dot
+                                                                                }`}
+                                                                            />
+                                                                            <div className="min-w-0">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="font-bold text-slate-800">
+                                                                                        {
+                                                                                            term.label
                                                                                         }
-                                                                                        className="hover:bg-slate-50/70"
-                                                                                    >
-                                                                                        <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
-                                                                                            {formatDate(
-                                                                                                pmt.date,
-                                                                                            )}
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 font-semibold text-slate-900">
+                                                                                    </span>
+                                                                                    {term.percent && (
+                                                                                        <span className="py-0.2 rounded-full bg-slate-100 px-2 font-mono text-[9.5px] font-semibold text-slate-600">
                                                                                             {
-                                                                                                pmt.termLabel
+                                                                                                term.percent
                                                                                             }
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 text-slate-600">
-                                                                                            {
-                                                                                                pmt.method
-                                                                                            }
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 font-mono text-slate-600">
-                                                                                            {
-                                                                                                pmt.referenceNo
-                                                                                            }
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700">
+
+                                                                                            %
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {isTermPaid ? (
+                                                                                        <span className="py-0.2 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 text-[9px] font-bold text-emerald-700">
+                                                                                            LUNAS
+                                                                                        </span>
+                                                                                    ) : termPaid >
+                                                                                      0 ? (
+                                                                                        <span className="py-0.2 rounded-md border border-amber-200 bg-amber-50 px-1.5 text-[9px] font-bold text-amber-700">
+                                                                                            PARSIAL
+                                                                                            (
                                                                                             {fmt(
-                                                                                                pmt.amount,
+                                                                                                termPaid,
                                                                                             )}
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 text-center">
-                                                                                            <button
-                                                                                                type="button"
-                                                                                                onClick={() =>
-                                                                                                    handleDownloadKwitansiPdf(
-                                                                                                        p,
-                                                                                                        pmt,
-                                                                                                    )
-                                                                                                }
-                                                                                                className="shadow-2xs mx-auto flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-emerald-700"
-                                                                                                title="Cetak Kwitansi PDF untuk pembayaran ini"
+
+                                                                                            )
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="py-0.2 rounded-md border border-slate-200 bg-slate-100 px-1.5 text-[9px] font-bold text-slate-500">
+                                                                                            BELUM
+                                                                                            BAYAR
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                                                                                    <span>
+                                                                                        Jatuh
+                                                                                        Tempo:
+                                                                                    </span>
+                                                                                    <span className="font-semibold text-slate-600">
+                                                                                        {term.dueDate
+                                                                                            ? formatDate(
+                                                                                                  term.dueDate,
+                                                                                              )
+                                                                                            : 'Sesuai Kesepakatan'}
+                                                                                    </span>
+                                                                                    {!isTermPaid &&
+                                                                                        term.dueDate && (
+                                                                                            <span
+                                                                                                className={`py-0.2 rounded px-1.5 text-[9px] ${dueDateStatus.style}`}
                                                                                             >
-                                                                                                <svg
-                                                                                                    className="h-3 w-3"
-                                                                                                    fill="none"
-                                                                                                    viewBox="0 0 24 24"
-                                                                                                    stroke="currentColor"
-                                                                                                    strokeWidth={
-                                                                                                        2.5
-                                                                                                    }
-                                                                                                >
-                                                                                                    <path
-                                                                                                        strokeLinecap="round"
-                                                                                                        strokeLinejoin="round"
-                                                                                                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                                                                                                    />
-                                                                                                </svg>
-                                                                                                <span>
-                                                                                                    Cetak
-                                                                                                    Kwitansi
-                                                                                                </span>
-                                                                                            </button>
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                ),
-                                                                            )}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs italic text-slate-500">
-                                                                    Belum ada
-                                                                    catatan
-                                                                    penerimaan
-                                                                    pembayaran
-                                                                    untuk
-                                                                    invoice ini.
-                                                                </div>
-                                                            )}
-                                                            {kwitansi && (
-                                                                <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs">
-                                                                    <div className="space-y-0.5">
-                                                                        <div className="font-bold text-emerald-800">
-                                                                            Kwitansi
-                                                                            Diterbitkan:{' '}
-                                                                            <span className="font-mono">
-                                                                                {
-                                                                                    kwitansi.receiptNumber
-                                                                                }
-                                                                            </span>
+                                                                                                {
+                                                                                                    dueDateStatus.label
+                                                                                                }
+                                                                                            </span>
+                                                                                        )}
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="font-medium text-emerald-700">
-                                                                            Diterima
-                                                                            dari{' '}
-                                                                            {
-                                                                                kwitansi.receivedFrom
-                                                                            }{' '}
-                                                                            ·{' '}
-                                                                            {formatDate(
-                                                                                kwitansi.paidAt,
-                                                                            )}
+                                                                        <div className="text-right">
+                                                                            <div className="font-mono text-xs font-bold text-slate-900">
+                                                                                {fmt(
+                                                                                    term.amount,
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                    <span className="font-mono font-black text-emerald-800">
-                                                                        {fmt(
-                                                                            kwitansi.amount,
-                                                                        )}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                );
+                                                            },
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         })}
                                     {issuedProjects.length === 0 && (
-                                        <div className="p-8 text-center text-xs font-semibold italic text-slate-400">
-                                            Belum ada invoice yang diterbitkan.
-                                        </div>
-                                    )}
-                                </div>
-                                <Pagination
-                                    currentPage={issuedPage}
-                                    totalPages={Math.ceil(
-                                        issuedProjects.length / ITEMS_PER_PAGE,
-                                    )}
-                                    totalItems={issuedProjects.length}
-                                    itemsPerPage={ITEMS_PER_PAGE}
-                                    onPageChange={setIssuedPage}
-                                />
-                            </div>
-                        )}
-
-                        {/* ── TAB 4: JADWAL PENERIMAAN KAS (AR SCHEDULE) ── */}
-                        {activeTab === 'ar_schedule' && (
-                            <div className="shadow-2xs space-y-4 rounded-3xl border border-slate-200/90 bg-white p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-800">
-                                            <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-                                            Jadwal Penerimaan Kas (Accounts
-                                            Receivable Schedule)
-                                        </h3>
-                                        <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-                                            Monitoring jatuh tempo penerimaan
-                                            pembayaran dari client · Diurutkan
-                                            dari jatuh tempo terdekat
-                                        </p>
-                                    </div>
-                                    <span className="bg-primary/10 border-primary/20 rounded-xl border px-2.5 py-1 text-[10px] font-bold text-primary">
-                                        {arScheduleItems.length} Tagihan
-                                        Terjadwal
-                                    </span>
-                                </div>
-                                <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80">
-                                    {arScheduleItems
-                                        .slice(
-                                            (arPage - 1) * ITEMS_PER_PAGE,
-                                            arPage * ITEMS_PER_PAGE,
-                                        )
-                                        .map((item, idx) => {
-                                            const dueDateStatus =
-                                                getDueDateStatus(item.dueDate);
-                                            return (
-                                                <div
-                                                    key={idx}
-                                                    className="flex flex-wrap items-center justify-between gap-4 p-4 transition-colors hover:bg-slate-50/40"
-                                                >
-                                                    <div className="flex min-w-0 items-center gap-3">
-                                                        <span
-                                                            className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${dueDateStatus.dot}`}
-                                                        />
-                                                        <div className="min-w-0 space-y-1">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <span className="bg-primary/10 border-primary/20 rounded-md border px-2 py-0.5 font-mono text-[10px] font-bold text-primary">
-                                                                    {
-                                                                        item
-                                                                            .project
-                                                                            .invoiceNumber
-                                                                    }
-                                                                </span>
-                                                                <span className="text-xs font-bold text-slate-900">
-                                                                    {
-                                                                        item
-                                                                            .project
-                                                                            .clientName
-                                                                    }
-                                                                </span>
-                                                                <InvoiceStatusBadge
-                                                                    status={
-                                                                        item.invStatus
-                                                                    }
-                                                                />
-                                                            </div>
-                                                            <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-slate-500">
-                                                                <span>
-                                                                    Termin:{' '}
-                                                                    <strong className="text-slate-700">
-                                                                        {
-                                                                            item.label
-                                                                        }
-                                                                    </strong>
-                                                                </span>
-                                                                <span>·</span>
-                                                                <span>
-                                                                    Proyek:{' '}
-                                                                    <strong className="font-mono text-slate-700">
-                                                                        {
-                                                                            item
-                                                                                .project
-                                                                                .code
-                                                                        }
-                                                                    </strong>
-                                                                </span>
-                                                                <span>·</span>
-                                                                <div className="flex items-center gap-1">
-                                                                    <svg
-                                                                        className="h-3 w-3 text-slate-400"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                        strokeWidth={
-                                                                            2
-                                                                        }
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                                                        />
-                                                                    </svg>
-                                                                    <span>
-                                                                        Jatuh
-                                                                        Tempo:{' '}
-                                                                        <strong className="text-slate-700">
-                                                                            {item.dueDate
-                                                                                ? formatDate(
-                                                                                      item.dueDate,
-                                                                                  )
-                                                                                : 'Sesuai Kesepakatan'}
-                                                                        </strong>
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex flex-shrink-0 items-center gap-3">
-                                                        <span
-                                                            className={`rounded-full border px-2.5 py-0.5 text-[9.5px] ${dueDateStatus.style}`}
-                                                        >
-                                                            {
-                                                                dueDateStatus.label
-                                                            }
-                                                        </span>
-                                                        <span className="font-mono text-xs font-black text-slate-900">
-                                                            {fmt(item.amount)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    {arScheduleItems.length === 0 && (
                                         <div className="p-8 text-center text-xs font-semibold italic text-slate-400">
                                             Belum ada jadwal penerimaan kas.
                                             Terbitkan invoice terlebih dahulu.
@@ -2308,9 +2421,9 @@ export default function SalesTransactions({
                                 <Pagination
                                     currentPage={arPage}
                                     totalPages={Math.ceil(
-                                        arScheduleItems.length / ITEMS_PER_PAGE,
+                                        issuedProjects.length / ITEMS_PER_PAGE,
                                     )}
-                                    totalItems={arScheduleItems.length}
+                                    totalItems={issuedProjects.length}
                                     itemsPerPage={ITEMS_PER_PAGE}
                                     onPageChange={setArPage}
                                 />
@@ -2367,35 +2480,52 @@ export default function SalesTransactions({
                                             label: 'Draft',
                                             desc: 'Belum Terbit',
                                             active: true,
+                                            isDone: activeProject.invoiceIssued,
                                         },
                                         {
                                             key: 'issued',
-                                            label: 'Issued',
-                                            desc: 'Diterbitkan',
+                                            label: 'Invoice Diterbitkan',
+                                            desc:
+                                                activeInvoiceStatus ===
+                                                'partial'
+                                                    ? 'Pembayaran Parsial'
+                                                    : 'Menunggu Pelunasan',
                                             active: activeProject.invoiceIssued,
+                                            isDone:
+                                                activeInvoiceStatus === 'paid',
                                         },
                                         {
                                             key: 'paid',
-                                            label: 'Paid / Lunas',
-                                            desc: 'Telah Dilunasi',
+                                            label: 'Lunas',
+                                            desc: 'Telah Dilunasi Penuh',
                                             active:
-                                                activeInvoiceStatus ===
-                                                    'paid' ||
-                                                activeInvoiceStatus ===
-                                                    'partial',
+                                                activeInvoiceStatus === 'paid',
+                                            isDone:
+                                                activeInvoiceStatus === 'paid',
                                         },
                                     ].map((step, i, arr) => {
                                         const isCurrent =
-                                            step.key === activeInvoiceStatus ||
                                             (step.key === 'draft' &&
-                                                !activeProject.invoiceIssued);
+                                                !activeProject.invoiceIssued) ||
+                                            (step.key === 'issued' &&
+                                                activeProject.invoiceIssued &&
+                                                activeInvoiceStatus !==
+                                                    'paid') ||
+                                            (step.key === 'paid' &&
+                                                activeInvoiceStatus === 'paid');
                                         return (
                                             <React.Fragment key={step.key}>
                                                 <div className="flex flex-col items-center gap-1.5">
                                                     <div
-                                                        className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-black transition-all ${step.active ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-400'} ${isCurrent ? 'ring-primary/20 ring-4' : ''}`}
+                                                        className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-black transition-all ${
+                                                            step.isDone
+                                                                ? 'border-emerald-600 bg-emerald-600 text-white'
+                                                                : step.active
+                                                                  ? 'border-primary bg-primary text-white shadow-neon-primary'
+                                                                  : 'border-slate-200 bg-white text-slate-400'
+                                                        } ${isCurrent ? 'ring-primary/20 ring-4' : ''}`}
                                                     >
-                                                        {step.active ? (
+                                                        {step.isDone ? (
                                                             <svg
                                                                 className="h-4 w-4"
                                                                 fill="none"
@@ -2415,7 +2545,7 @@ export default function SalesTransactions({
                                                     </div>
                                                     <div className="text-center">
                                                         <div
-                                                            className={`text-[10px] font-black ${step.active ? 'text-primary' : 'text-slate-400'}`}
+                                                            className={`text-[10px] font-black ${step.active || step.isDone ? (step.isDone ? 'text-emerald-700' : 'text-primary') : 'text-slate-400'}`}
                                                         >
                                                             {step.label}
                                                         </div>
@@ -2426,7 +2556,17 @@ export default function SalesTransactions({
                                                 </div>
                                                 {i < arr.length - 1 && (
                                                     <div
-                                                        className={`mx-1 mb-5 h-0.5 flex-1 ${arr[i + 1].active ? 'bg-primary' : 'bg-slate-200'}`}
+                                                        className={`mx-1 mb-5 h-0.5 flex-1 ${
+                                                            arr[i + 1].active ||
+                                                            arr[i].isDone
+                                                                ? arr[i]
+                                                                      .isDone &&
+                                                                  arr[i + 1]
+                                                                      .isDone
+                                                                    ? 'bg-emerald-500'
+                                                                    : 'bg-primary'
+                                                                : 'bg-slate-200'
+                                                        }`}
                                                     />
                                                 )}
                                             </React.Fragment>
@@ -2494,7 +2634,9 @@ export default function SalesTransactions({
                                     <div className="flex flex-wrap items-center justify-between gap-4">
                                         <div>
                                             <h4 className="text-xs font-bold text-slate-800">
-                                                {activeProject.paymentTerms ? 'Skema Pembayaran Telah Diatur' : 'Penerbitan Invoice Belum Dilakukan'}
+                                                {activeProject.paymentTerms
+                                                    ? 'Skema Pembayaran Telah Diatur'
+                                                    : 'Penerbitan Invoice Belum Dilakukan'}
                                             </h4>
                                             <p className="mt-0.5 text-[11px] font-medium text-slate-400">
                                                 {activeProject.paymentTerms
@@ -2505,16 +2647,22 @@ export default function SalesTransactions({
                                         <div className="flex items-center gap-2">
                                             <button
                                                 type="button"
-                                                onClick={() => setShowInvoiceForm(true)}
+                                                onClick={() =>
+                                                    setShowInvoiceForm(true)
+                                                }
                                                 className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                                             >
-                                                {activeProject.paymentTerms ? 'Ubah Skema Termin' : 'Atur Skema Pembayaran'}
+                                                {activeProject.paymentTerms
+                                                    ? 'Ubah Skema Termin'
+                                                    : 'Atur Skema Pembayaran'}
                                             </button>
                                             {activeProject.paymentTerms && (
                                                 <button
                                                     type="button"
-                                                    onClick={handleIssueOfficialInvoice}
-                                                    className="shadow-neon-primary cursor-pointer rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"
+                                                    onClick={
+                                                        handleIssueOfficialInvoice
+                                                    }
+                                                    className="cursor-pointer rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-neon-primary hover:bg-primary-700"
                                                 >
                                                     Terbitkan Invoice Resmi
                                                 </button>
@@ -2552,16 +2700,35 @@ export default function SalesTransactions({
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-2">
+                                                {activeTotalPaid === 0 ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setShowInvoiceForm(
+                                                                true,
+                                                            )
+                                                        }
+                                                        className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                                                    >
+                                                        Ubah Skema
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        disabled
+                                                        className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-400 opacity-75"
+                                                        title="Skema termin terkunci karena sudah ada pembayaran yang tercatat"
+                                                    >
+                                                        Skema Terkunci
+                                                    </button>
+                                                )}
                                                 <button
                                                     type="button"
-                                                    onClick={() => setShowInvoiceForm(true)}
-                                                    className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                                                >
-                                                    Ubah Skema
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDownloadInvoicePdf(activeProject)}
+                                                    onClick={() =>
+                                                        handleDownloadInvoicePdf(
+                                                            activeProject,
+                                                        )
+                                                    }
                                                     className="cursor-pointer rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
                                                 >
                                                     Cetak Invoice PDF
@@ -2614,7 +2781,8 @@ export default function SalesTransactions({
                                         <div className="shadow-2xs overflow-hidden rounded-2xl border border-slate-200 bg-white">
                                             <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-100/90 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-600">
                                                 <span>
-                                                    Rincian Termin & Status Pembayaran
+                                                    Rincian Termin & Status
+                                                    Pembayaran
                                                 </span>
                                                 <span>
                                                     {activeScheduleItems.length}{' '}
@@ -2647,10 +2815,77 @@ export default function SalesTransactions({
                                                 <tbody className="divide-y divide-slate-100">
                                                     {activeScheduleItems.map(
                                                         (item, i) => {
-                                                            const termsList = activeProject.invoices?.[0]?.payment_plan?.terms || [];
-                                                            const dbTerm = termsList[i] || null;
-                                                            const termPaidAmt = dbTerm ? (dbTerm.settlements || []).reduce((s, set) => s + Number(set.amount), 0) : 0;
-                                                            const isTermFullyPaid = dbTerm ? (termPaidAmt >= Number(dbTerm.amount) || dbTerm.status === 'paid') : false;
+                                                            const termsList =
+                                                                activeProject
+                                                                    .invoices?.[0]
+                                                                    ?.payment_plan
+                                                                    ?.terms ||
+                                                                [];
+                                                            const dbTerm =
+                                                                termsList[i] ||
+                                                                null;
+                                                            const termPaidAmt =
+                                                                dbTerm
+                                                                    ? (
+                                                                          dbTerm.settlements ||
+                                                                          []
+                                                                      ).reduce(
+                                                                          (
+                                                                              s,
+                                                                              set,
+                                                                          ) =>
+                                                                              s +
+                                                                              Number(
+                                                                                  set.amount,
+                                                                              ),
+                                                                          0,
+                                                                      )
+                                                                    : 0;
+                                                            const isTermFullyPaid =
+                                                                dbTerm
+                                                                    ? termPaidAmt >=
+                                                                          Number(
+                                                                              dbTerm.amount,
+                                                                          ) ||
+                                                                      dbTerm.status ===
+                                                                          'paid'
+                                                                    : false;
+                                                            const isPreviousTermPaid =
+                                                                i === 0 ||
+                                                                (() => {
+                                                                    const prevDbTerm =
+                                                                        termsList[
+                                                                            i -
+                                                                                1
+                                                                        ];
+                                                                    if (
+                                                                        !prevDbTerm
+                                                                    )
+                                                                        return true;
+                                                                    const prevPaid =
+                                                                        (
+                                                                            prevDbTerm.settlements ||
+                                                                            []
+                                                                        ).reduce(
+                                                                            (
+                                                                                s,
+                                                                                set,
+                                                                            ) =>
+                                                                                s +
+                                                                                Number(
+                                                                                    set.amount,
+                                                                                ),
+                                                                            0,
+                                                                        );
+                                                                    return (
+                                                                        prevPaid >=
+                                                                            Number(
+                                                                                prevDbTerm.amount,
+                                                                            ) ||
+                                                                        prevDbTerm.status ===
+                                                                            'paid'
+                                                                    );
+                                                                })();
 
                                                             return (
                                                                 <tr
@@ -2658,14 +2893,21 @@ export default function SalesTransactions({
                                                                     className="hover:bg-slate-50/60"
                                                                 >
                                                                     <td className="px-4 py-2.5 font-bold text-slate-800">
-                                                                        {item.label}
+                                                                        {
+                                                                            item.label
+                                                                        }
                                                                     </td>
                                                                     <td className="px-4 py-2.5 font-mono text-slate-600">
-                                                                        {item.percent}%
+                                                                        {
+                                                                            item.percent
+                                                                        }
+                                                                        %
                                                                     </td>
                                                                     <td className="px-4 py-2.5 text-slate-600">
                                                                         {item.dueDate
-                                                                            ? formatDate(item.dueDate)
+                                                                            ? formatDate(
+                                                                                  item.dueDate,
+                                                                              )
                                                                             : '-'}
                                                                     </td>
                                                                     <td className="px-4 py-2.5">
@@ -2673,35 +2915,127 @@ export default function SalesTransactions({
                                                                             <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9.5px] font-bold text-emerald-700">
                                                                                 LUNAS
                                                                             </span>
-                                                                        ) : termPaidAmt > 0 ? (
+                                                                        ) : termPaidAmt >
+                                                                          0 ? (
                                                                             <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9.5px] font-bold text-amber-700">
-                                                                                PARSIAL ({fmt(termPaidAmt)})
+                                                                                PARSIAL
+                                                                                (
+                                                                                {fmt(
+                                                                                    termPaidAmt,
+                                                                                )}
+
+                                                                                )
                                                                             </span>
                                                                         ) : (
                                                                             <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9.5px] font-bold text-slate-600">
-                                                                                BELUM BAYAR
+                                                                                BELUM
+                                                                                BAYAR
                                                                             </span>
                                                                         )}
                                                                     </td>
                                                                     <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900">
-                                                                        {fmt(item.amount)}
+                                                                        {fmt(
+                                                                            item.amount,
+                                                                        )}
                                                                     </td>
                                                                     <td className="px-4 py-2.5 text-center">
-                                                                        <div className="flex items-center justify-center gap-1.5">
-                                                                            {!isTermFullyPaid && (
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => {
-                                                                                        setSelectedInvoiceForPayment(activeProject);
-                                                                                        setSelectedPaymentTerm(dbTerm);
-                                                                                        setShowRecordPaymentModal(true);
-                                                                                    }}
-                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-emerald-600 px-2.5 py-1 text-[10.5px] font-bold text-white transition-all hover:bg-emerald-700"
-                                                                                    title={`Catat pembayaran untuk ${item.label}`}
+                                                                        <div className="flex items-center justify-center gap-2">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() =>
+                                                                                    handleDownloadInvoicePdf(
+                                                                                        activeProject,
+                                                                                        item,
+                                                                                    )
+                                                                                }
+                                                                                className="shadow-2xs inline-flex cursor-pointer items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-all hover:bg-indigo-100"
+                                                                                title={`Cetak Invoice PDF Tagihan ${item.label}`}
+                                                                            >
+                                                                                <svg
+                                                                                    className="h-3.5 w-3.5 text-indigo-600"
+                                                                                    fill="none"
+                                                                                    viewBox="0 0 24 24"
+                                                                                    stroke="currentColor"
+                                                                                    strokeWidth={
+                                                                                        2
+                                                                                    }
                                                                                 >
-                                                                                    <span>Catat Bayar</span>
-                                                                                </button>
-                                                                            )}
+                                                                                    <path
+                                                                                        strokeLinecap="round"
+                                                                                        strokeLinejoin="round"
+                                                                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                    />
+                                                                                </svg>
+                                                                                <span>
+                                                                                    Cetak
+                                                                                    Invoice
+                                                                                </span>
+                                                                            </button>
+                                                                            {!isTermFullyPaid &&
+                                                                                (isPreviousTermPaid ? (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setSelectedInvoiceForPayment(
+                                                                                                activeProject,
+                                                                                            );
+                                                                                            setSelectedPaymentTerm(
+                                                                                                dbTerm,
+                                                                                            );
+                                                                                            setShowRecordPaymentModal(
+                                                                                                true,
+                                                                                            );
+                                                                                        }}
+                                                                                        className="shadow-2xs inline-flex cursor-pointer items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-emerald-700"
+                                                                                        title={`Catat pembayaran untuk ${item.label}`}
+                                                                                    >
+                                                                                        <svg
+                                                                                            className="h-3.5 w-3.5"
+                                                                                            fill="none"
+                                                                                            viewBox="0 0 24 24"
+                                                                                            stroke="currentColor"
+                                                                                            strokeWidth={
+                                                                                                2.5
+                                                                                            }
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span>
+                                                                                            Catat
+                                                                                            Bayar
+                                                                                        </span>
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        disabled
+                                                                                        className="shadow-2xs inline-flex cursor-not-allowed items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-400 opacity-60"
+                                                                                        title="Harap selesaikan/lunasi termin sebelumnya terlebih dahulu"
+                                                                                    >
+                                                                                        <svg
+                                                                                            className="h-3.5 w-3.5 text-slate-400"
+                                                                                            fill="none"
+                                                                                            viewBox="0 0 24 24"
+                                                                                            stroke="currentColor"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span>
+                                                                                            Terkunci
+                                                                                        </span>
+                                                                                    </button>
+                                                                                ))}
                                                                         </div>
                                                                     </td>
                                                                 </tr>
@@ -2841,6 +3175,34 @@ export default function SalesTransactions({
             <RecordInvoicePaymentModal
                 isOpen={showRecordPaymentModal}
                 cashBankAccounts={cashBankAccounts}
+                initialTerm={
+                    selectedPaymentTerm
+                        ? {
+                              id: selectedPaymentTerm.id,
+                              label: selectedPaymentTerm.label,
+                              amount: Number(selectedPaymentTerm.amount),
+                              percent: Number(selectedPaymentTerm.percent),
+                              due_date: selectedPaymentTerm.due_date,
+                              status: selectedPaymentTerm.status as
+                                  | 'unpaid'
+                                  | 'paid'
+                                  | 'overdue',
+                              paid_amount: (
+                                  selectedPaymentTerm.settlements || []
+                              ).reduce((s, st) => s + Number(st.amount), 0),
+                              remaining_amount: Math.max(
+                                  0,
+                                  Number(selectedPaymentTerm.amount) -
+                                      (
+                                          selectedPaymentTerm.settlements || []
+                                      ).reduce(
+                                          (s, st) => s + Number(st.amount),
+                                          0,
+                                      ),
+                              ),
+                          }
+                        : null
+                }
                 invoice={
                     selectedInvoiceForPayment
                         ? {
@@ -2852,6 +3214,32 @@ export default function SalesTransactions({
                               totalAmount:
                                   selectedInvoiceForPayment.contractValue *
                                   (isPPN ? 1 + PPN_RATE : 1),
+                              terms: (
+                                  selectedInvoiceForPayment.invoices?.[0]
+                                      ?.payment_plan?.terms || []
+                              ).map((t) => {
+                                  const tPaid = (t.settlements || []).reduce(
+                                      (s, st) => s + Number(st.amount),
+                                      0,
+                                  );
+                                  const tAmt = Number(t.amount);
+                                  return {
+                                      id: t.id,
+                                      label: t.label,
+                                      amount: tAmt,
+                                      percent: Number(t.percent),
+                                      due_date: t.due_date,
+                                      status: t.status as
+                                          | 'unpaid'
+                                          | 'paid'
+                                          | 'overdue',
+                                      paid_amount: tPaid,
+                                      remaining_amount: Math.max(
+                                          0,
+                                          tAmt - tPaid,
+                                      ),
+                                  };
+                              }),
                               paymentTerms:
                                   selectedInvoiceForPayment.paymentTerms,
                           }
@@ -2878,6 +3266,15 @@ export default function SalesTransactions({
                     setSelectedPaymentTerm(null);
                 }}
                 onSubmit={handleSaveInvoicePayment}
+            />
+
+            {/* Floating Toast Notification */}
+            <Toast
+                show={toast.show}
+                type={toast.type}
+                title={toast.title}
+                message={toast.message}
+                onClose={() => setToast((prev) => ({ ...prev, show: false }))}
             />
         </AppLayout>
     );

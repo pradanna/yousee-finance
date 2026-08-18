@@ -196,6 +196,11 @@ export function formatIndoPeriod(
 }
 
 /**
+ * Alias for formatIndoPeriod to provide consistent API across all menus
+ */
+export const formatPeriod = formatIndoPeriod;
+
+/**
  * Calculate campaign runtime / airtime progress (Masa Tayang)
  */
 export function calcPeriodProgress(
