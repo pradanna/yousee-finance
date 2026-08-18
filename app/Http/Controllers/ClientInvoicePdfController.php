@@ -14,6 +14,7 @@ class ClientInvoicePdfController extends Controller
         $clientSubName = $request->input('clientSubName', 'Attn: Finance & Procurement');
         $invoiceNumber = $request->input('invoiceNumber', 'INV-06/2026/001');
         $invoiceDate = $request->input('invoiceDate', date('d/m/Y'));
+        $dueDate = $request->input('dueDate', '');
         $locations = $request->input('locations', []);
         if (empty($locations)) {
             $locations = [
@@ -67,6 +68,7 @@ class ClientInvoicePdfController extends Controller
             'clientSubName' => $clientSubName,
             'invoiceNumber' => $invoiceNumber,
             'invoiceDate' => $invoiceDate,
+            'dueDate' => $dueDate,
             'termLabel' => $termLabel,
             'contractTotalDpp' => $contractTotalDpp,
             'contractTotalInvoice' => $contractTotalInvoice,

@@ -34,6 +34,7 @@ class SalesTransactionController extends Controller
                 'purchaseOrders.vendor',
                 'invoices.paymentPlan.terms.settlements',
             ])
+            ->where('status', '!=', 'cancelled')
             ->latest('updated_at');
 
         if (! empty($search)) {

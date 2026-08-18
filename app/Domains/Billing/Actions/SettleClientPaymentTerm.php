@@ -69,18 +69,6 @@ class SettleClientPaymentTerm
 
                 if ($allTermsPaid && $invoice->status !== InvoiceStatus::PAID) {
                     $invoice->update(['status' => InvoiceStatus::PAID]);
-
-                    // Otomatis terbitkan Kwitansi resmi jika belum ada
-                    if ($invoice->kwitansis()->doesntExist()) {
-                        $receiptNumber = $this->generateKwitansiNumber($invoice->fiscal_mode);
-                        Kwitansi::create([
-                            'invoice_id'           => $invoice->id,
-                            'receipt_number'       => $receiptNumber,
-                            'amount'               => (float) $invoice->total,
-                            'paid_at'              => $data['paid_at'],
-                            'payment_account_code' => $data['payment_method'] ?? 'Bank BCA',
-                        ]);
-                    }
                 }
 
                 // Otomatis bentuk Jurnal Akuntansi Penerimaan Pembayaran Piutang Client (accounting-journal-flow.md §3 Flow A.2)
@@ -101,7 +89,7 @@ class SettleClientPaymentTerm
                         headerData: [
                             'fiscal_mode'      => $invoice->fiscal_mode,
                             'transaction_date' => $data['paid_at'],
-                            'description'      => "Penerimaan Pembayaran {$invNumber} - {$term->label} ({$clientName})",
+                            'description'      => "Penerimaan Pembayaran Piutang - {$clientName} ({$invNumber}) [{$term->label}]",
                             'project_id'       => $invoice->project_id,
                         ],
                         items: [
@@ -127,25 +115,5 @@ class SettleClientPaymentTerm
 
             return $settlement;
         });
-    }
-
-    private function generateKwitansiNumber(FiscalMode $mode): string
-    {
-        $now = Carbon::now();
-        $prefix = $mode === FiscalMode::PPN ? 'KW-PPN' : 'KW-NP';
-        $month = $now->format('m');
-        $year = $now->format('y');
-
-        $latestKwitansi = Kwitansi::whereHas('invoice', fn ($q) => $q->where('fiscal_mode', $mode->value))
-            ->whereYear('created_at', $now->year)
-            ->latest('id')
-            ->first();
-
-        $seq = 1;
-        if ($latestKwitansi && preg_match('/\/(\d+)$/', $latestKwitansi->receipt_number, $matches)) {
-            $seq = ((int) $matches[1]) + 1;
-        }
-
-        return sprintf('%s-%s/%s/%03d', $prefix, $month, $year, $seq);
     }
 }

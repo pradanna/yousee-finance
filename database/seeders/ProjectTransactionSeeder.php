@@ -463,8 +463,8 @@ class ProjectTransactionSeeder extends Seeder
                     foreach ($tmpl['terms'] as $tIdx => $tTmpl) {
                         $isLast = $tIdx === $termCount - 1;
                         $termAmt = $isLast
-                            ? round($invTotal - $runningAmt, 2)
-                            : round($invTotal * $tTmpl['percent'] / 100, 2);
+                            ? round($invTotal - $runningAmt, 0)
+                            : round($invTotal * $tTmpl['percent'] / 100, 0);
                         $runningAmt += $termAmt;
                         $termDueDate = (clone $startDate)->addDays($tTmpl['days']);
 

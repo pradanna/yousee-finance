@@ -281,6 +281,12 @@
                         <td class="meta-label">DATE :</td>
                         <td class="meta-value">{{ $invoiceDate }}</td>
                     </tr>
+                    @if(!empty($dueDate))
+                    <tr>
+                        <td class="meta-label">DUE DATE :</td>
+                        <td class="meta-value" style="color: #dc2626; font-weight: bold;">{{ $dueDate }}</td>
+                    </tr>
+                    @endif
                     <tr>
                         <td class="meta-label">NO :</td>
                         <td class="meta-value">{{ $invoiceNumber }}</td>

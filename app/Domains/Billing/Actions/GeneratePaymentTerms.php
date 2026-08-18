@@ -49,8 +49,8 @@ class GeneratePaymentTerms
             foreach ($percents as $index => $percent) {
                 $isLast = $index === $count - 1;
                 $amount = $isLast
-                    ? round($totalAmount - $runningAmount, 2)
-                    : round($totalAmount * $percent / 100, 2);
+                    ? round($totalAmount - $runningAmount, 0)
+                    : round($totalAmount * $percent / 100, 0);
                 $runningAmount += $amount;
 
                 $plan->terms()->create([
