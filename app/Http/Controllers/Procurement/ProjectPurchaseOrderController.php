@@ -36,4 +36,16 @@ class ProjectPurchaseOrderController extends Controller
 
         return redirect()->back()->with('success', 'PO vendor berhasil diterbitkan.');
     }
+
+    /**
+     * Batalkan dan hapus PO vendor (hanya jika belum ada pembayaran).
+     */
+    public function destroy(Project $project, \App\Domains\Procurement\Models\PurchaseOrder $purchaseOrder, \App\Domains\Procurement\Actions\CancelPurchaseOrder $action): RedirectResponse
+    {
+        abort_unless($purchaseOrder->project_id === $project->id, 404);
+
+        $action->execute($purchaseOrder);
+
+        return redirect()->back()->with('success', "PO {$purchaseOrder->po_number} berhasil dibatalkan. Titik lokasi dapat diedit kembali.");
+    }
 }

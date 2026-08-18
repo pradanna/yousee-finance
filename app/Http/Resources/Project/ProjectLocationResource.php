@@ -35,6 +35,7 @@ class ProjectLocationResource extends JsonResource
             'vendor_cost' => (float) $this->vendor_cost,
             'top_notes' => $this->top_notes,
             // Derived, never stored — see docs/databases/tables/project_locations.dbml
+            'purchase_order_id' => $this->purchase_order_id,
             'po_issued' => ! is_null($this->purchase_order_id),
             'po_number' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder?->po_number),
             'created_at' => $this->created_at?->toIso8601String(),

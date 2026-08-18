@@ -92,11 +92,11 @@ class ProjectController extends Controller
             'purchaseOrders.vendor',
             'purchaseOrders.items',
             'purchaseOrders.paymentPlan.terms.settlements',
-            'invoices.paymentPlan.terms',
+            'invoices.paymentPlan.terms.settlements',
         ]);
 
         $clients = Client::active()->orderBy('name')->get(['id', 'name']);
-        $sales = Sales::orderBy('name')->get(['id', 'name']);
+        $sales = Sales::orderBy('name')->get(['id', 'name', 'commission_rate']);
         $vendors = Vendor::active()->orderBy('name')->get(['id', 'name']);
 
         $cashBankAccounts = \App\Domains\Accounting\Models\ChartOfAccount::where('is_active', true)
@@ -146,8 +146,11 @@ class ProjectController extends Controller
      */
     public function destroy(Project $project, DeleteProject $action): RedirectResponse
     {
-        $action->execute($project);
-
-        return redirect()->back()->with('success', 'Project berhasil dihapus.');
+        try {
+            $action->execute($project);
+            return redirect()->back()->with('success', 'Project berhasil dibatalkan/dihapus.');
+        } catch (\DomainException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 }
