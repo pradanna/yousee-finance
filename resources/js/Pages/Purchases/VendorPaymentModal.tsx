@@ -173,6 +173,7 @@ interface VendorPaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     po: VendorPO | null;
+    isPPN?: boolean;
     cashBankAccounts?: Array<{
         id: string | number;
         code: string;
@@ -187,6 +188,7 @@ export function VendorPaymentModal({
     isOpen,
     onClose,
     po,
+    isPPN = true,
     cashBankAccounts = [],
     onAddPayment,
     onSubmit,
@@ -308,7 +310,11 @@ export function VendorPaymentModal({
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
                     <div>
                         <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                            <span className="h-2.5 w-2.5 rounded-full bg-rose-600" />
+                            <span
+                                className={`h-2.5 w-2.5 rounded-full ${
+                                    isPPN ? 'bg-blue-600' : 'bg-slate-700'
+                                }`}
+                            />
                             Catat Pembayaran Keluar (Vendor)
                         </h3>
                         <p className="mt-0.5 text-xs text-slate-500">
@@ -360,7 +366,9 @@ export function VendorPaymentModal({
                                         onClick={() => handleSelectTerm(term)}
                                         className={`flex cursor-pointer items-center justify-between rounded-2xl border p-3 text-left transition-all ${
                                             isSelected
-                                                ? 'border-rose-600 bg-rose-50 font-bold text-rose-900 ring-2 ring-rose-600/20'
+                                                ? isPPN
+                                                    ? 'border-blue-600 bg-blue-50 font-bold text-blue-900 ring-2 ring-blue-600/20'
+                                                    : 'border-slate-800 bg-slate-100 font-bold text-slate-900 ring-2 ring-slate-800/20'
                                                 : term.isPaid
                                                   ? 'border-slate-200 bg-slate-100 text-slate-400 opacity-60'
                                                   : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
@@ -373,30 +381,38 @@ export function VendorPaymentModal({
                                                         {term.poNumber}
                                                     </span>
                                                 )}
-                                                <span>
-                                                    {term.label}
-                                                </span>
+                                                <span>{term.label}</span>
                                                 {term.isPaid && (
-                                                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
+                                                    <span className="py-0.2 rounded bg-emerald-100 px-1.5 text-[9px] font-bold text-emerald-800">
                                                         Lunas
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="mt-0.5 text-[10px] text-slate-500">
-                                                Jatuh Tempo:{' '}
-                                                <strong className="font-mono text-slate-700">
-                                                    {formatIndoDate(term.dueDate)}
-                                                </strong>
+                                            <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
+                                                <span>{term.percent}%</span>
+                                                <span>•</span>
+                                                <span className="font-mono font-bold text-slate-800">
+                                                    {fmt(term.targetAmount)}
+                                                </span>
+                                                {term.dueDate && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span>
+                                                            Tempo:{' '}
+                                                            {formatIndoDate(
+                                                                term.dueDate,
+                                                            )}
+                                                        </span>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="font-mono text-xs font-bold text-slate-900">
-                                                {fmt(term.targetAmount)}
+                                            <div className="text-[10px] text-slate-400">
+                                                Sisa
                                             </div>
-                                            <div className="font-mono text-[10px] font-semibold text-rose-600">
-                                                {term.isPaid
-                                                    ? 'Rp 0'
-                                                    : `Sisa: ${fmt(term.remainingAmount)}`}
+                                            <div className="font-mono text-xs font-bold text-rose-600">
+                                                {fmt(term.remainingAmount)}
                                             </div>
                                         </div>
                                     </button>
@@ -417,7 +433,9 @@ export function VendorPaymentModal({
                             onClick={handleSelectFull}
                             className={`cursor-pointer rounded-2xl border p-3 text-left transition-all ${
                                 payType === 'full'
-                                    ? 'border-rose-600 bg-rose-50 font-bold text-rose-900 ring-2 ring-rose-600/20'
+                                    ? isPPN
+                                        ? 'border-blue-600 bg-blue-50 font-bold text-blue-900 ring-2 ring-blue-600/20'
+                                        : 'border-slate-800 bg-slate-100 font-bold text-slate-900 ring-2 ring-slate-800/20'
                                     : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                             }`}
                         >
@@ -434,7 +452,9 @@ export function VendorPaymentModal({
                             onClick={handleSelectPartial}
                             className={`cursor-pointer rounded-2xl border p-3 text-left transition-all ${
                                 payType === 'partial'
-                                    ? 'border-blue-600 bg-blue-50 font-bold text-blue-900 ring-2 ring-blue-600/20'
+                                    ? isPPN
+                                        ? 'border-blue-600 bg-blue-50 font-bold text-blue-900 ring-2 ring-blue-600/20'
+                                        : 'border-slate-800 bg-slate-100 font-bold text-slate-900 ring-2 ring-slate-800/20'
                                     : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                             }`}
                         >
@@ -464,7 +484,9 @@ export function VendorPaymentModal({
                         className={`w-full rounded-xl border px-3.5 py-2.5 font-mono text-sm font-bold focus:outline-none ${
                             payType === 'full'
                                 ? 'border-slate-300 bg-slate-100 text-slate-700'
-                                : 'border-blue-400 bg-white text-blue-950 focus:border-blue-600'
+                                : isPPN
+                                  ? 'border-blue-400 bg-white text-blue-950 focus:border-blue-600'
+                                  : 'border-slate-400 bg-white text-slate-900 focus:border-slate-700'
                         }`}
                     />
                 </div>
@@ -477,9 +499,7 @@ export function VendorPaymentModal({
                         </label>
                         <div className="relative flex items-center">
                             <div className="shadow-2xs flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs font-semibold text-slate-800 hover:border-blue-600">
-                                <span>
-                                    {formatIndoDate(dateInput)}
-                                </span>
+                                <span>{formatIndoDate(dateInput)}</span>
                                 <svg
                                     className="h-3.5 w-3.5 text-slate-400"
                                     fill="none"
@@ -511,19 +531,20 @@ export function VendorPaymentModal({
                             value={accountId}
                             onChange={(e) => {
                                 setAccountId(e.target.value);
-                                const acc = cashBankAccounts.find(
+                                const selected = cashBankAccounts.find(
                                     (a) => String(a.id) === e.target.value,
                                 );
-                                if (acc) {
-                                    setMethod(`Transfer ${acc.name}`);
+                                if (selected) {
+                                    setMethod(selected.name);
                                 }
                             }}
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:outline-none"
                         >
-                            {cashBankAccounts && cashBankAccounts.length > 0 ? (
+                            {cashBankAccounts.length > 0 ? (
                                 cashBankAccounts.map((acc) => (
                                     <option key={acc.id} value={acc.id}>
-                                        {acc.display_name || `${acc.code} - ${acc.name}`}
+                                        {acc.display_name ||
+                                            `${acc.code} - ${acc.name}`}
                                     </option>
                                 ))
                             ) : (
@@ -562,9 +583,11 @@ export function VendorPaymentModal({
                         type="button"
                         onClick={handleSubmit}
                         disabled={amountInput <= 0}
-                        className={`cursor-pointer rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all ${
+                        className={`cursor-pointer rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-all ${
                             amountInput > 0
-                                ? 'bg-rose-600 hover:bg-rose-700'
+                                ? isPPN
+                                    ? 'bg-blue-600 shadow-sm hover:bg-blue-700'
+                                    : 'bg-slate-800 shadow-sm hover:bg-slate-900'
                                 : 'cursor-not-allowed bg-slate-200 text-slate-400'
                         }`}
                     >

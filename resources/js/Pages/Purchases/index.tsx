@@ -440,6 +440,44 @@ export default function Purchases({
         return acc;
     }, {});
 
+    const activeProjectVendorSummary = useMemo(() => {
+        if (!activeProject) {
+            return {
+                totalDpp: 0,
+                totalPpn: 0,
+                grandTotal: 0,
+                issuedDpp: 0,
+                issuedGrandTotal: 0,
+                pendingDpp: 0,
+            };
+        }
+
+        const totalDpp = activeLocations.reduce(
+            (s, l) => s + (l.vendorCost || 0) * (l.qty || 1),
+            0,
+        );
+        const totalPpn = isPPN ? totalDpp * PPN_RATE : 0;
+        const grandTotal = totalDpp + totalPpn;
+
+        const issuedDpp = activeLocations
+            .filter((l) => l.poIssued)
+            .reduce((s, l) => s + (l.vendorCost || 0) * (l.qty || 1), 0);
+        const issuedGrandTotal = isPPN ? issuedDpp * (1 + PPN_RATE) : issuedDpp;
+
+        const pendingDpp = activeLocations
+            .filter((l) => !l.poIssued && l.vendorId !== null)
+            .reduce((s, l) => s + (l.vendorCost || 0) * (l.qty || 1), 0);
+
+        return {
+            totalDpp,
+            totalPpn,
+            grandTotal,
+            issuedDpp,
+            issuedGrandTotal,
+            pendingDpp,
+        };
+    }, [activeProject, activeLocations, isPPN]);
+
     const allLocations = projects.flatMap((p) => p.locations);
     const totalIssuedPO = allLocations.filter((l) => l.poIssued).length;
     const totalPendingPO = allLocations.filter(
@@ -2391,6 +2429,205 @@ export default function Purchases({
                                 </div>
                             )}
                         </div>
+
+                        {/* Rekapitulasi Total Keseluruhan Biaya Vendor */}
+                        {activeLocations.length > 0 && (
+                            <div className="shadow-xs overflow-hidden rounded-3xl border border-slate-200/90 bg-white">
+                                {/* Header Banner */}
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                                                isPPN
+                                                    ? 'border border-blue-200 bg-blue-100 text-blue-600'
+                                                    : 'border border-slate-300 bg-slate-200 text-slate-700'
+                                            }`}
+                                        >
+                                            <svg
+                                                className="h-5 w-5"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-black text-slate-900">
+                                                Total Keseluruhan Biaya Vendor
+                                            </h3>
+                                            <p className="text-xs text-slate-500">
+                                                Akumulasi seluruh biaya vendor
+                                                pada project ini (
+                                                {activeLocations.length} titik
+                                                lokasi •{' '}
+                                                {
+                                                    Object.keys(
+                                                        locationsByVendor,
+                                                    ).length
+                                                }{' '}
+                                                vendor)
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                                pendingLocations.length === 0
+                                                    ? 'border border-emerald-200 bg-emerald-100 text-emerald-800'
+                                                    : 'border border-amber-200 bg-amber-100 text-amber-800'
+                                            }`}
+                                        >
+                                            {pendingLocations.length === 0
+                                                ? 'Semua PO Sudah Terbit'
+                                                : `${pendingLocations.length} PO Belum Diterbitkan`}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Metric Cards Grid */}
+                                <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4">
+                                    {/* Subtotal DPP */}
+                                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            Subtotal DPP Vendor
+                                        </span>
+                                        <div className="mt-1 font-mono text-base font-bold text-slate-900">
+                                            {fmt(
+                                                activeProjectVendorSummary.totalDpp,
+                                            )}
+                                        </div>
+                                        <span className="mt-1 block text-[10px] text-slate-400">
+                                            Total dasar pengenaan pajak
+                                        </span>
+                                    </div>
+
+                                    {/* PPN Masukan 11% */}
+                                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            PPN Masukan (11%)
+                                        </span>
+                                        <div className="mt-1 font-mono text-base font-bold text-slate-900">
+                                            {isPPN
+                                                ? fmt(
+                                                      activeProjectVendorSummary.totalPpn,
+                                                  )
+                                                : 'Rp 0'}
+                                        </div>
+                                        <span className="mt-1 block text-[10px] text-slate-400">
+                                            {isPPN
+                                                ? 'PPN 11% dari DPP'
+                                                : 'Mode Non-PPN Aktif'}
+                                        </span>
+                                    </div>
+
+                                    {/* PO Sudah Terbit */}
+                                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                                            Nilai PO Diterbitkan
+                                        </span>
+                                        <div className="mt-1 font-mono text-base font-bold text-emerald-700">
+                                            {fmt(
+                                                activeProjectVendorSummary.issuedGrandTotal,
+                                            )}
+                                        </div>
+                                        <span className="mt-1 block text-[10px] text-emerald-600/80">
+                                            {activeProjectVendorSummary.grandTotal >
+                                            0
+                                                ? `${Math.round(
+                                                      (activeProjectVendorSummary.issuedGrandTotal /
+                                                          activeProjectVendorSummary.grandTotal) *
+                                                          100,
+                                                  )}% dari total pengeluaran`
+                                                : '0%'}
+                                        </span>
+                                    </div>
+
+                                    {/* Nilai PO Tertunda */}
+                                    <div
+                                        className={`rounded-2xl border p-4 ${
+                                            pendingLocations.length > 0
+                                                ? 'border-amber-100 bg-amber-50/50'
+                                                : 'border-slate-100 bg-slate-50/50'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`text-[10px] font-bold uppercase tracking-wider ${
+                                                pendingLocations.length > 0
+                                                    ? 'text-amber-600'
+                                                    : 'text-slate-400'
+                                            }`}
+                                        >
+                                            Nilai PO Tertunda
+                                        </span>
+                                        <div
+                                            className={`mt-1 font-mono text-base font-bold ${
+                                                pendingLocations.length > 0
+                                                    ? 'text-amber-600'
+                                                    : 'text-slate-700'
+                                            }`}
+                                        >
+                                            {fmt(
+                                                activeProjectVendorSummary.pendingDpp,
+                                            )}
+                                        </div>
+                                        <span
+                                            className={`mt-1 block text-[10px] ${
+                                                pendingLocations.length > 0
+                                                    ? 'text-amber-600/80'
+                                                    : 'text-slate-400'
+                                            }`}
+                                        >
+                                            {pendingLocations.length > 0
+                                                ? `${pendingLocations.length} titik belum diterbitkan`
+                                                : 'Semua PO lokasi terbit'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Highlight Footer Total PO Keseluruhan */}
+                                <div
+                                    className={`flex flex-wrap items-center justify-between gap-3 border-t px-6 py-3.5 ${
+                                        isPPN
+                                            ? 'border-blue-100 bg-blue-50/60'
+                                            : 'border-slate-200 bg-slate-100/70'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={`h-2 w-2 rounded-full ${
+                                                isPPN
+                                                    ? 'bg-blue-600'
+                                                    : 'bg-slate-700'
+                                            }`}
+                                        />
+                                        <span className="text-xs font-bold text-slate-800">
+                                            Grand Total Nilai Seluruh Vendor (
+                                            {isPPN
+                                                ? 'DPP + PPN 11%'
+                                                : 'Non-PPN'}
+                                            ):
+                                        </span>
+                                    </div>
+                                    <div
+                                        className={`font-mono text-lg font-black ${
+                                            isPPN
+                                                ? 'text-blue-700'
+                                                : 'text-slate-900'
+                                        }`}
+                                    >
+                                        {fmt(
+                                            activeProjectVendorSummary.grandTotal,
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -2423,6 +2660,7 @@ export default function Purchases({
             <VendorPaymentModal
                 isOpen={showRecordPaymentModal}
                 po={selectedPoForPayment}
+                isPPN={isPPN}
                 cashBankAccounts={cashBankAccounts}
                 onClose={() => {
                     setShowRecordPaymentModal(false);
