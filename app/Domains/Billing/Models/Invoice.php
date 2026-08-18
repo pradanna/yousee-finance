@@ -110,6 +110,11 @@ class Invoice extends Model
         return $this->morphOne(PaymentPlan::class, 'payable');
     }
 
+    public function kwitansis(): HasMany
+    {
+        return $this->hasMany(Kwitansi::class);
+    }
+
     /**
      * Hitung ulang subtotal/ppn/total dari items. Journal posting & Kwitansi
      * belum aktif — nunggu domain Accounting (chart_of_accounts,

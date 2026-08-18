@@ -303,48 +303,31 @@
     <table class="items-table">
         <thead>
             <tr>
-                <th style="width: 14%;">ITEM #</th>
-                <th style="width: 46%;">DESCRIPTION</th>
-                <th style="width: 6%;">QTY</th>
-                <th style="width: 17%;">UNIT PRICE</th>
-                <th style="width: 17%;">TOTAL</th>
+                <th style="width: 8%;">NO</th>
+                <th style="width: 25%;">JENIS MEDIA</th>
+                <th style="width: 57%;">DESKRIPSI & LOKASI</th>
+                <th style="width: 10%;">QTY</th>
             </tr>
         </thead>
         <tbody>
             @foreach($locations as $index => $item)
                 <tr>
+                    <td style="text-align: center; font-weight: bold;">{{ $index + 1 }}</td>
                     <td style="font-weight: bold;">
                         {{ $item['type'] ?? 'Billboard' }} {{ $item['size'] ?? '' }} {{ $item['orientation'] ?? 'V' }}
                     </td>
                     <td>
                         {{ $item['description'] ?? '-' }}
                         @if(!empty($item['area']))
-                            ({{ $item['area'] }})
+                            <strong>({{ $item['area'] }})</strong>
                         @endif
                     </td>
-                    <td style="text-align: center;">{{ $item['qty'] ?? 1 }}</td>
-                    <td>
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <tr>
-                                <td style="text-align: left; border: none; padding: 0;">Rp</td>
-                                <td style="text-align: right; border: none; padding: 0; font-family: 'Courier', monospace;">{{ number_format($item['vendorCost'] ?? $item['clientPrice'] ?? 0, 0, ',', '.') }}</td>
-                            </tr>
-                        </table>
-                    </td>
-                    <td>
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <tr>
-                                <td style="text-align: left; border: none; padding: 0;">Rp</td>
-                                <td style="text-align: right; border: none; padding: 0; font-family: 'Courier', monospace;">{{ number_format(($item['vendorCost'] ?? $item['clientPrice'] ?? 0) * ($item['qty'] ?? 1), 0, ',', '.') }}</td>
-                            </tr>
-                        </table>
-                    </td>
+                    <td style="text-align: center; font-weight: bold;">{{ $item['qty'] ?? 1 }}</td>
                 </tr>
             @endforeach
 
-            @for($i = count($locations); $i < 3; $i++)
+            @for($i = count($locations); $i < 4; $i++)
                 <tr class="row-empty">
-                    <td></td>
                     <td></td>
                     <td></td>
                     <td></td>
@@ -354,7 +337,7 @@
 
             <!-- PAYMENT TO CELL ROW -->
             <tr>
-                <td colspan="5" class="payment-cell">
+                <td colspan="4" class="payment-cell">
                     <div style="margin-bottom: 2px;">
                         <span class="payment-title">PAYMENT TO :</span>
                         <strong>{{ $bankAccountName }}</strong>
@@ -372,11 +355,19 @@
     <!-- 4. NOTES & TOTALS SECTION -->
     <div class="summary-wrapper">
         <div class="notes-box">
-            <div class="notes-header">Keterangan</div>
+            <div class="notes-header">Keterangan & Catatan</div>
             <div class="notes-content">
+                @if(!empty($termLabel))
+                    <div style="margin-bottom: 4px; font-weight: bold; color: #0284c7;">
+                        Penagihan: {{ $termLabel }}
+                        @if(!empty($contractTotalInvoice) && $contractTotalInvoice > 0)
+                            <span style="color: #475569; font-weight: normal;">(dari Total Nilai Kontrak Rp {{ number_format($contractTotalInvoice, 0, ',', '.') }})</span>
+                        @endif
+                    </div>
+                @endif
                 @if(is_array($notes))
                     @foreach($notes as $noteLine)
-                        <div>{{ $noteLine }}</div>
+                        <div>&bull; {{ $noteLine }}</div>
                     @endforeach
                 @else
                     <div>{!! nl2br(e($notes)) !!}</div>
@@ -386,7 +377,7 @@
 
         <table class="totals-table">
             <tr>
-                <td class="totals-label">SUBTOTAL</td>
+                <td class="totals-label">SUBTOTAL (DPP)</td>
                 <td class="totals-value">
                     <table style="width: 100%; border-collapse: collapse;">
                         <tr>
@@ -409,19 +400,23 @@
                 </td>
             </tr>
             @endif
+            @if($dpAmount > 0)
             <tr>
-                <td class="totals-label">DP</td>
+                <td class="totals-label">DP / TERBAYAR</td>
                 <td class="totals-value">
                     <table style="width: 100%; border-collapse: collapse;">
                         <tr>
                             <td style="text-align: left; border: none; padding: 0;">Rp</td>
-                            <td style="text-align: right; border: none; padding: 0;">{{ $dpAmount > 0 ? number_format($dpAmount, 0, ',', '.') : '-' }}</td>
+                            <td style="text-align: right; border: none; padding: 0;">{{ number_format($dpAmount, 0, ',', '.') }}</td>
                         </tr>
                     </table>
                 </td>
             </tr>
+            @endif
             <tr class="grand-total-row">
-                <td class="totals-label" style="background-color: #0284c7 !important; color: #ffffff;">TOTAL</td>
+                <td class="totals-label" style="background-color: #0284c7 !important; color: #ffffff;">
+                    {{ !empty($termLabel) && str_contains(strtolower($termLabel), 'termin') || str_contains(strtolower($termLabel), 'dp') ? 'TOTAL TAGIHAN' : 'TOTAL KONTRAK' }}
+                </td>
                 <td class="totals-value" style="color: #ffffff;">
                     <table style="width: 100%; border-collapse: collapse;">
                         <tr>

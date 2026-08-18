@@ -47,4 +47,40 @@ class ProjectInvoiceController extends Controller
 
         return redirect()->back()->with('success', 'Invoice berhasil diterbitkan.');
     }
+
+    /**
+     * Catat penerimaan pembayaran untuk satu termin Invoice Client.
+     */
+    public function settlePaymentTerm(
+        \App\Http\Requests\Procurement\StoreVendorPaymentSettlementRequest $request,
+        Project $project,
+        \App\Domains\Billing\Models\PaymentTerm $paymentTerm,
+        \App\Domains\Billing\Actions\SettleClientPaymentTerm $action,
+    ): RedirectResponse {
+        $invoice = $project->invoices()->first();
+        if (! $invoice) {
+            abort(404, 'Invoice untuk proyek ini belum dibuat.');
+        }
+
+        $plan = $invoice->paymentPlan;
+        if (! $plan || $paymentTerm->payment_plan_id !== $plan->id) {
+            abort(403, 'Termin pembayaran tidak sesuai dengan invoice proyek ini.');
+        }
+
+        // Validasi toleransi agar tidak melebihi sisa tagihan termin
+        $totalSettled = round((float) $paymentTerm->settlements()->sum('amount'), 2);
+        $termAmount = round((float) $paymentTerm->amount, 2);
+        $maxAllowed = round(max(0, $termAmount - $totalSettled), 2);
+        $payingAmount = round((float) $request->validated('amount'), 2);
+
+        if ($payingAmount > ($maxAllowed + 1.0)) {
+            return redirect()->back()->withErrors([
+                'amount' => 'Nominal pembayaran (Rp ' . number_format($payingAmount, 0, ',', '.') . ') melebihi sisa tagihan termin ini (Rp ' . number_format($maxAllowed, 0, ',', '.') . ').',
+            ]);
+        }
+
+        $action->execute($paymentTerm, $request->validated());
+
+        return redirect()->back()->with('success', 'Pembayaran client berhasil dicatat.');
+    }
 }

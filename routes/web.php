@@ -59,12 +59,17 @@ Route::middleware('auth')->group(function () {
     Route::delete('projects/{project}/locations/{location}', [\App\Http\Controllers\Project\ProjectLocationController::class, 'destroy'])->name('projects.locations.destroy');
 
     Route::post('projects/{project}/purchase-orders', [\App\Http\Controllers\Procurement\ProjectPurchaseOrderController::class, 'store'])->name('projects.purchase-orders.store');
+    Route::delete('projects/{project}/purchase-orders/{purchaseOrder}', [\App\Http\Controllers\Procurement\ProjectPurchaseOrderController::class, 'destroy'])->name('projects.purchase-orders.destroy');
     Route::post(
         'projects/{project}/purchase-orders/{purchaseOrder}/payment-terms/{paymentTerm}/settle',
         [\App\Http\Controllers\Procurement\ProjectVendorPaymentController::class, 'store'],
     )->name('projects.po.payment-terms.settle');
     Route::post('projects/{project}/payment-plan', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'storePaymentPlan'])->name('projects.payment-plan.store');
     Route::post('projects/{project}/invoice/issue', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'issue'])->name('projects.invoice.issue');
+    Route::post(
+        'projects/{project}/invoice/payment-terms/{paymentTerm}/settle',
+        [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'settlePaymentTerm'],
+    )->name('projects.invoice.payment-terms.settle');
 
     // Transaksi
     Route::get('/purchases', function () {

@@ -48,14 +48,18 @@ class ClientInvoicePdfController extends Controller
         $contractTotalDpp = (float) $request->input('contractTotalDpp', 0);
         $contractTotalInvoice = (float) $request->input('contractTotalInvoice', 0);
 
-        $subtotal = 0;
-        foreach ($locations as $item) {
-            $subtotal += (float) ($item['vendorCost'] ?? $item['clientPrice'] ?? 0);
+        if ($request->filled('subtotal')) {
+            $subtotal = (float) $request->input('subtotal');
+        } else {
+            $subtotal = 0;
+            foreach ($locations as $item) {
+                $subtotal += (float) ($item['vendorCost'] ?? $item['clientPrice'] ?? 0);
+            }
         }
 
-        $ppnAmount = $isPPN ? ($subtotal * 0.11) : 0;
-        $totalBeforeDp = $subtotal + $ppnAmount;
-        $grandTotal = max(0, $totalBeforeDp - $dpAmount);
+        $ppnAmount = $isPPN ? round($subtotal * 0.11, 2) : 0;
+        $totalBeforeDp = round($subtotal + $ppnAmount, 2);
+        $grandTotal = max(0, round($totalBeforeDp - $dpAmount, 2));
 
         $pdf = Pdf::loadView('pdf.client_invoice', [
             'project' => $project,

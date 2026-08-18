@@ -1,0 +1,151 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domains\Billing\Actions;
+
+use App\Domains\Accounting\Actions\PostJournalEntry;
+use App\Domains\Accounting\Models\AccountingSetting;
+use App\Domains\Billing\Enums\InvoiceStatus;
+use App\Domains\Billing\Enums\PaymentTermStatus;
+use App\Domains\Billing\Models\Invoice;
+use App\Domains\Billing\Models\Kwitansi;
+use App\Domains\Billing\Models\PaymentSettlement;
+use App\Domains\Billing\Models\PaymentTerm;
+use App\Domains\Shared\Enums\FiscalMode;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+
+class SettleClientPaymentTerm
+{
+    /**
+     * Catat penerimaan pembayaran untuk satu termin Invoice Client.
+     *
+     * Alur bisnis & akuntansi:
+     * 1. Simpan PaymentSettlement untuk termin terkait.
+     * 2. Perbarui status PaymentTerm (PAID jika lunas, UNPAID jika masih ada sisa).
+     * 3. Jika seluruh termin dalam Invoice telah lunas, perbarui status Invoice menjadi PAID dan bentuk Kwitansi otomatis.
+     * 4. Bentuk Jurnal Akuntansi Pelunasan Piutang:
+     *    (Dr) Kas / Bank (`account_id`)
+     *    (Cr) Piutang Dagang Client (`default_receivable`)
+     *
+     * @param array{
+     *     amount: float|int,
+     *     paid_at: string,
+     *     payment_method: string,
+     *     account_id?: string|null,
+     *     payment_ref?: string|null,
+     *     notes?: string|null,
+     * } $data
+     */
+    public function execute(PaymentTerm $term, array $data): PaymentSettlement
+    {
+        return DB::transaction(function () use ($term, $data): PaymentSettlement {
+            $settlement = PaymentSettlement::create([
+                'payment_term_id' => $term->id,
+                'amount'          => $data['amount'],
+                'paid_at'         => $data['paid_at'],
+                'payment_method'  => $data['payment_method'],
+                'payment_ref'     => $data['payment_ref'] ?? null,
+                'notes'           => $data['notes'] ?? null,
+            ]);
+
+            // Hitung total realisasi pembayaran termin ini
+            $totalPaidForTerm = (float) $term->settlements()->sum('amount');
+            $termAmount = (float) $term->amount;
+
+            $newTermStatus = $totalPaidForTerm >= ($termAmount - 1.0)
+                ? PaymentTermStatus::PAID
+                : PaymentTermStatus::UNPAID;
+
+            $term->update(['status' => $newTermStatus]);
+
+            $plan = $term->paymentPlan;
+            $invoice = $plan?->payable;
+
+            if ($invoice instanceof Invoice) {
+                // Cek apakah seluruh termin pada invoice sudah lunas
+                $allTermsPaid = $plan->terms()->where('status', '!=', PaymentTermStatus::PAID->value)->doesntExist();
+
+                if ($allTermsPaid && $invoice->status !== InvoiceStatus::PAID) {
+                    $invoice->update(['status' => InvoiceStatus::PAID]);
+
+                    // Otomatis terbitkan Kwitansi resmi jika belum ada
+                    if ($invoice->kwitansis()->doesntExist()) {
+                        $receiptNumber = $this->generateKwitansiNumber($invoice->fiscal_mode);
+                        Kwitansi::create([
+                            'invoice_id'           => $invoice->id,
+                            'receipt_number'       => $receiptNumber,
+                            'amount'               => (float) $invoice->total,
+                            'paid_at'              => $data['paid_at'],
+                            'payment_account_code' => $data['payment_method'] ?? 'Bank BCA',
+                        ]);
+                    }
+                }
+
+                // Otomatis bentuk Jurnal Akuntansi Penerimaan Pembayaran Piutang Client (accounting-journal-flow.md §3 Flow A.2)
+                // (Dr) Kas/Bank (`account_id`) = (Cr) Piutang Dagang (`default_receivable`)
+                $receivableAccountId = AccountingSetting::getAccountId('default_receivable');
+                $cashBankAccountId = $data['account_id'] ?? (
+                    strtolower($data['payment_method']) === 'cash' || strtolower($data['payment_method']) === 'tunai'
+                        ? AccountingSetting::getAccountId('default_cash')
+                        : AccountingSetting::getAccountId('default_bank')
+                );
+
+                if ($receivableAccountId && $cashBankAccountId) {
+                    $amount = (float) $data['amount'];
+                    $clientName = $invoice->client?->name ?? 'Client';
+                    $invNumber = $invoice->invoice_number ?? 'Invoice';
+
+                    (new PostJournalEntry())->execute(
+                        headerData: [
+                            'fiscal_mode'      => $invoice->fiscal_mode,
+                            'transaction_date' => $data['paid_at'],
+                            'description'      => "Penerimaan Pembayaran {$invNumber} - {$term->label} ({$clientName})",
+                            'project_id'       => $invoice->project_id,
+                        ],
+                        items: [
+                            [
+                                'account_id' => $cashBankAccountId,
+                                'debit'      => $amount,
+                                'credit'     => 0,
+                                'project_id' => $invoice->project_id,
+                                'memo'       => "Penerimaan Kas/Bank untuk {$invNumber} - {$term->label}",
+                            ],
+                            [
+                                'account_id' => $receivableAccountId,
+                                'debit'      => 0,
+                                'credit'     => $amount,
+                                'project_id' => $invoice->project_id,
+                                'memo'       => "Pelunasan Piutang Client {$invNumber} - {$term->label}",
+                            ],
+                        ],
+                        source: $settlement,
+                    );
+                }
+            }
+
+            return $settlement;
+        });
+    }
+
+    private function generateKwitansiNumber(FiscalMode $mode): string
+    {
+        $now = Carbon::now();
+        $prefix = $mode === FiscalMode::PPN ? 'KW-PPN' : 'KW-NP';
+        $month = $now->format('m');
+        $year = $now->format('y');
+
+        $latestKwitansi = Kwitansi::whereHas('invoice', fn ($q) => $q->where('fiscal_mode', $mode->value))
+            ->whereYear('created_at', $now->year)
+            ->latest('id')
+            ->first();
+
+        $seq = 1;
+        if ($latestKwitansi && preg_match('/\/(\d+)$/', $latestKwitansi->receipt_number, $matches)) {
+            $seq = ((int) $matches[1]) + 1;
+        }
+
+        return sprintf('%s-%s/%s/%03d', $prefix, $month, $year, $seq);
+    }
+}
