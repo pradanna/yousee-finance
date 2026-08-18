@@ -1,0 +1,11 @@
+Table expense_categories {
+  id varchar(36) [pk, note: 'UUID Primary Key']
+  name varchar(100) [not null, note: 'Nama kategori pengeluaran bahasa operasional/sehari-hari']
+  account_id varchar(36) [not null, ref: > chart_of_accounts.id, note: 'Akun COA Beban Leaf Node yang otomatis dijurnal']
+  description text [null, note: 'Keterangan opsional mengenai peruntukan kategori']
+  is_active boolean [not null, default: true, note: 'Status aktif kategori']
+  created_at timestamp [null]
+  updated_at timestamp [null]
+
+  Note: 'Tabel master kategori pengeluaran operasional yang dipetakan ke akun COA Beban'
+}

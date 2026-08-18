@@ -73,9 +73,9 @@ Route::middleware('auth')->group(function () {
 
     // Transaksi
     Route::get('/purchases', [\App\Http\Controllers\Procurement\PurchaseOrderController::class, 'index'])->name('purchases');
-    Route::get('/cash-out', function () {
-        return Inertia::render('CashOut');
-    })->name('cash-out');
+    Route::get('/cash-out', [\App\Http\Controllers\Accounting\CashOutController::class, 'index'])->name('cash-out');
+    Route::post('/cash-out', [\App\Http\Controllers\Accounting\CashOutController::class, 'store'])->name('cash-out.store');
+    Route::post('/cash-out/categories', [\App\Http\Controllers\Accounting\CashOutController::class, 'storeCategory'])->name('cash-out.categories.store');
 
     Route::get('/sales-transactions', [\App\Http\Controllers\Billing\SalesTransactionController::class, 'index'])->name('sales-transactions');
 

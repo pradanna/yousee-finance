@@ -1,0 +1,17 @@
+Table cash_transactions {
+  id varchar(36) [pk, note: 'UUID Primary Key']
+  transaction_number varchar(50) [unique, not null, note: 'Nomor Transaksi Pengeluaran, format OUT-YYYYMM-XXXX']
+  fiscal_mode varchar(20) [not null, note: 'ppn atau non-ppn']
+  payment_account_id varchar(36) [not null, ref: > chart_of_accounts.id, note: 'Akun Kas/Bank sumber dana (Leaf Node)']
+  expense_account_id varchar(36) [not null, ref: > chart_of_accounts.id, note: 'Akun Beban/Biaya (Leaf Node)']
+  project_id varchar(36) [null, ref: > projects.id, note: 'Project analytical tagging (optional)']
+  amount decimal(15,2) [not null, note: 'Nominal pengeluaran']
+  transaction_date date [not null, note: 'Tanggal transaksi kas keluar']
+  recipient varchar(255) [null, note: 'Penerima dana / vendor / personil']
+  description text [not null, note: 'Keterangan pengeluaran']
+  created_by varchar(36) [not null, ref: > users.id, note: 'User pembuat transaksi']
+  created_at timestamp [null]
+  updated_at timestamp [null]
+
+  Note: 'Tabel transaksi pengeluaran kas operasional langsung (Direct Cash Disbursement)'
+}
