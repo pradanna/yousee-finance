@@ -1,34 +1,89 @@
+import Pagination from '@/Components/Table/Pagination';
+import Toast, { ToastType } from '@/Components/UI/Toast';
 import Modal from '@/Components/UI/Modal';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
+import type { PageProps as BasePageProps } from '@/types';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import React, { useState } from 'react';
 
-interface CashExpense {
-    id: number;
-    paymentAccountCode: string;
-    expenseAccountCode: string;
-    amount: number;
-    transactionDate: string;
-    description: string;
-    receiptNumber: string;
+export interface CoaOption {
+    id: string;
+    code: string;
+    name: string;
+    friendly_name?: string;
 }
 
-const expenseAccounts = [
-    { code: '5210', label: 'Beban Operasional Listrik & Utilitas' },
-    { code: '5220', label: 'Beban Gaji & Honorarium Karyawan' },
-    { code: '5230', label: 'Beban Perlengkapan (ATK) & Fotocopy' },
-    { code: '5240', label: 'Beban Pemeliharaan & Perbaikan Gedung' },
-    { code: '5250', label: 'Beban Bensin, Tol & Parkir' },
-    { code: '5260', label: 'Beban Iklan & Promosi (Media Cetak/Online)' },
-];
+export interface ExpenseCategoryOption {
+    id: string;
+    name: string;
+    account_id: string;
+    account_code?: string;
+    account_name?: string;
+}
 
-const paymentAccounts = [
-    { code: '1111', label: 'Bank Mandiri Solo Baru (138-00-2010633-7)' },
-    { code: '1112', label: 'Bank BCA Operasional Utama' },
-    { code: '1110', label: 'Kas Tunai / Operasional' },
-];
+export interface ProjectOption {
+    id: string;
+    code: string;
+    name: string;
+}
 
-const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
+export interface CashTransactionItem {
+    id: string;
+    transaction_number: string;
+    fiscal_mode: 'ppn' | 'non-ppn';
+    payment_account_id: string;
+    expense_account_id: string;
+    project_id: string | null;
+    amount: number | string;
+    transaction_date: string;
+    recipient: string | null;
+    description: string;
+    created_at: string;
+    payment_account?: CoaOption;
+    expense_account?: CoaOption;
+    project?: ProjectOption | null;
+    creator?: {
+        id: string;
+        name: string;
+    };
+}
+
+export interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
+
+export interface PaginatedTransactions {
+    data: CashTransactionItem[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    links: PaginationLink[];
+}
+
+export interface CashOutPageProps extends BasePageProps {
+    transactions: PaginatedTransactions;
+    paymentAccounts: CoaOption[];
+    expenseCategories: ExpenseCategoryOption[];
+    leafExpenseAccounts: CoaOption[];
+    projects: ProjectOption[];
+    stats: {
+        currentMonthTotal: number;
+        lastMonthTotal: number;
+        totalFiltered: number;
+    };
+    filters: {
+        month: string;
+        year: string;
+    };
+}
+
+const fmt = (n: number | string) => `Rp ${Math.round(Number(n) || 0).toLocaleString('id-ID')}`;
+
 const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('id-ID', {
         day: 'numeric',
         month: 'long',
@@ -36,64 +91,140 @@ const formatDate = (dateStr: string) => {
     });
 };
 
+const MONTH_NAMES = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+];
+
 export default function CashOut() {
+    const {
+        transactions,
+        paymentAccounts,
+        expenseCategories,
+        leafExpenseAccounts,
+        projects,
+        stats,
+        filters,
+    } = usePage<CashOutPageProps>().props;
+
     const fiscalMode = useFiscalMode();
-    const [expenses, setExpenses] = useState<CashExpense[]>([
-        {
-            id: 1,
-            paymentAccountCode: '1112',
-            expenseAccountCode: '5210',
-            amount: 1500000,
-            transactionDate: '2026-08-10',
-            description: 'Bayar token listrik Videotron Simpang Lima',
-            receiptNumber: 'OUT-2026-001',
-        },
-        {
-            id: 2,
-            paymentAccountCode: '1110',
-            expenseAccountCode: '5230',
-            amount: 350000,
-            transactionDate: '2026-08-08',
-            description: 'Beli kertas HVS dan tinta printer',
-            receiptNumber: 'OUT-2026-002',
-        },
-    ]);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [successMessage, setSuccessMessage] = useState('');
+    const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
 
-    // Form State
-    const [formData, setFormData] = useState({
-        paymentAccountCode: '1112',
-        expenseAccountCode: '5210',
+    const [toast, setToast] = useState<{
+        show: boolean;
+        type: 'success' | 'error' | 'warning';
+        title: string;
+        message: string;
+    }>({
+        show: false,
+        type: 'success',
+        title: '',
+        message: '',
+    });
+
+    const triggerToast = (
+        type: 'success' | 'error' | 'warning',
+        title: string,
+        message: string,
+    ) => {
+        setToast({ show: true, type, title, message });
+    };
+
+    // Filter local state
+    const [selectedMonth, setSelectedMonth] = useState<string>(filters?.month || String(new Date().getMonth() + 1));
+    const [selectedYear, setSelectedYear] = useState<string>(filters?.year || String(new Date().getFullYear()));
+
+    const handleFilterChange = (m: string, y: string) => {
+        setSelectedMonth(m);
+        setSelectedYear(y);
+        router.get(
+            '/cash-out',
+            { month: m, year: y, fiscal_mode: fiscalMode },
+            { preserveState: true, preserveScroll: true },
+        );
+    };
+
+    // Sinkronisasi data saat mode fiskal berubah
+    React.useEffect(() => {
+        router.get(
+            '/cash-out',
+            { month: selectedMonth, year: selectedYear, fiscal_mode: fiscalMode },
+            { preserveState: true, preserveScroll: true, only: ['transactions', 'stats', 'projects'] },
+        );
+    }, [fiscalMode]);
+
+    // Form Catat Pengeluaran
+    const defaultPaymentAcc = paymentAccounts.length > 0 ? paymentAccounts[0].id : '';
+    const defaultCategory = expenseCategories.length > 0 ? expenseCategories[0].id : '';
+
+    const form = useForm({
+        fiscal_mode: fiscalMode,
+        transaction_date: new Date().toISOString().split('T')[0],
+        payment_account_id: defaultPaymentAcc,
+        expense_category_id: defaultCategory,
+        project_id: '',
         amount: '',
-        transactionDate: new Date().toISOString().split('T')[0],
+        recipient: '',
         description: '',
     });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const newExpense: CashExpense = {
-            id: Date.now(),
-            paymentAccountCode: formData.paymentAccountCode,
-            expenseAccountCode: formData.expenseAccountCode,
-            amount: Number(formData.amount),
-            transactionDate: formData.transactionDate,
-            description: formData.description,
-            receiptNumber: `OUT-2026-${String(expenses.length + 1).padStart(3, '0')}`,
-        };
-
-        setExpenses([newExpense, ...expenses]);
-        setIsModalOpen(false);
-        setFormData({
-            ...formData,
-            amount: '',
-            description: '',
+        form.post('/cash-out', {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsModalOpen(false);
+                form.reset('amount', 'recipient', 'description', 'project_id');
+                triggerToast(
+                    'success',
+                    'Pengeluaran Kas Dicatat',
+                    'Transaksi berhasil disimpan dan jurnal akuntansi telah dibukukan.',
+                );
+            },
+            onError: (errs) => {
+                const firstMsg = Object.values(errs)[0];
+                triggerToast('error', 'Gagal Mencatat Pengeluaran', firstMsg || 'Periksa kembali data formulir.');
+            },
         });
-        setSuccessMessage(
-            `Berhasil mencatat pengeluaran sebesar ${fmt(newExpense.amount)}!`,
-        );
-        setTimeout(() => setSuccessMessage(''), 4000);
+    };
+
+    // Form Tambah Kategori Baru
+    const categoryForm = useForm({
+        name: '',
+        account_id: leafExpenseAccounts.length > 0 ? leafExpenseAccounts[0].id : '',
+        description: '',
+    });
+
+    const handleCategorySubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        categoryForm.post('/cash-out/categories', {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsAddCategoryModalOpen(false);
+                categoryForm.reset('name', 'description');
+                triggerToast(
+                    'success',
+                    'Kategori Berhasil Ditambahkan',
+                    'Kategori baru telah tersimpan dan terhubung ke akun akuntansi.',
+                );
+            },
+            onError: (errs) => {
+                const firstMsg = Object.values(errs)[0];
+                triggerToast('error', 'Gagal Menambah Kategori', firstMsg || 'Periksa kembali data formulir.');
+            },
+        });
     };
 
     return (
@@ -106,182 +237,232 @@ export default function CashOut() {
                 { label: 'Pengeluaran Kas' },
             ]}
         >
-            <div className="w-full space-y-6">
-                {/* Success Toast */}
-                {successMessage && (
-                    <div className="animate-in fade-in flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-bold text-emerald-800 shadow-sm duration-200">
-                        <div className="flex items-center gap-2">
-                            <svg
-                                className="h-4 w-4 text-emerald-600"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2.5}
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
-                            </svg>
-                            <span>{successMessage}</span>
-                        </div>
-                        <button
-                            onClick={() => setSuccessMessage('')}
-                            className="font-black text-emerald-600 hover:text-emerald-900"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
+            <Head title="Pengeluaran Kas" />
 
-                {/* Page Header */}
+            <div className="w-full space-y-6">
+                {/* Header & Controls */}
                 <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
                     <div>
                         <h2 className="text-sm font-bold tracking-tight text-slate-800">
                             Riwayat Pengeluaran Operasional
                         </h2>
                         <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                            Pencatatan pengeluaran kas non-vendor (listrik,
-                            gaji, atk, dll) · Mode{' '}
-                            {fiscalMode === 'ppn' ? 'PPN' : 'Non-PPN'}
+                            Pencatatan pengeluaran kas non-vendor (listrik, gaji, bensin, atk, pemeliharaan titik) · Mode{' '}
+                            <span className="font-bold text-primary">{fiscalMode === 'ppn' ? 'PPN' : 'Non-PPN'}</span>
                         </p>
                     </div>
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="flex cursor-pointer items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700"
-                    >
-                        <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
+
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Month / Year Filter */}
+                        <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white p-1 shadow-2xs">
+                            <select
+                                value={selectedMonth}
+                                onChange={(e) => handleFilterChange(e.target.value, selectedYear)}
+                                className="border-none bg-transparent py-1 pl-2.5 pr-8 text-xs font-semibold text-slate-700 focus:ring-0"
+                            >
+                                <option value="all">Semua Bulan</option>
+                                {MONTH_NAMES.map((m, idx) => (
+                                    <option key={idx + 1} value={String(idx + 1)}>
+                                        {m}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                value={selectedYear}
+                                onChange={(e) => handleFilterChange(selectedMonth, e.target.value)}
+                                className="border-none bg-transparent py-1 pl-2.5 pr-8 text-xs font-semibold text-slate-700 focus:ring-0"
+                            >
+                                <option value="all">Semua Tahun</option>
+                                {[2024, 2025, 2026, 2027].map((y) => (
+                                    <option key={y} value={String(y)}>
+                                        {y}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setIsAddCategoryModalOpen(true)}
+                            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50"
                         >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M12 4v16m8-8H4"
-                            />
-                        </svg>
-                        Catat Pengeluaran
-                    </button>
+                            <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            + Kategori Baru
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                form.setData('fiscal_mode', fiscalMode);
+                                setIsModalOpen(true);
+                            }}
+                            className="flex cursor-pointer items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700 active:scale-95"
+                        >
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 4v16m8-8H4"
+                                />
+                            </svg>
+                            Catat Pengeluaran
+                        </button>
+                    </div>
                 </div>
 
                 {/* Metric Cards */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <span className="text-[10px] font-bold uppercase text-slate-400">
+                    <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Total Pengeluaran Bulan Ini
                         </span>
-                        <div className="mt-1 text-xl font-black text-slate-800">
-                            {fmt(expenses.reduce((s, e) => s + e.amount, 0))}
+                        <div className="mt-1.5 font-mono text-xl font-black text-slate-900">
+                            {fmt(stats?.currentMonthTotal || 0)}
+                        </div>
+                        <div className="mt-1 text-[10px] font-medium text-slate-400">
+                            Bulan lalu: {fmt(stats?.lastMonthTotal || 0)}
                         </div>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <span className="text-[10px] font-bold uppercase text-slate-400">
-                            Total Transaksi
+
+                    <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Total Pengeluaran Sesuai Filter
                         </span>
-                        <div className="mt-1 text-xl font-black text-slate-800">
-                            {expenses.length} Trx
+                        <div className="mt-1.5 font-mono text-xl font-black text-primary">
+                            {fmt(stats?.totalFiltered || 0)}
+                        </div>
+                        <div className="mt-1 text-[10px] font-medium text-slate-400">
+                            {transactions?.total || 0} transaksi tercatat
                         </div>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white bg-gradient-to-br from-indigo-50 to-white p-4 shadow-sm">
-                        <span className="text-[10px] font-bold uppercase text-indigo-500">
-                            Quick Info
+
+                    <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/60 to-white p-5 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                            Otomasi Jurnal Akuntansi
                         </span>
                         <div className="mt-1 text-[11px] font-medium leading-relaxed text-slate-600">
-                            Mencatat pengeluaran di sini akan{' '}
-                            <strong>otomatis membuat jurnal ganda</strong>{' '}
-                            (Debet Beban & Kredit Bank).
+                            Mencatat pengeluaran di sini akan <strong>otomatis membukukan jurnal umum</strong>: (Dr) Akun Beban & (Cr) Akun Kas/Bank.
                         </div>
                     </div>
                 </div>
 
                 {/* Table */}
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs">
                     <div className="overflow-x-auto">
                         <table className="w-full whitespace-nowrap text-left text-xs">
-                            <thead className="border-b border-slate-200 bg-slate-50/80 font-bold tracking-wider text-slate-500">
+                            <thead className="border-b border-slate-200/80 bg-slate-50/70 font-bold tracking-wider text-slate-500">
                                 <tr>
-                                    <th className="px-5 py-3">No. Referensi</th>
+                                    <th className="px-5 py-3">No. Transaksi</th>
                                     <th className="px-5 py-3">Tanggal</th>
-                                    <th className="px-5 py-3">Beban (Debet)</th>
-                                    <th className="px-5 py-3">
-                                        Sumber Dana (Kredit)
-                                    </th>
+                                    <th className="px-5 py-3">Kategori Pengeluaran</th>
+                                    <th className="px-5 py-3">Sumber Kas</th>
+                                    <th className="px-5 py-3">Penerima / Project</th>
                                     <th className="px-5 py-3">Keterangan</th>
-                                    <th className="px-5 py-3 text-right">
-                                        Nominal
-                                    </th>
+                                    <th className="px-5 py-3 text-right">Nominal</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 font-medium">
-                                {expenses.map((expense) => {
-                                    const expAcc =
-                                        expenseAccounts.find(
-                                            (a) =>
-                                                a.code ===
-                                                expense.expenseAccountCode,
-                                        )?.label || expense.expenseAccountCode;
-                                    const bankAcc =
-                                        paymentAccounts.find(
-                                            (a) =>
-                                                a.code ===
-                                                expense.paymentAccountCode,
-                                        )?.label || expense.paymentAccountCode;
-
-                                    return (
-                                        <tr
-                                            key={expense.id}
-                                            className="transition-colors hover:bg-slate-50"
-                                        >
-                                            <td className="px-5 py-3.5">
-                                                <span className="rounded-md bg-slate-100 px-2 py-1 font-mono font-bold text-slate-700">
-                                                    {expense.receiptNumber}
+                                {(transactions?.data || []).map((t) => (
+                                    <tr
+                                        key={t.id}
+                                        className="transition-colors hover:bg-slate-50/60"
+                                    >
+                                        <td className="px-5 py-3.5">
+                                            <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                                                {t.transaction_number}
+                                            </span>
+                                        </td>
+                                        <td className="px-5 py-3.5 text-slate-600">
+                                            {formatDate(t.transaction_date)}
+                                        </td>
+                                        <td className="px-5 py-3.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-rose-500"></span>
+                                                <span className="font-semibold text-slate-800">
+                                                    {t.expense_account?.name || '-'}
                                                 </span>
-                                            </td>
-                                            <td className="px-5 py-3.5 text-slate-600">
-                                                {formatDate(
-                                                    expense.transactionDate,
+                                            </div>
+                                        </td>
+                                        <td className="px-5 py-3.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-500"></span>
+                                                <span className="text-slate-700 font-semibold">
+                                                    {t.payment_account?.name || '-'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-5 py-3.5 text-slate-600">
+                                            <div className="space-y-0.5">
+                                                {t.recipient && (
+                                                    <div className="font-semibold text-slate-800">
+                                                        {t.recipient}
+                                                    </div>
                                                 )}
-                                            </td>
-                                            <td className="px-5 py-3.5">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                                                    <span className="text-slate-700">
-                                                        {expAcc}
+                                                {t.project && (
+                                                    <span className="rounded bg-blue-50 px-1.5 py-0.2 font-mono text-[9.5px] font-bold text-primary">
+                                                        {t.project.code}
                                                     </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-5 py-3.5">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                                                    <span className="text-slate-700">
-                                                        {bankAcc}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td
-                                                className="max-w-[200px] truncate px-5 py-3.5 text-slate-500"
-                                                title={expense.description}
-                                            >
-                                                {expense.description || '-'}
-                                            </td>
-                                            <td className="px-5 py-3.5 text-right font-bold text-slate-800">
-                                                {fmt(expense.amount)}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                )}
+                                                {!t.recipient && !t.project && (
+                                                    <span className="text-slate-400">-</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td
+                                            className="max-w-[220px] truncate px-5 py-3.5 text-slate-500"
+                                            title={t.description}
+                                        >
+                                            {t.description || '-'}
+                                        </td>
+                                        <td className="px-5 py-3.5 text-right font-mono text-xs font-black text-slate-900">
+                                            {fmt(t.amount)}
+                                        </td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
-                        {expenses.length === 0 && (
-                            <div className="py-12 text-center text-slate-400">
-                                Belum ada data pengeluaran.
+
+                        {(!transactions?.data || transactions.data.length === 0) && (
+                            <div className="py-14 text-center">
+                                <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                                <p className="text-xs font-semibold text-slate-500">Belum ada data pengeluaran kas.</p>
+                                <p className="mt-0.5 text-[11px] text-slate-400">Klik "Catat Pengeluaran" untuk menambahkan transaksi baru.</p>
                             </div>
                         )}
                     </div>
+
+                    {/* Pagination */}
+                    {transactions?.total > 0 && (
+                        <Pagination
+                            currentPage={transactions.current_page}
+                            totalPages={transactions.last_page}
+                            totalItems={transactions.total}
+                            itemsPerPage={transactions.per_page}
+                            onPageChange={(page) => {
+                                router.get(
+                                    '/cash-out',
+                                    {
+                                        page,
+                                        month: selectedMonth,
+                                        year: selectedYear,
+                                        fiscal_mode: fiscalMode,
+                                    },
+                                    { preserveState: true, preserveScroll: true },
+                                );
+                            }}
+                        />
+                    )}
                 </div>
             </div>
 
@@ -292,14 +473,19 @@ export default function CashOut() {
                 maxWidth="md"
             >
                 <form onSubmit={handleSubmit} className="p-6">
-                    <div className="mb-6 flex items-center justify-between">
-                        <h3 className="text-lg font-black tracking-tight text-slate-900">
-                            Catat Pengeluaran Kas
-                        </h3>
+                    <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
+                        <div>
+                            <h3 className="text-sm font-black tracking-tight text-slate-900">
+                                Catat Pengeluaran Kas Operasional
+                            </h3>
+                            <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                                Mode: <strong className="text-primary uppercase">{fiscalMode}</strong>
+                            </p>
+                        </div>
                         <button
                             type="button"
                             onClick={() => setIsModalOpen(false)}
-                            className="text-slate-400 hover:text-slate-700"
+                            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                         >
                             <svg
                                 className="h-5 w-5"
@@ -317,115 +503,169 @@ export default function CashOut() {
                         </button>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 text-xs">
                         <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">
-                                Tanggal Transaksi
+                            <label className="mb-1 block font-bold text-slate-700">
+                                Tanggal Transaksi <span className="text-rose-500">*</span>
                             </label>
                             <input
                                 type="date"
                                 required
-                                value={formData.transactionDate}
+                                value={form.data.transaction_date}
                                 onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        transactionDate: e.target.value,
-                                    })
+                                    form.setData('transaction_date', e.target.value)
                                 }
-                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-sm focus:border-primary focus:ring-primary"
+                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs font-semibold focus:border-primary focus:ring-primary"
                             />
+                            {form.errors.transaction_date && (
+                                <p className="mt-1 text-[10px] text-rose-500 font-semibold">{form.errors.transaction_date}</p>
+                            )}
                         </div>
 
                         <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">
-                                Bayar Dari (Sumber Dana)
+                            <label className="mb-1 block font-bold text-slate-700">
+                                Sumber Kas / Rekening <span className="text-rose-500">*</span>
                             </label>
                             <select
-                                value={formData.paymentAccountCode}
+                                required
+                                value={form.data.payment_account_id}
                                 onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        paymentAccountCode: e.target.value,
-                                    })
+                                    form.setData('payment_account_id', e.target.value)
                                 }
-                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-sm focus:border-primary focus:ring-primary"
+                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs font-semibold focus:border-primary focus:ring-primary"
                             >
                                 {paymentAccounts.map((acc) => (
-                                    <option key={acc.code} value={acc.code}>
-                                        {acc.label}
+                                    <option key={acc.id} value={acc.id}>
+                                        {acc.friendly_name || acc.name}
                                     </option>
                                 ))}
                             </select>
+                            {form.errors.payment_account_id && (
+                                <p className="mt-1 text-[10px] text-rose-500 font-semibold">{form.errors.payment_account_id}</p>
+                            )}
                         </div>
 
                         <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">
-                                Kategori Biaya (Beban)
-                            </label>
+                            <div className="mb-1 flex items-center justify-between">
+                                <label className="font-bold text-slate-700">
+                                    Kategori Pengeluaran <span className="text-rose-500">*</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsAddCategoryModalOpen(true);
+                                    }}
+                                    className="text-[10.5px] font-bold text-primary hover:underline"
+                                >
+                                    + Tambah Kategori
+                                </button>
+                            </div>
                             <select
-                                value={formData.expenseAccountCode}
+                                required
+                                value={form.data.expense_category_id}
                                 onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        expenseAccountCode: e.target.value,
-                                    })
+                                    form.setData('expense_category_id', e.target.value)
                                 }
-                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-sm focus:border-primary focus:ring-primary"
+                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs font-semibold focus:border-primary focus:ring-primary"
                             >
-                                {expenseAccounts.map((acc) => (
-                                    <option key={acc.code} value={acc.code}>
-                                        {acc.label}
+                                {expenseCategories.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>
+                                        {cat.name}
                                     </option>
                                 ))}
                             </select>
+                            {form.errors.expense_category_id && (
+                                <p className="mt-1 text-[10px] text-rose-500 font-semibold">{form.errors.expense_category_id}</p>
+                            )}
                         </div>
 
-                        <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">
-                                Nominal (Rp)
-                            </label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-2 text-sm font-bold text-slate-400">
-                                    Rp
-                                </span>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label className="mb-1 block font-bold text-slate-700">
+                                    Nominal Pengeluaran (Rp) <span className="text-rose-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-2 font-mono text-xs font-bold text-slate-400">
+                                        Rp
+                                    </span>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={
+                                            form.data.amount
+                                                ? Number(form.data.amount).toLocaleString('id-ID')
+                                                : ''
+                                        }
+                                        onChange={(e) => {
+                                            const rawVal = e.target.value.replace(/\D/g, '');
+                                            form.setData('amount', rawVal);
+                                        }}
+                                        placeholder="0"
+                                        className="w-full rounded-xl border-slate-200 py-2 pl-9 pr-3 font-mono text-xs font-bold text-slate-900 focus:border-primary focus:ring-primary"
+                                    />
+                                </div>
+                                {form.errors.amount && (
+                                    <p className="mt-1 text-[10px] text-rose-500 font-semibold">{form.errors.amount}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block font-bold text-slate-700">
+                                    Penerima Dana (Opsional)
+                                </label>
                                 <input
-                                    type="number"
-                                    required
-                                    min="1"
-                                    value={formData.amount}
+                                    type="text"
+                                    value={form.data.recipient}
                                     onChange={(e) =>
-                                        setFormData({
-                                            ...formData,
-                                            amount: e.target.value,
-                                        })
+                                        form.setData('recipient', e.target.value)
                                     }
-                                    placeholder="0"
-                                    className="w-full rounded-xl border-slate-200 py-2 pl-9 pr-3 text-sm font-bold text-slate-900 focus:border-primary focus:ring-primary"
+                                    placeholder="Contoh: Toko Listrik / Budi"
+                                    className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs focus:border-primary focus:ring-primary"
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">
-                                Keterangan / Memo
+                            <label className="mb-1 block font-bold text-slate-700">
+                                Tagging Proyek (Opsional)
+                            </label>
+                            <select
+                                value={form.data.project_id}
+                                onChange={(e) =>
+                                    form.setData('project_id', e.target.value)
+                                }
+                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs focus:border-primary focus:ring-primary"
+                            >
+                                <option value="">-- Tanpa Proyek (Biaya Umum Kantor) --</option>
+                                {projects.map((prj) => (
+                                    <option key={prj.id} value={prj.id}>
+                                        {prj.code} - {prj.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block font-bold text-slate-700">
+                                Keterangan / Memo <span className="text-rose-500">*</span>
                             </label>
                             <textarea
                                 rows={2}
                                 required
-                                value={formData.description}
+                                value={form.data.description}
                                 onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        description: e.target.value,
-                                    })
+                                    form.setData('description', e.target.value)
                                 }
-                                placeholder="Contoh: Bayar tagihan listrik..."
-                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-sm focus:border-primary focus:ring-primary"
+                                placeholder="Contoh: Pembelian token listrik videotron simpang lima..."
+                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs focus:border-primary focus:ring-primary"
                             ></textarea>
+                            {form.errors.description && (
+                                <p className="mt-1 text-[10px] text-rose-500 font-semibold">{form.errors.description}</p>
+                            )}
                         </div>
                     </div>
 
-                    <div className="mt-8 flex justify-end gap-3 border-t border-slate-100 pt-4">
+                    <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
                         <button
                             type="button"
                             onClick={() => setIsModalOpen(false)}
@@ -435,13 +675,125 @@ export default function CashOut() {
                         </button>
                         <button
                             type="submit"
-                            className="rounded-xl bg-primary px-6 py-2 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700"
+                            disabled={form.processing}
+                            className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700 active:scale-95 disabled:opacity-50"
                         >
-                            Simpan Pengeluaran
+                            {form.processing ? 'Menyimpan...' : 'Simpan Pengeluaran'}
                         </button>
                     </div>
                 </form>
             </Modal>
+
+            {/* Modal Tambah Kategori Baru */}
+            <Modal
+                show={isAddCategoryModalOpen}
+                onClose={() => setIsAddCategoryModalOpen(false)}
+                maxWidth="md"
+            >
+                <form onSubmit={handleCategorySubmit} className="p-6">
+                    <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
+                        <div>
+                            <h3 className="text-sm font-black tracking-tight text-slate-900">
+                                Tambah Kategori Pengeluaran Baru
+                            </h3>
+                            <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                                Kategori baru akan otomatis dipetakan ke akun jurnal akuntansi terkait
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsAddCategoryModalOpen(false)}
+                            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div className="space-y-4 text-xs">
+                        <div>
+                            <label className="mb-1 block font-bold text-slate-700">
+                                Nama Kategori (Bahasa Operasional) <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                required
+                                value={categoryForm.data.name}
+                                onChange={(e) => categoryForm.setData('name', e.target.value)}
+                                placeholder="Contoh: Konsumsi Tamu / Rapat Kantor"
+                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs font-semibold focus:border-primary focus:ring-primary"
+                            />
+                            {categoryForm.errors.name && (
+                                <p className="mt-1 text-[10px] text-rose-500 font-semibold">{categoryForm.errors.name}</p>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block font-bold text-slate-700">
+                                Akun Akuntansi / COA Terkait (Debet Jurnal) <span className="text-rose-500">*</span>
+                            </label>
+                            <select
+                                required
+                                value={categoryForm.data.account_id}
+                                onChange={(e) => categoryForm.setData('account_id', e.target.value)}
+                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs font-semibold focus:border-primary focus:ring-primary"
+                            >
+                                {leafExpenseAccounts.map((acc) => (
+                                    <option key={acc.id} value={acc.id}>
+                                        {acc.code} - {acc.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {categoryForm.errors.account_id && (
+                                <p className="mt-1 text-[10px] text-rose-500 font-semibold">{categoryForm.errors.account_id}</p>
+                            )}
+                            <p className="mt-1 text-[10px] text-slate-400">
+                                Setiap pengeluaran dengan kategori ini akan otomatis didebetkan ke akun beban yang dipilih di atas.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block font-bold text-slate-700">
+                                Keterangan / Catatan (Opsional)
+                            </label>
+                            <textarea
+                                rows={2}
+                                value={categoryForm.data.description}
+                                onChange={(e) => categoryForm.setData('description', e.target.value)}
+                                placeholder="Keterangan peruntukan kategori..."
+                                className="w-full rounded-xl border-slate-200 px-3 py-2 text-xs focus:border-primary focus:ring-primary"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
+                        <button
+                            type="button"
+                            onClick={() => setIsAddCategoryModalOpen(false)}
+                            className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={categoryForm.processing}
+                            className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700 active:scale-95 disabled:opacity-50"
+                        >
+                            {categoryForm.processing ? 'Menyimpan...' : 'Simpan Kategori'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* Global Toast */}
+            <Toast
+                show={toast.show}
+                type={toast.type}
+                title={toast.title}
+                message={toast.message}
+                onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+            />
         </AppLayout>
     );
 }
