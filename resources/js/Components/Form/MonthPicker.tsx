@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
 interface MonthPickerProps {
-    value: string; // Format: "YYYY-MM" e.g. "2026-06"
+    value: string; // Format: "YYYY-MM" e.g. "2026-06" or "all" / ""
     onChange: (value: string, year: string, month: string) => void;
     className?: string;
+    allowAll?: boolean;
+    allLabel?: string;
 }
 
 const MONTH_NAMES = [
@@ -40,6 +42,8 @@ export default function MonthPicker({
     value,
     onChange,
     className = '',
+    allowAll = false,
+    allLabel = 'Semua Periode',
 }: MonthPickerProps) {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -48,8 +52,10 @@ export default function MonthPicker({
     const defaultYear = now.getFullYear();
     const defaultMonthIndex = now.getMonth();
 
+    const isAllSelected = !value || value === 'all';
+
     // Parse current value
-    const [selectedYearStr, selectedMonthStr] = value ? value.split('-') : [];
+    const [selectedYearStr, selectedMonthStr] = (!isAllSelected && value) ? value.split('-') : [];
     const currentYear = selectedYearStr
         ? parseInt(selectedYearStr, 10) || defaultYear
         : defaultYear;
@@ -94,7 +100,14 @@ export default function MonthPicker({
         setIsOpen(false);
     };
 
-    const displayText = `${MONTH_NAMES[currentMonthIndex] || 'Juni'} ${currentYear}`;
+    const handleSelectAll = () => {
+        onChange('all', 'all', 'all');
+        setIsOpen(false);
+    };
+
+    const displayText = isAllSelected
+        ? allLabel
+        : `${MONTH_NAMES[currentMonthIndex] || ''} ${currentYear}`;
 
     return (
         <div
@@ -188,6 +201,7 @@ export default function MonthPicker({
                     <div className="grid grid-cols-3 gap-2">
                         {MONTH_SHORT_NAMES.map((shortName, idx) => {
                             const isSelected =
+                                !isAllSelected &&
                                 viewYear === currentYear &&
                                 idx === currentMonthIndex;
                             return (
@@ -206,6 +220,23 @@ export default function MonthPicker({
                             );
                         })}
                     </div>
+
+                    {/* Quick Action: Reset to All Periods */}
+                    {allowAll && (
+                        <div className="mt-3 border-t border-slate-100 pt-2.5">
+                            <button
+                                type="button"
+                                onClick={handleSelectAll}
+                                className={`w-full cursor-pointer rounded-xl py-1.5 text-center text-xs font-bold transition-all ${
+                                    isAllSelected
+                                        ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                                }`}
+                            >
+                                {allLabel}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

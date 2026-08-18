@@ -1,5 +1,6 @@
 import PrimaryButton from '@/Components/Button/PrimaryButton';
 import MetricCard from '@/Components/Card/MetricCard';
+import MonthPicker from '@/Components/Form/MonthPicker';
 import SelectInput from '@/Components/Form/SelectInput';
 import TextInput from '@/Components/Form/TextInput';
 import EmptyState from '@/Components/Table/EmptyState';
@@ -52,11 +53,13 @@ interface ProjectsPageProps {
             client?: { id: string; name: string };
             client_name?: string;
             sales_id?: string;
-            sales?: { id: string; name: string };
+            sales?: { id: string; name: string; commission_rate?: number };
             sales_pic?: string;
+            sales_commission_rate?: number;
             fiscal_mode: 'ppn' | 'non-ppn';
             start_date: string;
             end_date: string;
+            created_at?: string;
             contract_value: number;
             target_qty: number;
             status: 'draft' | 'active' | 'completed' | 'cancelled';
@@ -74,8 +77,49 @@ interface ProjectsPageProps {
                 po_issued: boolean;
                 po_number?: string;
             }>;
-            purchase_orders?: Array<unknown>;
-            invoices?: Array<unknown>;
+            purchase_orders?: Array<{
+                id: string;
+                po_number: string;
+                vendor_id: string;
+                total: number | string;
+                status?: string;
+                payment_plan?: {
+                    id: string;
+                    scheme?: string;
+                    total_amount?: number | string;
+                    terms?: Array<{
+                        id: string;
+                        label: string;
+                        amount: number | string;
+                        percent: number | string;
+                        status: string;
+                        settlements?: Array<{
+                            id: string;
+                            amount: number | string;
+                        }>;
+                    }>;
+                } | null;
+            }>;
+            invoices?: Array<{
+                id: string;
+                invoice_number?: string;
+                status?: string;
+                subtotal: number | string;
+                ppn: number | string;
+                total: number | string;
+                payment_plan?: {
+                    id: string;
+                    scheme?: string;
+                    total_amount?: number | string;
+                    terms?: Array<{
+                        id: string;
+                        label: string;
+                        amount: number | string;
+                        percent: number | string;
+                        status: string;
+                    }>;
+                } | null;
+            }>;
             invoice_issued?: boolean;
             invoice_number?: string;
         }>;
@@ -271,6 +315,41 @@ function calcPeriodProgress(
     };
 }
 
+function isProjectCompleted(
+    p: ProjectsPageProps['projects']['data'][number],
+): boolean {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isPeriodPassed = p.end_date ? today > new Date(p.end_date) : false;
+
+    const poList = p.purchase_orders || [];
+    const isAllPoPaid =
+        poList.length > 0 &&
+        poList.every((po) => {
+            const terms = po.payment_plan?.terms || [];
+            if (terms.length > 0) {
+                return terms.every((t) => t.status === 'paid');
+            }
+            return po.status === 'completed' || po.status === 'paid';
+        });
+
+    const invList = p.invoices || [];
+    const isAllInvoicesPaid =
+        invList.length > 0 &&
+        invList.every((inv) => {
+            const terms = inv.payment_plan?.terms || [];
+            if (terms.length > 0) {
+                return terms.every((t) => t.status === 'paid');
+            }
+            return inv.status === 'paid';
+        });
+
+    return (
+        p.status === 'completed' ||
+        (isPeriodPassed && isAllPoPaid && isAllInvoicesPaid)
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Projects Page Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -300,19 +379,59 @@ export default function Projects({
 
                 const periodObj = formatPeriod(p.start_date, p.end_date);
 
+                let derivedStatus: Project['status'] =
+                    statusMap[p.status] || 'Draft';
+                if (isProjectCompleted(p)) {
+                    derivedStatus = 'Completed';
+                }
+
+                // Hitung total realisasi pembayaran yang sudah terjadi di proyek ini
+                let totalPaidAmount = 0;
+                let hasPaymentRealized = false;
+
+                // Cek pembayaran PO vendor (settlements)
+                (p.purchase_orders || []).forEach((po) => {
+                    (po.payment_plan?.terms || []).forEach((term) => {
+                        (term.settlements || []).forEach((st) => {
+                            const val = Number(st.amount) || 0;
+                            if (val > 0) {
+                                totalPaidAmount += val;
+                                hasPaymentRealized = true;
+                            }
+                        });
+                    });
+                });
+
+                // Cek pembayaran Invoice client
+                (p.invoices || []).forEach((inv) => {
+                    if (inv.status === 'paid') {
+                        hasPaymentRealized = true;
+                        totalPaidAmount += Number(inv.total) || 0;
+                    }
+                    (inv.payment_plan?.terms || []).forEach((t) => {
+                        if (t.status === 'paid') {
+                            hasPaymentRealized = true;
+                            totalPaidAmount += Number(t.amount) || 0;
+                        }
+                    });
+                });
+
                 return {
                     id: p.id,
                     code: p.code,
                     name: p.name,
                     clientId: p.client_id,
                     clientName: p.client?.name ?? p.client_name ?? '-',
+                    salesId: p.sales_id ?? p.sales?.id ?? undefined,
                     salesPIC: p.sales?.name ?? p.sales_pic ?? '-',
+                    salesCommissionRate: Number(p.sales_commission_rate ?? p.sales?.commission_rate ?? 0),
                     period:
                         periodObj.label || `${p.start_date} - ${p.end_date}`,
                     startDate: p.start_date,
                     endDate: p.end_date,
+                    createdAt: p.created_at,
                     contractValue: Number(p.contract_value) || 0,
-                    status: statusMap[p.status] || 'Draft',
+                    status: derivedStatus,
                     targetQty: p.target_qty || 1,
                     locations: (p.locations || []).map((loc) => ({
                         id: loc.id,
@@ -329,6 +448,8 @@ export default function Projects({
                     })),
                     invoiceIssued: Boolean(p.invoice_issued),
                     invoiceNumber: p.invoice_number || '',
+                    hasPayments: hasPaymentRealized,
+                    totalPaid: totalPaidAmount,
                 };
             });
     }, [paginatedProjectsData, isPPN]);
@@ -336,11 +457,47 @@ export default function Projects({
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [clientFilter, setClientFilter] = useState<string>('all');
+    const [salesFilter, setSalesFilter] = useState<string>('all');
+    const [filterBasis, setFilterBasis] = useState<
+        'active_period' | 'start_date' | 'created_at'
+    >('created_at');
+    const [filterYear, setFilterYear] = useState<string>('all');
+    const [filterMonth, setFilterMonth] = useState<string>('all');
     const [viewMode, setViewMode] = useState<ViewMode>('grid');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 6;
 
+    // Extract available years dynamically from projects
+    const availableYears = useMemo<string[]>(() => {
+        const yearsSet = new Set<string>();
+        projects.forEach((p) => {
+            if (p.createdAt) yearsSet.add(p.createdAt.substring(0, 4));
+            if (p.startDate) yearsSet.add(p.startDate.substring(0, 4));
+            if (p.endDate) yearsSet.add(p.endDate.substring(0, 4));
+        });
+        const currentYear = String(new Date().getFullYear());
+        yearsSet.add(currentYear);
+        return Array.from(yearsSet).sort((a, b) => Number(b) - Number(a));
+    }, [projects]);
+
+    // Edit project state
+    const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
+
     // Toast state
+    const [projectToCancel, setProjectToCancel] = useState<Project | null>(
+        null,
+    );
+    const [isCancelling, setIsCancelling] = useState(false);
+    const [errorDialog, setErrorDialog] = useState<{
+        show: boolean;
+        title: string;
+        message: string;
+    }>({
+        show: false,
+        title: '',
+        message: '',
+    });
     const [toast, setToast] = useState<{
         show: boolean;
         type: ToastType;
@@ -351,6 +508,38 @@ export default function Projects({
         type: 'success',
         message: '',
     });
+
+    const handleConfirmCancelProject = () => {
+        if (!projectToCancel) return;
+        setIsCancelling(true);
+        router.delete(route('projects.destroy', projectToCancel.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                triggerToast(
+                    `Proyek "${projectToCancel.name}" berhasil dibatalkan.`,
+                    'success',
+                    'Proyek Dibatalkan',
+                );
+                setProjectToCancel(null);
+                setIsCancelling(false);
+            },
+            onError: (errs) => {
+                const errorMessage =
+                    (typeof errs.error === 'string' && errs.error) ||
+                    (typeof errs.message === 'string' && errs.message) ||
+                    Object.values(errs)[0] ||
+                    'Proyek tidak dapat dibatalkan karena tidak memenuhi syarat pembatalan.';
+
+                setProjectToCancel(null);
+                setIsCancelling(false);
+                setErrorDialog({
+                    show: true,
+                    title: 'Pembatalan Proyek Ditolak',
+                    message: String(errorMessage),
+                });
+            },
+        });
+    };
 
     const triggerToast = (
         message: string,
@@ -384,6 +573,7 @@ export default function Projects({
         control,
         watch,
         reset,
+        setValue,
         setError,
         formState: { errors, isSubmitting },
     } = useForm<CreateProjectFormData>({
@@ -400,6 +590,38 @@ export default function Projects({
         },
     });
 
+    const handleOpenCreateProject = () => {
+        setProjectToEdit(null);
+        reset({
+            name: '',
+            clientId: '',
+            salesId: '',
+            startDate: '',
+            endDate: '',
+            targetQty: '1',
+            contractValue: '',
+            taxMode: 'dpp',
+        });
+        setIsCreateOpen(true);
+    };
+
+    const handleOpenEditProject = (proj: Project) => {
+        setProjectToEdit(proj);
+        reset({
+            name: proj.name,
+            clientId: proj.clientId,
+            salesId: proj.salesId || '',
+            startDate: proj.startDate || '',
+            endDate: proj.endDate || '',
+            targetQty: String(proj.targetQty || 1),
+            contractValue: proj.contractValue
+                ? Math.round(proj.contractValue).toLocaleString('id-ID')
+                : '',
+            taxMode: 'dpp',
+        });
+        setIsCreateOpen(true);
+    };
+
     const watchedStartDate = watch('startDate');
     const watchedEndDate = watch('endDate');
     const watchedContractValue = watch('contractValue');
@@ -409,7 +631,7 @@ export default function Projects({
         return formatPeriod(watchedStartDate, watchedEndDate);
     }, [watchedStartDate, watchedEndDate]);
 
-    // Live calculations for Create Project modal
+    // Live calculations for Create / Edit Project modal
     const parsedRawValue =
         parseInt((watchedContractValue ?? '').replace(/[^0-9]/g, ''), 10) || 0;
     const computedFinancials = useMemo(() => {
@@ -442,77 +664,197 @@ export default function Projects({
             target_qty: 'targetQty',
         };
 
-    const onCreateProject = (data: CreateProjectFormData) => {
+    const onSubmitProject = (data: CreateProjectFormData) => {
         const rawContractValue =
             parseInt(data.contractValue.replace(/[^0-9]/g, ''), 10) || 0;
 
-        router.post(
-            route('projects.store'),
-            {
-                name: data.name,
-                client_id: data.clientId,
-                sales_id: data.salesId || undefined,
-                fiscal_mode: fiscalMode,
-                start_date: data.startDate,
-                end_date: data.endDate,
-                contract_value: rawContractValue,
-                is_ppn_inclusive: isPPN && data.taxMode === 'inc',
-                target_qty: data.targetQty,
-            },
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setIsCreateOpen(false);
-                    reset();
-                    triggerToast(
-                        `Proyek "${data.name}" berhasil dibuat.`,
-                        'success',
-                        'Proyek Dibuat',
-                    );
+        if (projectToEdit) {
+            // Edit existing project
+            router.put(
+                route('projects.update', projectToEdit.id),
+                {
+                    name: data.name,
+                    client_id: data.clientId,
+                    sales_id: data.salesId || undefined,
+                    start_date: data.startDate,
+                    end_date: data.endDate,
+                    contract_value: rawContractValue,
+                    is_ppn_inclusive: isPPN && data.taxMode === 'inc',
+                    target_qty: data.targetQty,
                 },
-                onError: (serverErrors) => {
-                    Object.entries(serverErrors).forEach(([key, message]) => {
-                        const field = SERVER_ERROR_FIELD_MAP[key];
-                        if (field) {
-                            setError(field, { message });
-                        }
-                    });
-                    const firstError = Object.values(serverErrors)[0];
-                    if (firstError) {
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setIsCreateOpen(false);
+                        setProjectToEdit(null);
+                        reset();
                         triggerToast(
-                            String(firstError),
-                            'error',
-                            'Gagal Membuat Proyek',
+                            `Proyek "${data.name}" berhasil diperbarui.`,
+                            'success',
+                            'Proyek Diperbarui',
                         );
-                    }
+                    },
+                    onError: (serverErrors) => {
+                        Object.entries(serverErrors).forEach(([key, message]) => {
+                            const field = SERVER_ERROR_FIELD_MAP[key];
+                            if (field) {
+                                setError(field, { message });
+                            }
+                        });
+                        const firstError = Object.values(serverErrors)[0];
+                        if (firstError) {
+                            triggerToast(
+                                String(firstError),
+                                'error',
+                                'Gagal Memperbarui Proyek',
+                            );
+                        }
+                    },
                 },
-            },
-        );
+            );
+        } else {
+            // Create new project
+            router.post(
+                route('projects.store'),
+                {
+                    name: data.name,
+                    client_id: data.clientId,
+                    sales_id: data.salesId || undefined,
+                    fiscal_mode: fiscalMode,
+                    start_date: data.startDate,
+                    end_date: data.endDate,
+                    contract_value: rawContractValue,
+                    is_ppn_inclusive: isPPN && data.taxMode === 'inc',
+                    target_qty: data.targetQty,
+                },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setIsCreateOpen(false);
+                        reset();
+                        triggerToast(
+                            `Proyek "${data.name}" berhasil dibuat.`,
+                            'success',
+                            'Proyek Dibuat',
+                        );
+                    },
+                    onError: (serverErrors) => {
+                        Object.entries(serverErrors).forEach(([key, message]) => {
+                            const field = SERVER_ERROR_FIELD_MAP[key];
+                            if (field) {
+                                setError(field, { message });
+                            }
+                        });
+                        const firstError = Object.values(serverErrors)[0];
+                        if (firstError) {
+                            triggerToast(
+                                String(firstError),
+                                'error',
+                                'Gagal Membuat Proyek',
+                            );
+                        }
+                    },
+                },
+            );
+        }
     };
 
     const handleUpdateProject = (_updated?: Project) => {
         router.reload();
     };
 
-    // Metrics calculation
+    // Helper: Filter by Period Basis
+    const periodFilteredProjects = useMemo(() => {
+        if (filterYear === 'all' && filterMonth === 'all') {
+            return projects;
+        }
+
+        return projects.filter((p) => {
+            const startStr = p.startDate || '';
+            const endStr = p.endDate || startStr;
+
+            if (filterBasis === 'start_date') {
+                if (!startStr) return false;
+                const pYear = startStr.substring(0, 4);
+                const pMonth = startStr.substring(5, 7);
+                const matchesYear =
+                    filterYear === 'all' || pYear === filterYear;
+                const matchesMonth =
+                    filterMonth === 'all' ||
+                    pMonth === filterMonth.padStart(2, '0');
+                return matchesYear && matchesMonth;
+            }
+
+            if (filterBasis === 'created_at') {
+                const dateRef = p.createdAt || startStr;
+                if (!dateRef) return false;
+                const pYear = dateRef.substring(0, 4);
+                const pMonth = dateRef.substring(5, 7);
+                const matchesYear =
+                    filterYear === 'all' || pYear === filterYear;
+                const matchesMonth =
+                    filterMonth === 'all' ||
+                    pMonth === filterMonth.padStart(2, '0');
+                return matchesYear && matchesMonth;
+            }
+
+            // Default: 'active_period' (Overlap test)
+            const targetYear = filterYear === 'all' ? null : Number(filterYear);
+            const targetMonth =
+                filterMonth === 'all' ? null : Number(filterMonth);
+
+            let periodStart: string;
+            let periodEnd: string;
+
+            if (targetYear && targetMonth) {
+                const monthStr = String(targetMonth).padStart(2, '0');
+                const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+                periodStart = `${targetYear}-${monthStr}-01`;
+                periodEnd = `${targetYear}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+            } else if (targetYear) {
+                periodStart = `${targetYear}-01-01`;
+                periodEnd = `${targetYear}-12-31`;
+            } else if (targetMonth) {
+                const currentYear = new Date().getFullYear();
+                const monthStr = String(targetMonth).padStart(2, '0');
+                const lastDay = new Date(currentYear, targetMonth, 0).getDate();
+                periodStart = `${currentYear}-${monthStr}-01`;
+                periodEnd = `${currentYear}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+            } else {
+                return true;
+            }
+
+            // Overlap condition: (p.start <= periodEnd) && (p.end >= periodStart)
+            return (
+                (!startStr || startStr <= periodEnd) &&
+                (!endStr || endStr >= periodStart)
+            );
+        });
+    }, [projects, filterBasis, filterYear, filterMonth]);
+
+    // Metrics calculation — adapts dynamically to period filter
     const totalActiveProjects = useMemo(() => {
-        return projects.filter((p) => p.status === 'Active').length;
-    }, [projects]);
+        return periodFilteredProjects.filter((p) => p.status === 'Active')
+            .length;
+    }, [periodFilteredProjects]);
 
     const totalContractValue = useMemo(() => {
-        return projects.reduce((acc, p) => acc + p.contractValue, 0);
-    }, [projects]);
+        return periodFilteredProjects.reduce(
+            (acc, p) => acc + p.contractValue,
+            0,
+        );
+    }, [periodFilteredProjects]);
 
     const totalEstimatedProfit = useMemo(() => {
-        return projects.reduce((acc, p) => {
+        return periodFilteredProjects.reduce((acc, p) => {
             const fin = calcFinancials(p, p.locations, fiscalMode);
             return acc + fin.netProfit;
         }, 0);
-    }, [projects, fiscalMode]);
+    }, [periodFilteredProjects, fiscalMode]);
 
     // Filtering + sort by tanggal mulai tayang (ascending)
     const filteredProjects = useMemo(() => {
-        const filtered = projects.filter((p) => {
+        const filtered = periodFilteredProjects.filter((p) => {
             const matchesSearch =
                 p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -521,32 +863,36 @@ export default function Projects({
                     .includes(searchQuery.toLowerCase()) ||
                 p.salesPIC.toLowerCase().includes(searchQuery.toLowerCase());
 
+            const matchesClient =
+                clientFilter === 'all' || p.clientId === clientFilter;
+
+            const matchesSales =
+                salesFilter === 'all' || p.salesId === salesFilter || p.salesPIC.toLowerCase() === salesFilter.toLowerCase();
+
             const matchesStatus =
                 statusFilter === 'all' ||
                 (statusFilter === 'active' && p.status === 'Active') ||
                 (statusFilter === 'draft' && p.status === 'Draft') ||
                 (statusFilter === 'completed' && p.status === 'Completed') ||
+                (statusFilter === 'cancelled' && p.status === 'Cancelled') ||
                 (statusFilter === 'pending_po' &&
                     p.locations.some((l) => !l.poIssued)) ||
                 (statusFilter === 'no_invoice' && !p.invoiceIssued);
 
-            return matchesSearch && matchesStatus;
+            return matchesSearch && matchesClient && matchesSales && matchesStatus;
         });
 
-        // Sort priority:
-        //   1. Akan datang (belum tayang) — startDate ascending (yang paling dekat muncul duluan)
-        //   2. Sedang berjalan (on-air)   — endDate ascending (yang mau habis duluan)
-        //   3. Selesai / expired          — startDate descending (paling baru dulu)
+        // Sort priority
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         const getTayangGroup = (p: Project): number => {
             if (p.status === 'Completed' || p.status === 'Cancelled') return 3;
             const parsed = parsePeriod(p.period);
-            if (!parsed) return 2; // fallback ke on-air group
-            if (today < parsed.start) return 1; // belum mulai
-            if (today > parsed.end) return 3; // sudah lewat
-            return 2; // sedang berjalan
+            if (!parsed) return 2;
+            if (today < parsed.start) return 1;
+            if (today > parsed.end) return 3;
+            return 2;
         };
 
         return filtered.sort((a, b) => {
@@ -558,23 +904,63 @@ export default function Projects({
             const parsedB = parsePeriod(b.period);
 
             if (groupA === 1) {
-                // Akan datang: startDate ascending
                 const tA = parsedA ? parsedA.start.getTime() : Infinity;
                 const tB = parsedB ? parsedB.start.getTime() : Infinity;
                 return tA - tB;
             }
             if (groupA === 2) {
-                // Sedang tayang: endDate ascending (yang mau habis duluan)
                 const tA = parsedA ? parsedA.end.getTime() : Infinity;
                 const tB = parsedB ? parsedB.end.getTime() : Infinity;
                 return tA - tB;
             }
-            // Selesai: startDate descending (paling baru dulu)
             const tA = parsedA ? parsedA.start.getTime() : 0;
             const tB = parsedB ? parsedB.start.getTime() : 0;
             return tB - tA;
         });
-    }, [projects, searchQuery, statusFilter]);
+    }, [periodFilteredProjects, searchQuery, clientFilter, salesFilter, statusFilter]);
+
+    // Subset filtered by client and sales (for status pill counts)
+    const baseClientSalesFiltered = useMemo(() => {
+        return periodFilteredProjects.filter((p) => {
+            const matchesSearch =
+                !searchQuery ||
+                p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.clientName
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase()) ||
+                p.salesPIC.toLowerCase().includes(searchQuery.toLowerCase());
+
+            const matchesClient =
+                clientFilter === 'all' || p.clientId === clientFilter;
+
+            const matchesSales =
+                salesFilter === 'all' || p.salesId === salesFilter || p.salesPIC.toLowerCase() === salesFilter.toLowerCase();
+
+            return matchesSearch && matchesClient && matchesSales;
+        });
+    }, [periodFilteredProjects, searchQuery, clientFilter, salesFilter]);
+
+    // Counts computed from period & client & sales filtered projects for the status tabs
+    const countAll = baseClientSalesFiltered.length;
+    const countActive = baseClientSalesFiltered.filter(
+        (p) => p.status === 'Active',
+    ).length;
+    const countDraft = baseClientSalesFiltered.filter(
+        (p) => p.status === 'Draft',
+    ).length;
+    const countCompleted = baseClientSalesFiltered.filter(
+        (p) => p.status === 'Completed',
+    ).length;
+    const countCancelled = baseClientSalesFiltered.filter(
+        (p) => p.status === 'Cancelled',
+    ).length;
+    const countPendingPO = baseClientSalesFiltered.filter((p) =>
+        p.locations.some((l) => !l.poIssued),
+    ).length;
+    const countNoInvoice = baseClientSalesFiltered.filter(
+        (p) => !p.invoiceIssued,
+    ).length;
 
     // Pagination
     const totalItems = filteredProjects.length;
@@ -586,14 +972,27 @@ export default function Projects({
         );
     }, [filteredProjects, currentPage, itemsPerPage]);
 
-    // Counts for filter chips
-    const countAll = projects.length;
-    const countActive = projects.filter((p) => p.status === 'Active').length;
-    const countDraft = projects.filter((p) => p.status === 'Draft').length;
-    const countPendingPO = projects.filter((p) =>
-        p.locations.some((l) => !l.poIssued),
-    ).length;
-    const countNoInvoice = projects.filter((p) => !p.invoiceIssued).length;
+    const monthOptions = [
+        { value: 'all', label: 'Semua Bulan' },
+        { value: '1', label: 'Januari' },
+        { value: '2', label: 'Februari' },
+        { value: '3', label: 'Maret' },
+        { value: '4', label: 'April' },
+        { value: '5', label: 'Mei' },
+        { value: '6', label: 'Juni' },
+        { value: '7', label: 'Juli' },
+        { value: '8', label: 'Agustus' },
+        { value: '9', label: 'September' },
+        { value: '10', label: 'Oktober' },
+        { value: '11', label: 'November' },
+        { value: '12', label: 'Desember' },
+    ];
+
+    const basisLabels = {
+        active_period: 'Masa Tayang Aktif',
+        start_date: 'Bulan Mulai (Start Date)',
+        created_at: 'Tanggal Dibuat',
+    };
 
     return (
         <AppLayout
@@ -618,7 +1017,7 @@ export default function Projects({
                         </p>
                     </div>
 
-                    <PrimaryButton onClick={() => setIsCreateOpen(true)}>
+                    <PrimaryButton onClick={handleOpenCreateProject}>
                         <svg
                             className="h-4 w-4"
                             fill="none"
@@ -636,12 +1035,16 @@ export default function Projects({
                     </PrimaryButton>
                 </div>
 
-                {/* Metric Summary Grid */}
+                {/* Metric Summary Grid — Di Atas, Nilai Menyesuaikan Filter */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <MetricCard
                         title="Proyek Aktif"
                         value={`${totalActiveProjects} Proyek`}
-                        badgeText="Proyek Berjalan"
+                        badgeText={
+                            filterYear !== 'all' || filterMonth !== 'all'
+                                ? `Filter Periode`
+                                : `Proyek Berjalan`
+                        }
                         cardBgClass="bg-blue-50/60 border-blue-200/60 shadow-xs"
                         badgeColorClass="bg-white/90 text-blue-800 border-blue-200/60"
                         icon={
@@ -693,7 +1096,11 @@ export default function Projects({
                     <MetricCard
                         title="Estimasi Laba Bersih"
                         value={fmt(totalEstimatedProfit)}
-                        badgeText="Profit Margin"
+                        badgeText={
+                            filterBasis === 'active_period'
+                                ? 'Masa Tayang'
+                                : basisLabels[filterBasis]
+                        }
                         cardBgClass="bg-slate-100/80 border-slate-200/80 shadow-xs"
                         badgeColorClass="bg-white/90 text-slate-800 border-slate-200/60"
                         icon={
@@ -716,14 +1123,14 @@ export default function Projects({
                     />
                 </div>
 
-                {/* Search & Fast Filter Chips Bar */}
+                {/* Filter & Fast Status Pills Bar */}
                 <div className="shadow-xs space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4">
-                    {/* Top Row: Search Input & View Switcher */}
-                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-                        {/* Search Input */}
-                        <div className="max-w-md flex-1 space-y-1">
+                    {/* Top Row: Search Input, Client Filter, Sales Filter, Period Basis & Month Picker */}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+                        {/* Search Input (Lebih Ringkas) */}
+                        <div className="space-y-1 sm:col-span-2 lg:col-span-3">
                             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Pencarian Proyek
+                                Cari Proyek
                             </label>
                             <div className="relative">
                                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
@@ -743,7 +1150,7 @@ export default function Projects({
                                 </div>
                                 <TextInput
                                     type="text"
-                                    placeholder="Cari nama proyek, kode, client, atau sales..."
+                                    placeholder="Cari kode/nama..."
                                     value={searchQuery}
                                     onChange={(e) => {
                                         setSearchQuery(e.target.value);
@@ -754,11 +1161,157 @@ export default function Projects({
                             </div>
                         </div>
 
-                        {/* View Switcher Segmented Control */}
-                        <div className="space-y-1">
+                        {/* Client Filter Dropdown */}
+                        <div className="space-y-1 sm:col-span-1 lg:col-span-2">
                             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Mode Tampilan
+                                Client
                             </label>
+                            <SelectInput
+                                value={clientFilter}
+                                onChange={(e) => {
+                                    setClientFilter(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                options={[
+                                    { value: 'all', label: 'Semua Client' },
+                                    ...clients.map((c) => ({
+                                        value: c.id,
+                                        label: c.name,
+                                    })),
+                                ]}
+                            />
+                        </div>
+
+                        {/* Sales Filter Dropdown */}
+                        <div className="space-y-1 sm:col-span-1 lg:col-span-2">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Sales PIC
+                            </label>
+                            <SelectInput
+                                value={salesFilter}
+                                onChange={(e) => {
+                                    setSalesFilter(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                options={[
+                                    { value: 'all', label: 'Semua Sales' },
+                                    ...sales.map((s) => ({
+                                        value: s.id,
+                                        label: s.name,
+                                    })),
+                                ]}
+                            />
+                        </div>
+
+                        {/* Filter Basis Selector */}
+                        <div className="space-y-1 sm:col-span-1 lg:col-span-2">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Acuan Periode
+                            </label>
+                            <SelectInput
+                                value={filterBasis}
+                                onChange={(e) => {
+                                    setFilterBasis(
+                                        e.target.value as
+                                            | 'active_period'
+                                            | 'start_date'
+                                            | 'created_at',
+                                    );
+                                    setCurrentPage(1);
+                                }}
+                                options={[
+                                    {
+                                        value: 'created_at',
+                                        label: 'Tanggal Dibuat',
+                                    },
+                                    {
+                                        value: 'active_period',
+                                        label: 'Masa Tayang',
+                                    },
+                                    {
+                                        value: 'start_date',
+                                        label: 'Bulan Mulai',
+                                    },
+                                ]}
+                            />
+                        </div>
+
+                        {/* Month & Year Picker Component */}
+                        <div className="space-y-1 sm:col-span-1 lg:col-span-3">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Bulan & Tahun
+                            </label>
+                            <MonthPicker
+                                value={
+                                    filterYear !== 'all' &&
+                                    filterMonth !== 'all'
+                                        ? `${filterYear}-${filterMonth.padStart(2, '0')}`
+                                        : 'all'
+                                }
+                                onChange={(val, yr, mo) => {
+                                    setFilterYear(yr);
+                                    setFilterMonth(
+                                        mo === 'all'
+                                            ? 'all'
+                                            : String(Number(mo)),
+                                    );
+                                    setCurrentPage(1);
+                                }}
+                                allowAll={true}
+                                allLabel="Semua Periode"
+                                className="w-full [&>button]:w-full [&>button]:justify-between"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Bottom Row: Interactive Status Pills Navigation & View Switcher */}
+                    <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                        {/* Status Pills */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {[
+                                { key: 'all', label: `Semua (${countAll})` },
+                                { key: 'draft', label: `Draft (${countDraft})` },
+                                {
+                                    key: 'pending_po',
+                                    label: `Pending PO (${countPendingPO})`,
+                                },
+                                {
+                                    key: 'no_invoice',
+                                    label: `Invoicing (${countNoInvoice})`,
+                                },
+                                { key: 'active', label: `Aktif (${countActive})` },
+                                {
+                                    key: 'completed',
+                                    label: `Selesai (${countCompleted})`,
+                                },
+                                {
+                                    key: 'cancelled',
+                                    label: `Dibatalkan (${countCancelled})`,
+                                },
+                            ].map((pill) => {
+                                const isSelected = statusFilter === pill.key;
+                                return (
+                                    <button
+                                        key={pill.key}
+                                        type="button"
+                                        onClick={() => {
+                                            setStatusFilter(pill.key);
+                                            setCurrentPage(1);
+                                        }}
+                                        className={`cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${
+                                            isSelected
+                                                ? 'shadow-2xs border-primary/30 bg-primary/10 ring-primary/30 font-extrabold text-primary ring-1'
+                                                : 'border-slate-200/80 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        {pill.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* View Switcher Segmented Control (Dipindah ke Bawah) */}
+                        <div className="flex shrink-0 items-center justify-end">
                             <div className="shadow-2xs flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
                                 <button
                                     type="button"
@@ -770,7 +1323,7 @@ export default function Projects({
                                     }`}
                                     title="Tampilan Kartu Rich Modular"
                                 >
-                                    <span>Grid Kartu</span>
+                                    <span>Grid</span>
                                 </button>
 
                                 <button
@@ -800,42 +1353,6 @@ export default function Projects({
                                 </button>
                             </div>
                         </div>
-                    </div>
-
-                    {/* Bottom Row: Interactive Status Pills Navigation */}
-                    <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-                        {[
-                            { key: 'all', label: `Semua Proyek (${countAll})` },
-                            { key: 'active', label: `Aktif (${countActive})` },
-                            { key: 'draft', label: `Draft (${countDraft})` },
-                            {
-                                key: 'pending_po',
-                                label: `Pending PO (${countPendingPO})`,
-                            },
-                            {
-                                key: 'no_invoice',
-                                label: `Invoicing (${countNoInvoice})`,
-                            },
-                        ].map((pill) => {
-                            const isSelected = statusFilter === pill.key;
-                            return (
-                                <button
-                                    key={pill.key}
-                                    type="button"
-                                    onClick={() => {
-                                        setStatusFilter(pill.key);
-                                        setCurrentPage(1);
-                                    }}
-                                    className={`cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-bold transition-all ${
-                                        isSelected
-                                            ? 'shadow-2xs border-blue-200 bg-blue-50 font-extrabold text-blue-700'
-                                            : 'border-slate-200/80 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                                    }`}
-                                >
-                                    {pill.label}
-                                </button>
-                            );
-                        })}
                     </div>
                 </div>
 
@@ -884,7 +1401,7 @@ export default function Projects({
                                             <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 opacity-0 transition-opacity group-hover:opacity-100" />
 
                                             <div className="space-y-4">
-                                                {/* Card Header Badges */}
+                                                {/* Card Header Badges & Actions */}
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2">
                                                         <span className="rounded-md border border-blue-100 bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-extrabold text-blue-700">
@@ -902,9 +1419,107 @@ export default function Projects({
                                                                 : 'Non-PPN'}
                                                         </span>
                                                     </div>
-                                                    <StatusBadge
-                                                        status={project.status}
-                                                    />
+                                                    <div
+                                                        className="flex items-center gap-1.5"
+                                                        onClick={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                    >
+                                                        <StatusBadge
+                                                            status={
+                                                                project.status
+                                                            }
+                                                        />
+                                                        <ActionDropdown
+                                                            items={[
+                                                                {
+                                                                    label: 'Kelola Detail Proyek',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                            />
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            router.visit(
+                                                                                route(
+                                                                                    'projects.show',
+                                                                                    project.id,
+                                                                                ),
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Edit Proyek',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            handleOpenEditProject(
+                                                                                project,
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Batalkan Proyek',
+                                                                    variant:
+                                                                        'danger',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-rose-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            setProjectToCancel(
+                                                                                project,
+                                                                            ),
+                                                                },
+                                                            ]}
+                                                        />
+                                                    </div>
                                                 </div>
 
                                                 {/* Project Title & Client info */}
@@ -979,26 +1594,42 @@ export default function Projects({
                                                 </div>
                                                 <div className="text-right">
                                                     <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                                        Estimasi Laba
+                                                        {isPPN
+                                                            ? 'NET PPN'
+                                                            : 'NET'}
                                                     </span>
                                                     <div className="mt-0.5 flex items-center justify-end gap-1.5">
                                                         <span
-                                                            className={`font-mono text-xs font-bold ${fin.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}
-                                                        >
-                                                            {fmt(fin.netProfit)}
-                                                        </span>
-                                                        <span
-                                                            className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                                                                fin.margin >= 30
-                                                                    ? 'border border-emerald-100 bg-emerald-50 text-emerald-700'
-                                                                    : 'border border-amber-100 bg-amber-50 text-amber-700'
+                                                            className={`font-mono text-xs font-bold ${
+                                                                (isPPN
+                                                                    ? fin.ppnNet
+                                                                    : fin.netProfit) >=
+                                                                0
+                                                                    ? 'text-emerald-600'
+                                                                    : 'text-rose-600'
                                                             }`}
                                                         >
-                                                            {fin.margin.toFixed(
-                                                                0,
+                                                            {fmt(
+                                                                isPPN
+                                                                    ? fin.ppnNet
+                                                                    : fin.netProfit,
                                                             )}
-                                                            %
                                                         </span>
+                                                        {!isPPN && (
+                                                            <span
+                                                                className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                                                                    fin.margin >=
+                                                                    30
+                                                                        ? 'border border-emerald-100 bg-emerald-50 text-emerald-700'
+                                                                        : 'border border-amber-100 bg-amber-50 text-amber-700'
+                                                                }`}
+                                                            >
+                                                                {fin.margin.toFixed(
+                                                                    0,
+                                                                )}
+                                                                %
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -1032,7 +1663,7 @@ export default function Projects({
                                 </div>
                                 <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600">
                                     {
-                                        projects.filter(
+                                        filteredProjects.filter(
                                             (p) => p.status === 'Draft',
                                         ).length
                                     }
@@ -1040,7 +1671,7 @@ export default function Projects({
                             </div>
 
                             <div className="space-y-3">
-                                {projects
+                                {filteredProjects
                                     .filter((p) => p.status === 'Draft')
                                     .map((project) => {
                                         const fin = calcFinancials(
@@ -1065,9 +1696,105 @@ export default function Projects({
                                                     <span className="rounded bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-600">
                                                         {project.code}
                                                     </span>
-                                                    <span className="text-[10px] font-semibold text-slate-400">
-                                                        {project.period}
-                                                    </span>
+                                                    <div
+                                                        className="flex items-center gap-1.5"
+                                                        onClick={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                    >
+                                                        <span className="text-[10px] font-semibold text-slate-400">
+                                                            {project.period}
+                                                        </span>
+                                                        <ActionDropdown
+                                                            items={[
+                                                                {
+                                                                    label: 'Kelola Detail Proyek',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                            />
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            router.visit(
+                                                                                route(
+                                                                                    'projects.show',
+                                                                                    project.id,
+                                                                                ),
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Edit Proyek',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            handleOpenEditProject(
+                                                                                project,
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Batalkan Proyek',
+                                                                    variant:
+                                                                        'danger',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-rose-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            setProjectToCancel(
+                                                                                project,
+                                                                            ),
+                                                                },
+                                                            ]}
+                                                        />
+                                                    </div>
                                                 </div>
                                                 <h4 className="text-xs font-bold leading-snug text-slate-800">
                                                     {project.name}
@@ -1077,7 +1804,7 @@ export default function Projects({
                                                 </div>
                                                 <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-xs font-bold">
                                                     <span className="text-slate-400">
-                                                        Kontrak:
+                                                        Tagihan:
                                                     </span>
                                                     <span className="font-mono text-slate-900">
                                                         {fmt(fin.totalInvoice)}
@@ -1100,7 +1827,7 @@ export default function Projects({
                                 </div>
                                 <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-[10px] font-bold text-blue-700">
                                     {
-                                        projects.filter(
+                                        filteredProjects.filter(
                                             (p) => p.status === 'Active',
                                         ).length
                                     }
@@ -1108,7 +1835,7 @@ export default function Projects({
                             </div>
 
                             <div className="space-y-3">
-                                {projects
+                                {filteredProjects
                                     .filter((p) => p.status === 'Active')
                                     .map((project) => {
                                         const fin = calcFinancials(
@@ -1122,10 +1849,6 @@ export default function Projects({
                                             ).length;
                                         const locCount =
                                             project.locations.length;
-                                        const poProgress =
-                                            locCount > 0
-                                                ? poCount / locCount
-                                                : 0;
 
                                         return (
                                             <div
@@ -1144,9 +1867,105 @@ export default function Projects({
                                                     <span className="rounded bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-600">
                                                         {project.code}
                                                     </span>
-                                                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
-                                                        Aktif
-                                                    </span>
+                                                    <div
+                                                        className="flex items-center gap-1.5"
+                                                        onClick={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                    >
+                                                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
+                                                            Aktif
+                                                        </span>
+                                                        <ActionDropdown
+                                                            items={[
+                                                                {
+                                                                    label: 'Kelola Detail Proyek',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                            />
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            router.visit(
+                                                                                route(
+                                                                                    'projects.show',
+                                                                                    project.id,
+                                                                                ),
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Edit Proyek',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            handleOpenEditProject(
+                                                                                project,
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Batalkan Proyek',
+                                                                    variant:
+                                                                        'danger',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-rose-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            setProjectToCancel(
+                                                                                project,
+                                                                            ),
+                                                                },
+                                                            ]}
+                                                        />
+                                                    </div>
                                                 </div>
                                                 <h4 className="text-xs font-bold leading-snug text-slate-800">
                                                     {project.name}
@@ -1188,10 +2007,25 @@ export default function Projects({
 
                                                 <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-xs font-bold">
                                                     <span className="text-slate-400">
-                                                        Laba Bersih:
+                                                        {isPPN
+                                                            ? 'NET PPN:'
+                                                            : 'NET:'}
                                                     </span>
-                                                    <span className="font-mono text-emerald-600">
-                                                        {fmt(fin.netProfit)}
+                                                    <span
+                                                        className={`font-mono ${
+                                                            (isPPN
+                                                                ? fin.ppnNet
+                                                                : fin.netProfit) >=
+                                                            0
+                                                                ? 'text-emerald-600'
+                                                                : 'text-rose-600'
+                                                        }`}
+                                                    >
+                                                        {fmt(
+                                                            isPPN
+                                                                ? fin.ppnNet
+                                                                : fin.netProfit,
+                                                        )}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1211,7 +2045,7 @@ export default function Projects({
                                 </div>
                                 <span className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                                     {
-                                        projects.filter(
+                                        filteredProjects.filter(
                                             (p) => p.status === 'Completed',
                                         ).length
                                     }
@@ -1219,7 +2053,7 @@ export default function Projects({
                             </div>
 
                             <div className="space-y-3">
-                                {projects
+                                {filteredProjects
                                     .filter((p) => p.status === 'Completed')
                                     .map((project) => {
                                         const fin = calcFinancials(
@@ -1244,9 +2078,105 @@ export default function Projects({
                                                     <span className="rounded bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-600">
                                                         {project.code}
                                                     </span>
-                                                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
-                                                        Selesai
-                                                    </span>
+                                                    <div
+                                                        className="flex items-center gap-1.5"
+                                                        onClick={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                    >
+                                                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
+                                                            Selesai
+                                                        </span>
+                                                        <ActionDropdown
+                                                            items={[
+                                                                {
+                                                                    label: 'Kelola Detail Proyek',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                            />
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            router.visit(
+                                                                                route(
+                                                                                    'projects.show',
+                                                                                    project.id,
+                                                                                ),
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Edit Proyek',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            handleOpenEditProject(
+                                                                                project,
+                                                                            ),
+                                                                },
+                                                                {
+                                                                    label: 'Batalkan Proyek',
+                                                                    variant:
+                                                                        'danger',
+                                                                    icon: (
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5 text-rose-500"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                            />
+                                                                        </svg>
+                                                                    ),
+                                                                    onClick:
+                                                                        () =>
+                                                                            setProjectToCancel(
+                                                                                project,
+                                                                            ),
+                                                                },
+                                                            ]}
+                                                        />
+                                                    </div>
                                                 </div>
                                                 <h4 className="text-xs font-bold leading-snug text-slate-800">
                                                     {project.name}
@@ -1468,6 +2398,58 @@ export default function Projects({
                                                                                         ),
                                                                                     ),
                                                                         },
+                                                                        {
+                                                                            label: 'Edit Proyek',
+                                                                            icon: (
+                                                                                <svg
+                                                                                    className="h-3.5 w-3.5 text-slate-500"
+                                                                                    fill="none"
+                                                                                    viewBox="0 0 24 24"
+                                                                                    stroke="currentColor"
+                                                                                    strokeWidth={
+                                                                                        2
+                                                                                    }
+                                                                                >
+                                                                                    <path
+                                                                                        strokeLinecap="round"
+                                                                                        strokeLinejoin="round"
+                                                                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                                                    />
+                                                                                </svg>
+                                                                            ),
+                                                                            onClick:
+                                                                                () =>
+                                                                                    handleOpenEditProject(
+                                                                                        project,
+                                                                                    ),
+                                                                        },
+                                                                        {
+                                                                            label: 'Batalkan Proyek',
+                                                                            variant:
+                                                                                'danger',
+                                                                            icon: (
+                                                                                <svg
+                                                                                    className="h-3.5 w-3.5 text-rose-500"
+                                                                                    fill="none"
+                                                                                    viewBox="0 0 24 24"
+                                                                                    stroke="currentColor"
+                                                                                    strokeWidth={
+                                                                                        2
+                                                                                    }
+                                                                                >
+                                                                                    <path
+                                                                                        strokeLinecap="round"
+                                                                                        strokeLinejoin="round"
+                                                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                                    />
+                                                                                </svg>
+                                                                            ),
+                                                                            onClick:
+                                                                                () =>
+                                                                                    setProjectToCancel(
+                                                                                        project,
+                                                                                    ),
+                                                                        },
                                                                     ]}
                                                                 />
                                                             </td>
@@ -1493,20 +2475,28 @@ export default function Projects({
                     </div>
                 )}
 
-                {/* Create Project Modal */}
+                {/* Create / Edit Project Modal */}
                 <Modal
                     show={isCreateOpen}
-                    onClose={() => setIsCreateOpen(false)}
+                    onClose={() => {
+                        setIsCreateOpen(false);
+                        setProjectToEdit(null);
+                    }}
                     maxWidth="lg"
                 >
                     <div className="space-y-5 p-6">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                             <h3 className="text-base font-bold text-slate-900">
-                                Buat Proyek Kampanye Baru
+                                {projectToEdit
+                                    ? `Edit Proyek: ${projectToEdit.name} (${projectToEdit.code})`
+                                    : 'Buat Proyek Kampanye Baru'}
                             </h3>
                             <button
                                 type="button"
-                                onClick={() => setIsCreateOpen(false)}
+                                onClick={() => {
+                                    setIsCreateOpen(false);
+                                    setProjectToEdit(null);
+                                }}
                                 className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
                             >
                                 <svg
@@ -1526,7 +2516,7 @@ export default function Projects({
                         </div>
 
                         <form
-                            onSubmit={handleSubmit(onCreateProject)}
+                            onSubmit={handleSubmit(onSubmitProject)}
                             className="space-y-4"
                         >
                             <div className="space-y-1.5">
@@ -1866,7 +2856,10 @@ export default function Projects({
                             <div className="flex gap-3 border-t border-slate-100 pt-4">
                                 <button
                                     type="button"
-                                    onClick={() => setIsCreateOpen(false)}
+                                    onClick={() => {
+                                        setIsCreateOpen(false);
+                                        setProjectToEdit(null);
+                                    }}
                                     className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50"
                                 >
                                     Batal
@@ -1878,10 +2871,225 @@ export default function Projects({
                                 >
                                     {isSubmitting
                                         ? 'Menyimpan...'
-                                        : 'Simpan Draft Proyek'}
+                                        : projectToEdit
+                                          ? 'Simpan Perubahan'
+                                          : 'Simpan Draft Proyek'}
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </Modal>
+
+                {/* Confirm Cancel Project Modal */}
+                <Modal
+                    show={Boolean(projectToCancel)}
+                    onClose={() => setProjectToCancel(null)}
+                    maxWidth="md"
+                >
+                    <div className="space-y-4 p-6">
+                        {projectToCancel?.status !== 'Draft' ||
+                        projectToCancel?.hasPayments ? (
+                            /* State Protected (Bukan Draft / Sudah Ada Pembayaran) */
+                            <>
+                                <div className="flex items-center gap-3.5">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                                        <svg
+                                            className="h-6 w-6"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                            />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-900">
+                                            Proyek Tidak Dapat Dibatalkan
+                                        </h3>
+                                        <p className="mt-0.5 text-xs text-slate-500">
+                                            Proyek{' '}
+                                            <span className="font-bold text-slate-800">
+                                                "{projectToCancel?.name}"
+                                            </span>{' '}
+                                            ({projectToCancel?.code}) tidak
+                                            memenuhi syarat pembatalan.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-3.5 text-xs text-amber-900">
+                                    <div className="flex items-center justify-between font-bold">
+                                        <span>Status Proyek Saat Ini:</span>
+                                        <span className="rounded-md border border-amber-300 bg-amber-100 px-2 py-0.5 font-bold text-amber-900">
+                                            {projectToCancel?.status ===
+                                            'Active'
+                                                ? 'Aktif (Sedang Tayang)'
+                                                : projectToCancel?.status ===
+                                                    'Completed'
+                                                  ? 'Selesai (Completed)'
+                                                  : projectToCancel?.status}
+                                        </span>
+                                    </div>
+
+                                    {Boolean(
+                                        projectToCancel?.totalPaid &&
+                                        projectToCancel.totalPaid > 0,
+                                    ) && (
+                                        <div className="flex items-center justify-between border-t border-amber-200/60 pt-1.5 font-bold">
+                                            <span>Realisasi Pembayaran:</span>
+                                            <span className="font-mono text-amber-800">
+                                                {fmt(
+                                                    projectToCancel?.totalPaid ||
+                                                        0,
+                                                )}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <p className="border-t border-amber-200/60 pt-1 text-[11px] leading-relaxed text-amber-800/90">
+                                        {projectToCancel?.status === 'Active'
+                                            ? 'Proyek yang sedang tayang / berjalan memiliki komitmen sewa lokasi dan kewajiban biaya vendor yang sedang berlangsung sehingga tidak dapat dibatalkan secara langsung. Jika ingin berhenti di tengah jalan, gunakan mekanisme Selesai Lebih Awal / Revisi Kontrak.'
+                                            : projectToCancel?.status ===
+                                                'Completed'
+                                              ? 'Proyek telah berstatus Selesai dan seluruh transaksi telah terarsip secara permanen dalam sistem akuntansi.'
+                                              : 'Proyek yang telah memiliki mutasi kas atau transaksi jurnal tidak dapat dibatalkan demi menjaga integritas pembukuan dan neraca keuangan.'}
+                                    </p>
+                                </div>
+
+                                <div className="flex justify-end border-t border-slate-100 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setProjectToCancel(null)}
+                                        className="shadow-xs cursor-pointer rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-slate-800"
+                                    >
+                                        Mengerti & Tutup
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            /* State Unprotected (Hanya Berstatus Draft & Belum Ada Pembayaran -> Boleh Dibatalkan) */
+                            <>
+                                <div className="flex items-center gap-3.5">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+                                        <svg
+                                            className="h-6 w-6"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={2}
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                            />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-900">
+                                            Batalkan Draft Proyek Billboard?
+                                        </h3>
+                                        <p className="mt-0.5 text-xs text-slate-500">
+                                            Tindakan ini akan membatalkan draft
+                                            proyek{' '}
+                                            <span className="font-bold text-slate-800">
+                                                "{projectToCancel?.name}"
+                                            </span>{' '}
+                                            ({projectToCancel?.code}).
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3 text-xs text-rose-800">
+                                    Proyek masih berstatus{' '}
+                                    <strong>Draft</strong> dan belum memiliki
+                                    mutasi kas. Membatalkan proyek akan
+                                    mengarsipkan draft proyek ini secara aman.
+                                </div>
+
+                                <div className="flex justify-end gap-2.5 border-t border-slate-100 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setProjectToCancel(null)}
+                                        disabled={isCancelling}
+                                        className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                                    >
+                                        Tutup
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleConfirmCancelProject}
+                                        disabled={isCancelling}
+                                        className="shadow-xs cursor-pointer rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white transition-all hover:bg-rose-700 disabled:opacity-50"
+                                    >
+                                        {isCancelling
+                                            ? 'Membatalkan...'
+                                            : 'Ya, Batalkan Proyek'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </Modal>
+
+                {/* Error / Warning Dialog Modal */}
+                <Modal
+                    show={errorDialog.show}
+                    onClose={() =>
+                        setErrorDialog((prev) => ({ ...prev, show: false }))
+                    }
+                    maxWidth="md"
+                >
+                    <div className="space-y-4 p-6">
+                        <div className="flex items-center gap-3.5">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+                                <svg
+                                    className="h-6 w-6"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                    />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900">
+                                    {errorDialog.title || 'Pembatalan Proyek Ditolak'}
+                                </h3>
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                    Sistem memproteksi penghapusan data ini.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 p-3.5 text-xs font-semibold leading-relaxed text-rose-900">
+                            {errorDialog.message}
+                        </div>
+
+                        <div className="flex justify-end border-t border-slate-100 pt-4">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setErrorDialog((prev) => ({
+                                        ...prev,
+                                        show: false,
+                                    }))
+                                }
+                                className="shadow-xs cursor-pointer rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-slate-800"
+                            >
+                                Mengerti & Tutup
+                            </button>
+                        </div>
                     </div>
                 </Modal>
 

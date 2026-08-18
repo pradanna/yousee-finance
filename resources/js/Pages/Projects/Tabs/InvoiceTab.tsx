@@ -1,5 +1,6 @@
+import { router } from '@inertiajs/react';
 import React from 'react';
-import { Project, fmt, SCHEME_LABELS, ClientPaymentPlan, PaymentTermStatus, formatIndoDate, calcPaymentSummary, calcFinancials } from '../projectTypes';
+import { Project, fmt, SCHEME_LABELS, ClientPaymentPlan, PaymentTermStatus, formatIndoDate, calcPaymentSummary, calcFinancials, PaymentTerm } from '../projectTypes';
 import { StatusBadge } from '../Show';
 
 export default function InvoiceTab({ 
@@ -7,21 +8,145 @@ export default function InvoiceTab({
     isPPN,
     onOpenInvoiceModal,
     onOpenPaymentModal,
-    onUpdateProject
+    onUpdateProject,
+    onTriggerToast,
 }: { 
     project: Project;
     isPPN: boolean;
     onOpenInvoiceModal: () => void;
-    onOpenPaymentModal: (term: any, targetAmt: number) => void;
+    onOpenPaymentModal: (term: PaymentTerm, targetAmt: number) => void;
     onUpdateProject: (p: Project) => void;
+    onTriggerToast?: (message: string, type?: 'success' | 'error' | 'info', title?: string) => void;
 }) {
     
+    const PPN_RATE = 0.11;
     const fin = calcFinancials(project, project.locations, isPPN ? 'ppn' : 'non-ppn');
-    const dueAlerts: any[] = [];
+    const dueAlerts: PaymentTerm[] = [];
     const hasPaidTerm = project.clientPaymentPlan?.terms?.some(t => t.status === 'paid') || false;
-    const triggerInvoicePdf = (...args: any[]) => alert("PDF Download");
 
-    const setDisplayedProject = onUpdateProject;
+    const handleDownloadInvoicePdf = (term?: PaymentTerm) => {
+        const isTermin = !!term;
+        const totalContractDpp = project.contractValue;
+        const totalContractInvoice = isPPN ? Math.round(totalContractDpp * 1.11) : totalContractDpp;
+
+        // Jika cetak invoice per termin:
+        // DPP termin = term.amount
+        // PPN termin = isPPN ? round(term.amount * 0.11) : 0
+        // Grand Total termin = isPPN ? round(term.amount * 1.11) : term.amount
+        const dppValue = isTermin ? term.amount : totalContractDpp;
+        const invoiceTotalValue = isPPN ? Math.round(dppValue * 1.11) : dppValue;
+
+        const csrfToken =
+            (
+                document.querySelector(
+                    'meta[name="csrf-token"]',
+                ) as HTMLMetaElement
+            )?.content || '';
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/client-invoice-pdf';
+        form.target = '_blank';
+
+        const appendInput = (name: string, value: string) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        };
+
+        appendInput('_token', csrfToken);
+        appendInput('clientName', project.clientName);
+        appendInput('clientSubName', 'Attn: Finance & Procurement');
+        appendInput('invoiceNumber', project.invoiceNumber || 'INV-06/2026/001');
+        appendInput('invoiceDate', new Date().toLocaleDateString('id-ID'));
+        appendInput('isPPN', isPPN ? 'true' : 'false');
+        appendInput('dpAmount', '0'); // Tidak mengurangi DP dari subtotal agar total pas sesuai tagihan termin / master
+        appendInput('subtotal', String(dppValue));
+        appendInput('contractTotalDpp', String(totalContractDpp));
+        appendInput('contractTotalInvoice', String(totalContractInvoice));
+        appendInput('termLabel', isTermin ? `${term.label} (${term.percent}%)` : 'Tagihan Keseluruhan Kontrak');
+        appendInput('stream', 'true');
+
+        if (project.locations && project.locations.length > 0) {
+            const locCount = project.locations.length;
+            const pricePerLoc = Math.round(dppValue / locCount);
+            
+            project.locations.forEach((loc, i) => {
+                // Lokasi terakhir menampung sisa pembagian agar jumlah total lokasi persis sama dengan dppValue
+                const actualLocPrice = (i === locCount - 1)
+                    ? (dppValue - (pricePerLoc * (locCount - 1)))
+                    : pricePerLoc;
+
+                appendInput(`locations[${i}][type]`, loc.type);
+                appendInput(`locations[${i}][size]`, loc.size);
+                appendInput(`locations[${i}][orientation]`, loc.orientation || 'V');
+                appendInput(`locations[${i}][description]`, loc.description);
+                appendInput(`locations[${i}][area]`, loc.area);
+                appendInput(`locations[${i}][qty]`, String(loc.qty ?? 1));
+                appendInput(`locations[${i}][clientPrice]`, String(actualLocPrice));
+                appendInput(`locations[${i}][vendorCost]`, String(actualLocPrice));
+            });
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    };
+
+    const handleDownloadKwitansiPdf = (term: PaymentTerm) => {
+        const totalAmount = isPPN ? Math.round(term.amount * 1.11) : term.amount;
+        const paidAmount = term.paidAmount 
+            ? (isPPN ? Math.round(term.paidAmount * 1.11) : term.paidAmount)
+            : totalAmount;
+
+        const locDetails =
+            project.locations && project.locations.length > 0
+                ? project.locations
+                      .map(
+                          (loc) =>
+                              `Pemasangan ${loc.type} ${loc.size} ${loc.description}${loc.area ? ' (' + loc.area + ')' : ''}`,
+                      )
+                      .join(' dan ')
+                : project.name;
+
+        const totalTerms = project.clientPaymentPlan?.terms?.length || 1;
+        const termIdx = (project.clientPaymentPlan?.terms?.findIndex(t => t.id === term.id) ?? 0) + 1;
+        const receiptNum = term.paymentRef ? `KW-${term.paymentRef}` : `KW-${project.invoiceNumber || project.code}-${termIdx}`;
+        const dateVal = term.paidAt || new Date().toISOString().split('T')[0];
+        const paymentDesc = `Pembayaran ${term.label} (${totalTerms > 1 ? totalTerms + ' Termin' : 'Lunas'}) Sewa Media Iklan - ${locDetails}`;
+
+        const csrfToken =
+            (
+                document.querySelector(
+                    'meta[name="csrf-token"]',
+                ) as HTMLMetaElement
+            )?.content || '';
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/kwitansi-pdf';
+        form.target = '_blank';
+
+        const appendInput = (name: string, value: string) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        };
+
+        appendInput('_token', csrfToken);
+        appendInput('receiptNumber', receiptNum);
+        appendInput('receivedFrom', project.clientName);
+        appendInput('amount', String(paidAmount));
+        appendInput('forPaymentOf', paymentDesc);
+        appendInput('date', dateVal);
+        appendInput('stream', 'true');
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    };
 
     return (
                                 <div className="space-y-6">
@@ -194,46 +319,39 @@ export default function InvoiceTab({
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                const now =
-                                                                    new Date();
-                                                                const monthStr =
-                                                                    String(
-                                                                        now.getMonth() +
-                                                                            1,
-                                                                    ).padStart(
-                                                                        2,
-                                                                        '0',
-                                                                    );
-                                                                const yearStr =
-                                                                    String(
-                                                                        now.getFullYear(),
-                                                                    ).slice(-2);
-                                                                const seqStr =
-                                                                    String(
-                                                                        Math.floor(
-                                                                            Math.random() *
-                                                                                899,
-                                                                        ) + 100,
-                                                                    ).padStart(
-                                                                        3,
-                                                                        '0',
-                                                                    );
-                                                                const invNo =
-                                                                    isPPN
-                                                                        ? `INV-${monthStr}/${yearStr}/${seqStr}`
-                                                                        : `INV-NP-${monthStr}/${yearStr}/${seqStr}`;
-                                                                const updatedPrj =
+                                                                // Pastikan URL hash tetap di #invoice
+                                                                if (typeof window !== 'undefined') {
+                                                                    const currentUrl = new URL(window.location.href);
+                                                                    currentUrl.hash = 'invoice';
+                                                                    window.history.replaceState(null, '', currentUrl.toString());
+                                                                }
+
+                                                                router.post(
+                                                                    `/projects/${project.id}/invoice/issue`,
+                                                                    {},
                                                                     {
-                                                                        ...project,
-                                                                        invoiceIssued: true,
-                                                                        invoiceNumber:
-                                                                            invNo,
-                                                                    };
-                                                                setDisplayedProject(
-                                                                    updatedPrj,
-                                                                );
-                                                                onUpdateProject(
-                                                                    updatedPrj,
+                                                                        preserveScroll: true,
+                                                                        preserveState: true,
+                                                                        onSuccess: () => {
+                                                                            if (onTriggerToast) {
+                                                                                onTriggerToast(
+                                                                                    `Invoice resmi proyek ${project.name} berhasil diterbitkan dan piutang tercatat di jurnal akuntansi.`,
+                                                                                    'success',
+                                                                                    'Invoice Diterbitkan',
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                        onError: (errs) => {
+                                                                            const errorMsg = Object.values(errs).flat().join(' ') || 'Gagal menerbitkan invoice.';
+                                                                            if (onTriggerToast) {
+                                                                                onTriggerToast(
+                                                                                    errorMsg,
+                                                                                    'error',
+                                                                                    'Penerbitan Gagal',
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                    },
                                                                 );
                                                             }}
                                                             className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700"
@@ -258,6 +376,29 @@ export default function InvoiceTab({
                                                 ) : (
                                                     /* Case 3: Invoice already issued */
                                                     <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                handleDownloadInvoicePdf()
+                                                            }
+                                                            className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-blue-700"
+                                                        >
+                                                            <svg
+                                                                className="h-4 w-4"
+                                                                fill="none"
+                                                                viewBox="0 0 24 24"
+                                                                stroke="currentColor"
+                                                                strokeWidth={2}
+                                                            >
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                />
+                                                            </svg>
+                                                            Cetak Invoice Utama
+                                                        </button>
+
                                                         {!hasPaidTerm ? (
                                                             <button
                                                                 type="button"
@@ -267,12 +408,10 @@ export default function InvoiceTab({
                                                                 className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 transition-all hover:bg-slate-200"
                                                             >
                                                                 Ubah Skema
-                                                                Penagihan
                                                             </button>
                                                         ) : (
                                                             <span className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-500">
                                                                 Skema Terkunci
-                                                                (Ada Pembayaran)
                                                             </span>
                                                         )}
                                                     </>
@@ -442,10 +581,11 @@ export default function InvoiceTab({
                                                                             </div>
                                                                         </div>
 
+                                                                        {/* Tombol Cetak Invoice Dokumen PDF */}
                                                                         <button
                                                                             type="button"
                                                                             onClick={() =>
-                                                                                triggerInvoicePdf(
+                                                                                handleDownloadInvoicePdf(
                                                                                     term,
                                                                                 )
                                                                             }
@@ -456,9 +596,7 @@ export default function InvoiceTab({
                                                                                 fill="none"
                                                                                 viewBox="0 0 24 24"
                                                                                 stroke="currentColor"
-                                                                                strokeWidth={
-                                                                                    2
-                                                                                }
+                                                                                strokeWidth={2}
                                                                             >
                                                                                 <path
                                                                                     strokeLinecap="round"
@@ -466,63 +604,38 @@ export default function InvoiceTab({
                                                                                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                                                                                 />
                                                                             </svg>
-                                                                            Cetak
-                                                                            PDF
+                                                                            Cetak Invoice
                                                                         </button>
 
-                                                                        {term.status ===
-                                                                        'paid' ? (
+                                                                        {/* Tombol Cetak Kwitansi jika termin sudah lunas */}
+                                                                        {term.status === 'paid' && (
                                                                             <button
                                                                                 type="button"
-                                                                                onClick={() => {
-                                                                                    const updatedTerms =
-                                                                                        project.clientPaymentPlan!.terms.map(
-                                                                                            (
-                                                                                                t,
-                                                                                            ) => {
-                                                                                                if (
-                                                                                                    t.id ===
-                                                                                                    term.id
-                                                                                                ) {
-                                                                                                    return {
-                                                                                                        ...t,
-                                                                                                        status: 'unpaid' as PaymentTermStatus,
-                                                                                                        paidAmount:
-                                                                                                            undefined,
-                                                                                                        paidAt: undefined,
-                                                                                                        paymentMethod:
-                                                                                                            undefined,
-                                                                                                        paymentRef:
-                                                                                                            undefined,
-                                                                                                    };
-                                                                                                }
-                                                                                                return t;
-                                                                                            },
-                                                                                        );
-                                                                                    const updatedPlan =
-                                                                                        {
-                                                                                            ...project.clientPaymentPlan!,
-                                                                                            terms: updatedTerms,
-                                                                                        };
-                                                                                    const updatedPrj =
-                                                                                        {
-                                                                                            ...project,
-                                                                                            clientPaymentPlan:
-                                                                                                updatedPlan,
-                                                                                        };
-                                                                                    setDisplayedProject(
-                                                                                        updatedPrj,
-                                                                                    );
-                                                                                    onUpdateProject(
-                                                                                        updatedPrj,
-                                                                                    );
-                                                                                }}
-                                                                                className="cursor-pointer rounded-xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-600 transition-all hover:bg-slate-200"
+                                                                                onClick={() =>
+                                                                                    handleDownloadKwitansiPdf(
+                                                                                        term,
+                                                                                    )
+                                                                                }
+                                                                                className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 transition-all hover:bg-emerald-100"
                                                                             >
-                                                                                Batal
-                                                                                Lunas
+                                                                                <svg
+                                                                                    className="h-3.5 w-3.5 text-emerald-600"
+                                                                                    fill="none"
+                                                                                    viewBox="0 0 24 24"
+                                                                                    stroke="currentColor"
+                                                                                    strokeWidth={2}
+                                                                                >
+                                                                                    <path
+                                                                                        strokeLinecap="round"
+                                                                                        strokeLinejoin="round"
+                                                                                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                                                    />
+                                                                                </svg>
+                                                                                Cetak Kwitansi
                                                                             </button>
-                                                                        ) : (
+                                                                        )}
+
+                                                                        {term.status !== 'paid' && (
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => {
@@ -549,15 +662,16 @@ export default function InvoiceTab({
                                                                                                 existingPaid,
                                                                                         );
 
-                                                                                    onOpenPaymentModal(term, remTarget >
-                                                                                            0
+                                                                                    onOpenPaymentModal(
+                                                                                        term,
+                                                                                        remTarget > 0
                                                                                             ? remTarget
-                                                                                            : targetAmt,);
+                                                                                            : targetAmt,
+                                                                                    );
                                                                                 }}
                                                                                 className="shadow-2xs cursor-pointer rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100"
                                                                             >
-                                                                                Terima
-                                                                                Pembayaran
+                                                                                Terima Pembayaran
                                                                             </button>
                                                                         )}
                                                                     </div>
@@ -730,18 +844,43 @@ export default function InvoiceTab({
                                                                                 </div>
                                                                             </div>
 
-                                                                            <div className="flex-shrink-0 text-right">
-                                                                                <div className="font-mono text-xs font-black text-emerald-700">
-                                                                                    +{' '}
-                                                                                    {fmt(
-                                                                                        paidAmtWithPpn,
-                                                                                    )}
+                                                                            <div className="flex flex-shrink-0 items-center gap-3">
+                                                                                <div className="text-right">
+                                                                                    <div className="font-mono text-xs font-black text-emerald-700">
+                                                                                        +{' '}
+                                                                                        {fmt(
+                                                                                            paidAmtWithPpn,
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="text-[9px] font-medium text-slate-400">
+                                                                                        Dana Masuk Diterima
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div className="text-[9px] font-medium text-slate-400">
-                                                                                    Dana
-                                                                                    Masuk
-                                                                                    Diterima
-                                                                                </div>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() =>
+                                                                                        handleDownloadKwitansiPdf(
+                                                                                            term,
+                                                                                        )
+                                                                                    }
+                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 transition-all hover:bg-emerald-100"
+                                                                                    title="Cetak Kwitansi Pembayaran Resmi"
+                                                                                >
+                                                                                    <svg
+                                                                                        className="h-3.5 w-3.5 text-emerald-600"
+                                                                                        fill="none"
+                                                                                        viewBox="0 0 24 24"
+                                                                                        stroke="currentColor"
+                                                                                        strokeWidth={2}
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    Kwitansi
+                                                                                </button>
                                                                             </div>
                                                                         </div>
                                                                     );

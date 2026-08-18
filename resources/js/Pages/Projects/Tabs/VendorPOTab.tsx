@@ -17,6 +17,7 @@ export default function VendorPOTab({
     projectId,
     purchaseOrders,
     cashBankAccounts = [],
+    onTriggerToast,
     onIssuePO,
     onIssueBulkPO,
     onUpdateProject,
@@ -32,6 +33,7 @@ export default function VendorPOTab({
         name: string;
         display_name: string;
     }>;
+    onTriggerToast?: (message: string, type?: 'success' | 'error' | 'warning' | 'info', title?: string) => void;
     onIssuePO: (
         locId: string | number,
         poNumber: string,
@@ -69,6 +71,7 @@ export default function VendorPOTab({
 
     // Vendor Payment Modal State
     const [selectedVendorForPay, setSelectedVendorForPay] = useState<{
+        vendorId?: string | number;
         vendorName: string;
         poNumber: string;
         poId?: string | number;
@@ -388,31 +391,101 @@ export default function VendorPOTab({
         });
     }, [groupedVendorPOs, poFilterScheme]);
 
+    // Hitung agregat finansial seluruh vendor
+    const totalVendorPaidAll = useMemo(() => {
+        return purchaseOrders.reduce((sum, po) => {
+            const planTerms = po.payment_plan?.terms || [];
+            if (planTerms.length > 0) {
+                return sum + planTerms.reduce((tSum, t) => tSum + (t.totalPaid || 0), 0);
+            }
+            return sum;
+        }, 0);
+    }, [purchaseOrders]);
+
+    const totalRemainingAll = Math.max(0, Math.round(totalPO - totalVendorPaidAll));
+
     return (
-        <div className="space-y-5">
-            <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-2xl border border-slate-200/80 bg-slate-50 p-4">
-                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Total Lokasi
+        <div className="space-y-6">
+            {/* Top Metric Cards */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+                    <div className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Total Titik & PO
                     </div>
-                    <div className="text-lg font-bold text-slate-800">
-                        {locations.length} titik
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-slate-900">
+                            {issuedCount}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-400">
+                            / {locations.length} titik PO terbit
+                        </span>
+                    </div>
+                    <div className="mt-2 text-[11px] text-slate-500">
+                        {locations.length - issuedCount > 0 ? (
+                            <span className="font-semibold text-amber-600">
+                                Sisa {locations.length - issuedCount} titik belum terbit PO
+                            </span>
+                        ) : (
+                            <span className="font-semibold text-emerald-600">
+                                Seluruh titik sudah terbit PO
+                            </span>
+                        )}
                     </div>
                 </div>
-                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50 p-4">
-                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                        PO Sudah Terbit
+
+                <div className="rounded-2xl border border-blue-200/80 bg-blue-50/50 p-4 shadow-2xs">
+                    <div className="mb-1 text-xs font-bold uppercase tracking-wider text-blue-700">
+                        Target Total PO {isPPN ? '(Inc PPN 11%)' : ''}
                     </div>
-                    <div className="text-lg font-bold text-emerald-700">
-                        {issuedCount} titik
-                    </div>
-                </div>
-                <div className="rounded-2xl border border-amber-200/80 bg-amber-50 p-4">
-                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-amber-600">
-                        {isPPN ? 'Total All PO (DPP+PPN)' : 'Total All PO'}
-                    </div>
-                    <div className="font-mono text-sm font-bold text-amber-700">
+                    <div className="font-mono text-2xl font-black text-blue-900">
                         {fmt(totalPO)}
+                    </div>
+                    <div className="mt-1 text-[11px] text-blue-600/80">
+                        {isPPN ? (
+                            <span>
+                                DPP: <strong className="font-mono font-semibold text-blue-900">{fmt(totalVendorDPP)}</strong> | PPN: <strong className="font-mono font-semibold text-violet-700">{fmt(totalVendorDPP * 0.11)}</strong>
+                            </span>
+                        ) : (
+                            <span>Biaya keseluruhan pengadaan vendor</span>
+                        )}
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-4 shadow-2xs">
+                    <div className="mb-1 text-xs font-bold uppercase tracking-wider text-emerald-700">
+                        Realisasi Dibayar
+                    </div>
+                    <div className="font-mono text-2xl font-black text-emerald-900">
+                        {fmt(totalVendorPaidAll)}
+                    </div>
+                    <div className="mt-1 text-[11px] text-emerald-600/80">
+                        {totalPO > 0 ? (
+                            <span>
+                                Progres:{' '}
+                                <strong className="font-bold text-emerald-800">
+                                    {Math.min(100, Math.round((totalVendorPaidAll / totalPO) * 100))}%
+                                </strong>{' '}
+                                dari target PO
+                            </span>
+                        ) : (
+                            <span>Belum ada realisasi pembayaran</span>
+                        )}
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-rose-200/80 bg-rose-50/50 p-4 shadow-2xs">
+                    <div className="mb-1 text-xs font-bold uppercase tracking-wider text-rose-700">
+                        Sisa Hutang Vendor
+                    </div>
+                    <div className="font-mono text-2xl font-black text-rose-900">
+                        {fmt(totalRemainingAll)}
+                    </div>
+                    <div className="mt-1 text-[11px] text-rose-600/80">
+                        <span>
+                            {totalRemainingAll === 0 && totalPO > 0
+                                ? 'Hutang seluruh PO lunas'
+                                : 'Kewajiban bayar yang belum lunas'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -776,32 +849,24 @@ export default function VendorPOTab({
                                                                       term.id,
                                                               ),
                                                           );
+                                                      const targetAmount = Math.round(term.amount);
+                                                      const paidAmount = Math.round(term.totalPaid);
+                                                      const isTermPaid = term.isPaid || (targetAmount > 0 && paidAmount >= targetAmount);
+                                                      const remainingAmount = isTermPaid ? 0 : Math.max(0, Math.round(term.remaining));
+                                                      const isPartial = !isTermPaid && paidAmount > 0;
+
                                                       return {
                                                           id: term.id,
                                                           label: term.label,
                                                           percent: term.percent,
-                                                          targetAmount:
-                                                              Math.round(
-                                                                  term.amount,
-                                                              ),
-                                                          paidAmount:
-                                                              Math.round(
-                                                                  term.totalPaid,
-                                                              ),
-                                                          remainingAmount:
-                                                              Math.round(
-                                                                  term.remaining,
-                                                              ),
-                                                          dueDate:
-                                                              term.due_date,
-                                                          isPaid: term.isPaid,
-                                                          isPartial:
-                                                              term.totalPaid >
-                                                                  0 &&
-                                                              !term.isPaid,
+                                                          targetAmount,
+                                                          paidAmount,
+                                                          remainingAmount,
+                                                          dueDate: term.due_date,
+                                                          isPaid: isTermPaid,
+                                                          isPartial,
                                                           poId: parentPo?.id,
-                                                          poNumber:
-                                                              parentPo?.po_number,
+                                                          poNumber: parentPo?.po_number,
                                                       };
                                                   })
                                                 : (() => {
@@ -927,120 +992,34 @@ export default function VendorPOTab({
                                                           },
                                                       );
                                                   })();
-
-                                            if (vendorIssuedCount === 0)
-                                                return null;
-
-                                            return (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const firstUnpaid =
-                                                            vendorSchedule.find(
-                                                                (t) =>
-                                                                    !t.isPaid,
-                                                            );
-                                                        setSelectedVendorForPay(
-                                                            {
-                                                                vendorName:
-                                                                    group.vendorName,
-                                                                poNumber:
-                                                                    firstUnpaid?.poNumber ||
-                                                                    firstPoNum,
-                                                                poId:
-                                                                    firstUnpaid?.poId ||
-                                                                    vendorPo?.id,
-                                                                totalAmount:
-                                                                    Math.round(
-                                                                        vendorGrandTotal,
-                                                                    ),
-                                                                remainingAmount:
-                                                                    Math.round(
-                                                                        vendorRemaining,
-                                                                    ),
-                                                                schedule:
-                                                                    vendorSchedule,
-                                                                selectedTermId:
-                                                                    firstUnpaid?.id,
-                                                            },
-                                                        );
-                                                        setVPayType(
-                                                            firstUnpaid
-                                                                ? 'partial'
-                                                                : 'full',
-                                                        );
-                                                        setVPayAmountInput(
-                                                            firstUnpaid
-                                                                ? firstUnpaid.remainingAmount
-                                                                : vendorRemaining >
-                                                                    0
-                                                                  ? Math.round(
-                                                                        vendorRemaining,
-                                                                    )
-                                                                  : Math.round(
-                                                                        vendorGrandTotal,
-                                                                    ),
-                                                        );
-                                                        setVPayDateInput(
-                                                            new Date()
-                                                                .toISOString()
-                                                                .split('T')[0],
-                                                        );
-                                                        setVPayMethodInput(
-                                                            'Transfer Bank BCA',
-                                                        );
-                                                        setVPayRefInput('');
-                                                        setVPayNotesInput(
-                                                            firstUnpaid
-                                                                ? `Pembayaran ${firstUnpaid.label} PO ${firstUnpaid.poNumber || firstPoNum}`
-                                                                : `Pelunasan PO ${firstPoNum}`,
-                                                        );
-                                                    }}
-                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-emerald-700"
-                                                >
-                                                    <svg
-                                                        className="h-3.5 w-3.5"
-                                                        fill="none"
-                                                        viewBox="0 0 24 24"
-                                                        stroke="currentColor"
-                                                        strokeWidth={2}
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                                        />
-                                                    </svg>
-                                                    Bayar Vendor
-                                                </button>
-                                            );
+                                            return null;
                                         })()}
 
-                                        {/* Ringkasan Keuangan Vendor */}
-                                        <div className="shadow-2xs flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-mono text-[10px]">
-                                            <div>
-                                                <div className="text-[9px] font-bold uppercase text-slate-400">
-                                                    Target PO
+                                        {/* Ringkasan Keuangan Vendor (Typography & Layout Diperbesar) */}
+                                        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3.5 py-2 shadow-2xs">
+                                            <div className="pr-1">
+                                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                                    Target PO {isPPN ? '(Inc PPN)' : ''}
                                                 </div>
-                                                <div className="font-bold text-slate-800">
+                                                <div className="font-mono text-sm font-black text-slate-900">
                                                     {fmt(vendorGrandTotal)}
                                                 </div>
                                             </div>
-                                            <div className="mx-1 h-5 w-px bg-slate-200" />
-                                            <div>
-                                                <div className="text-[9px] font-bold uppercase text-emerald-600">
+                                            <div className="h-6 w-px bg-slate-200" />
+                                            <div className="px-1">
+                                                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
                                                     Dibayar
                                                 </div>
-                                                <div className="font-bold text-emerald-700">
+                                                <div className="font-mono text-sm font-black text-emerald-700">
                                                     {fmt(totalVendorPaid)}
                                                 </div>
                                             </div>
-                                            <div className="mx-1 h-5 w-px bg-slate-200" />
-                                            <div>
-                                                <div className="text-[9px] font-bold uppercase text-rose-500">
+                                            <div className="h-6 w-px bg-slate-200" />
+                                            <div className="pl-1">
+                                                <div className="text-[10px] font-bold uppercase tracking-wider text-rose-500">
                                                     Sisa Hutang
                                                 </div>
-                                                <div className="font-bold text-rose-600">
+                                                <div className="font-mono text-sm font-black text-rose-600">
                                                     {fmt(vendorRemaining)}
                                                 </div>
                                             </div>
@@ -1493,207 +1472,202 @@ export default function VendorPOTab({
 
                                                 {/* Collapsible Content */}
                                                 {isExpanded && (
-                                                    <div className="animate-in fade-in slide-in-from-top-2 mt-3 space-y-2.5 border-t border-slate-200/80 pt-3 duration-200">
+                                                    <div className="animate-in fade-in slide-in-from-top-2 mt-3 space-y-3.5 border-t border-slate-200/80 pt-3 duration-200">
                                                         <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
                                                             <span>
-                                                                Rincian
-                                                                Pelaksanaan &
-                                                                Jatuh Tempo
-                                                                Pembayaran
-                                                                Vendor
+                                                                Rincian Pelaksanaan & Jatuh Tempo Pembayaran Vendor
                                                             </span>
                                                             <span className="font-bold text-slate-700">
-                                                                {
-                                                                    vendorSchedule.length
-                                                                }{' '}
-                                                                Termin (
-                                                                {vendorGrandTotal >
-                                                                0
-                                                                    ? Math.round(
-                                                                          (totalVendorPaid /
-                                                                              vendorGrandTotal) *
-                                                                              100,
-                                                                      )
+                                                                {vendorSchedule.length} Termin (
+                                                                {vendorGrandTotal > 0
+                                                                    ? Math.round((totalVendorPaid / vendorGrandTotal) * 100)
                                                                     : 0}
                                                                 % Realisasi)
                                                             </span>
                                                         </div>
 
-                                                        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
-                                                            {vendorSchedule.map(
-                                                                (term) => (
-                                                                    <div
-                                                                        key={
-                                                                            term.id
-                                                                        }
-                                                                        className={`flex flex-col justify-between rounded-2xl border p-3 transition-all ${
-                                                                            term.isPaid
-                                                                                ? 'border-emerald-200 bg-emerald-50/60'
-                                                                                : term.isPartial
-                                                                                  ? 'border-blue-200 bg-blue-50/60'
-                                                                                  : 'shadow-2xs border-slate-200 bg-white'
-                                                                        }`}
-                                                                    >
-                                                                        <div className="space-y-1">
-                                                                            <div className="flex items-center justify-between">
-                                                                                <span className="text-xs font-bold text-slate-900">
-                                                                                    {
-                                                                                        term.label
-                                                                                    }
-                                                                                </span>
-                                                                                <span
-                                                                                    className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${
-                                                                                        term.isPaid
-                                                                                            ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
-                                                                                            : term.isPartial
-                                                                                              ? 'border-blue-200 bg-blue-100 text-blue-800'
-                                                                                              : 'border-amber-200 bg-amber-100 text-amber-800'
-                                                                                    }`}
-                                                                                >
-                                                                                    {term.isPaid
-                                                                                        ? 'Lunas'
-                                                                                        : term.isPartial
-                                                                                          ? 'Bayar Parsial'
-                                                                                          : 'Belum Dibayar'}
-                                                                                </span>
+                                                        {(() => {
+                                                            // Kelompokkan jadwal termin per Nomor PO
+                                                            const poGroupsMap = new Map<string, typeof vendorSchedule>();
+                                                            vendorSchedule.forEach((term) => {
+                                                                const poKey = term.poNumber || firstPoNum || 'PO Vendor';
+                                                                if (!poGroupsMap.has(poKey)) {
+                                                                    poGroupsMap.set(poKey, []);
+                                                                }
+                                                                poGroupsMap.get(poKey)!.push(term);
+                                                            });
+
+                                                            const poGroups = Array.from(poGroupsMap.entries());
+
+                                                            return (
+                                                                <div className="space-y-4">
+                                                                    {poGroups.map(([poNumberKey, termsInPo], groupIdx) => (
+                                                                        <div key={poNumberKey} className="space-y-2.5">
+                                                                            {/* Header Pemisah Dokumen PO */}
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-800 shadow-2xs">
+                                                                                    <svg
+                                                                                        className="h-3.5 w-3.5 text-blue-600"
+                                                                                        fill="none"
+                                                                                        viewBox="0 0 24 24"
+                                                                                        stroke="currentColor"
+                                                                                        strokeWidth={2}
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    <span>PO: <span className="font-mono text-blue-700">{poNumberKey}</span></span>
+                                                                                    <span className="text-[10px] font-normal text-slate-400">
+                                                                                        ({termsInPo.length} Termin)
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div className="h-px flex-1 bg-slate-200" />
                                                                             </div>
 
-                                                                            <div className="flex items-center justify-between text-[10px] text-slate-500">
-                                                                                <span>
-                                                                                    Porsi:{' '}
-                                                                                    <strong className="text-slate-700">
-                                                                                        {
-                                                                                            term.percent
-                                                                                        }
+                                                                            {/* Grid Kartu Termin PO ini */}
+                                                                            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
+                                                                                {termsInPo.map((term, termIdx) => {
+                                                                                    // Sequential check: apakah ada termin sebelumnya dalam PO ini yang belum lunas
+                                                                                    const hasUnpaidPriorTerm = termsInPo.slice(0, termIdx).some((priorTerm) => !priorTerm.isPaid && priorTerm.remainingAmount > 0);
+                                                                                    const canPayThisTerm = !term.isPaid && term.remainingAmount > 0 && !hasUnpaidPriorTerm;
 
-                                                                                        %
-                                                                                    </strong>
-                                                                                </span>
-                                                                                <span className="font-mono font-bold text-slate-800">
-                                                                                    {fmt(
-                                                                                        term.targetAmount,
-                                                                                    )}
-                                                                                </span>
-                                                                            </div>
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={term.id}
+                                                                                            className={`flex flex-col justify-between rounded-2xl border p-3 transition-all ${
+                                                                                                term.isPaid
+                                                                                                    ? 'border-emerald-200 bg-emerald-50/60'
+                                                                                                    : hasUnpaidPriorTerm
+                                                                                                      ? 'border-slate-200/60 bg-slate-50/80 opacity-70'
+                                                                                                      : term.isPartial
+                                                                                                        ? 'border-blue-200 bg-blue-50/60'
+                                                                                                        : 'shadow-2xs border-slate-200 bg-white'
+                                                                                            }`}
+                                                                                        >
+                                                                                            <div className="space-y-1">
+                                                                                                <div className="flex items-center justify-between">
+                                                                                                    <span className="text-xs font-bold text-slate-900">
+                                                                                                        {term.label}
+                                                                                                        <span
+                                                                                                            className={`ml-2 rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${
+                                                                                                                term.isPaid
+                                                                                                                    ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                                                                                                                    : hasUnpaidPriorTerm
+                                                                                                                      ? 'border-slate-200 bg-slate-100 text-slate-500'
+                                                                                                                      : term.isPartial
+                                                                                                                        ? 'border-blue-200 bg-blue-100 text-blue-800'
+                                                                                                                        : 'border-amber-200 bg-amber-100 text-amber-800'
+                                                                                                            }`}
+                                                                                                        >
+                                                                                                            {term.isPaid
+                                                                                                                ? 'Lunas'
+                                                                                                                : hasUnpaidPriorTerm
+                                                                                                                  ? 'Terkunci (Termin Lalu Belum Lunas)'
+                                                                                                                  : term.isPartial
+                                                                                                                    ? 'Bayar Parsial'
+                                                                                                                    : 'Belum Dibayar'}
+                                                                                                        </span>
+                                                                                                    </span>
+                                                                                                </div>
 
-                                                                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                                                                                <svg
-                                                                                    className="h-3.5 w-3.5 text-slate-400"
-                                                                                    fill="none"
-                                                                                    viewBox="0 0 24 24"
-                                                                                    stroke="currentColor"
-                                                                                    strokeWidth={
-                                                                                        2
-                                                                                    }
-                                                                                >
-                                                                                    <path
-                                                                                        strokeLinecap="round"
-                                                                                        strokeLinejoin="round"
-                                                                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                                                                    />
-                                                                                </svg>
-                                                                                <span>
-                                                                                    Jatuh
-                                                                                    Tempo:
-                                                                                </span>
-                                                                                <span className="font-mono font-semibold text-slate-700">
-                                                                                    {formatIndoDate(
-                                                                                        term.dueDate,
-                                                                                    )}
-                                                                                </span>
+                                                                                                <div className="flex items-center justify-between text-[10px] text-slate-500">
+                                                                                                    <span>
+                                                                                                        Porsi: <strong className="text-slate-700">{term.percent}%</strong>
+                                                                                                    </span>
+                                                                                                    <span className="font-mono font-bold text-slate-800">
+                                                                                                        {fmt(term.targetAmount)}
+                                                                                                    </span>
+                                                                                                </div>
+
+                                                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                                                                                                    <svg
+                                                                                                        className="h-3.5 w-3.5 text-slate-400"
+                                                                                                        fill="none"
+                                                                                                        viewBox="0 0 24 24"
+                                                                                                        stroke="currentColor"
+                                                                                                        strokeWidth={2}
+                                                                                                    >
+                                                                                                        <path
+                                                                                                            strokeLinecap="round"
+                                                                                                            strokeLinejoin="round"
+                                                                                                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                                                                        />
+                                                                                                    </svg>
+                                                                                                    <span>Jatuh Tempo:</span>
+                                                                                                    <span className="font-mono font-semibold text-slate-700">
+                                                                                                        {formatIndoDate(term.dueDate)}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </div>
+
+                                                                                            <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
+                                                                                                <div className="text-[10px]">
+                                                                                                    {term.isPaid ? (
+                                                                                                        <span className="font-bold text-emerald-700">
+                                                                                                            Lunas ({fmt(term.targetAmount)})
+                                                                                                        </span>
+                                                                                                    ) : (
+                                                                                                        <span className="font-mono font-bold text-rose-600">
+                                                                                                            Sisa: {fmt(term.remainingAmount)}
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                </div>
+
+                                                                                                {canPayThisTerm && (
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => {
+                                                                                                            const currentPoNum = term.poNumber || poNumberKey || firstPoNum;
+                                                                                                            const poGrandTotal = termsInPo.reduce((sum, t) => sum + t.targetAmount, 0);
+                                                                                                            const poRemaining = termsInPo.reduce((sum, t) => sum + (t.isPaid ? 0 : t.remainingAmount), 0);
+
+                                                                                                            setSelectedVendorForPay({
+                                                                                                                vendorId: group.vendorId,
+                                                                                                                vendorName: group.vendorName,
+                                                                                                                poNumber: currentPoNum,
+                                                                                                                poId: term.poId || vendorPo?.id,
+                                                                                                                totalAmount: Math.round(poGrandTotal),
+                                                                                                                remainingAmount: Math.round(poRemaining),
+                                                                                                                schedule: termsInPo,
+                                                                                                                selectedTermId: term.id,
+                                                                                                            });
+                                                                                                            setVPayType(
+                                                                                                                term.remainingAmount >= term.targetAmount
+                                                                                                                    ? 'full'
+                                                                                                                    : 'partial',
+                                                                                                            );
+                                                                                                            setVPayAmountInput(
+                                                                                                                Math.round(term.remainingAmount),
+                                                                                                            );
+                                                                                                            setVPayDateInput(
+                                                                                                                new Date()
+                                                                                                                    .toISOString()
+                                                                                                                    .split('T')[0],
+                                                                                                            );
+                                                                                                            setVPayMethodInput('Transfer Bank BCA');
+                                                                                                            setVPayRefInput('');
+                                                                                                            setVPayNotesInput(
+                                                                                                                `Pembayaran ${term.label} PO ${currentPoNum}`,
+                                                                                                            );
+                                                                                                        }}
+                                                                                                        className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-emerald-700"
+                                                                                                    >
+                                                                                                        Bayar Termin Ini
+                                                                                                    </button>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
                                                                             </div>
                                                                         </div>
-
-                                                                        <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
-                                                                            <div className="text-[10px]">
-                                                                                {term.isPaid ? (
-                                                                                    <span className="font-bold text-emerald-700">
-                                                                                        Lunas
-                                                                                        (
-                                                                                        {fmt(
-                                                                                            term.targetAmount,
-                                                                                        )}
-
-                                                                                        )
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <span className="font-mono font-bold text-rose-600">
-                                                                                        Sisa:{' '}
-                                                                                        {fmt(
-                                                                                            term.remainingAmount,
-                                                                                        )}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-
-                                                                            {!term.isPaid && (
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => {
-                                                                                        setSelectedVendorForPay(
-                                                                                            {
-                                                                                                vendorName:
-                                                                                                    group.vendorName,
-                                                                                                poNumber:
-                                                                                                    term.poNumber ||
-                                                                                                    firstPoNum,
-                                                                                                poId:
-                                                                                                    term.poId ||
-                                                                                                    vendorPo?.id,
-                                                                                                totalAmount:
-                                                                                                    Math.round(
-                                                                                                        vendorGrandTotal,
-                                                                                                    ),
-                                                                                                remainingAmount:
-                                                                                                    Math.round(
-                                                                                                        vendorRemaining,
-                                                                                                    ),
-                                                                                                schedule:
-                                                                                                    vendorSchedule,
-                                                                                                selectedTermId:
-                                                                                                    term.id,
-                                                                                            },
-                                                                                        );
-                                                                                        setVPayType(
-                                                                                            term.remainingAmount >=
-                                                                                                term.targetAmount
-                                                                                                ? 'full'
-                                                                                                : 'partial',
-                                                                                        );
-                                                                                        setVPayAmountInput(
-                                                                                            Math.round(
-                                                                                                term.remainingAmount,
-                                                                                            ),
-                                                                                        );
-                                                                                        setVPayDateInput(
-                                                                                            new Date()
-                                                                                                .toISOString()
-                                                                                                .split(
-                                                                                                    'T',
-                                                                                                )[0],
-                                                                                        );
-                                                                                        setVPayMethodInput(
-                                                                                            'Transfer Bank BCA',
-                                                                                        );
-                                                                                        setVPayRefInput(
-                                                                                            '',
-                                                                                        );
-                                                                                        setVPayNotesInput(
-                                                                                            `Pembayaran ${term.label} PO ${term.poNumber || firstPoNum}`,
-                                                                                        );
-                                                                                    }}
-                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-emerald-700"
-                                                                                >
-                                                                                    Bayar
-                                                                                    Termin
-                                                                                    Ini
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                ),
-                                                            )}
-                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 )}
                                             </div>
@@ -1822,17 +1796,17 @@ export default function VendorPOTab({
 
             {/* Modal Catat Pembayaran Vendor */}
             {selectedVendorForPay && (
-                <div className="backdrop-blur-xs fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4">
-                    <div className="animate-in fade-in zoom-in w-full max-w-lg space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl duration-200">
+                <div className="backdrop-blur-xs fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4 sm:p-6">
+                    <div className="animate-in fade-in zoom-in w-full max-w-4xl space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl duration-200">
+                        {/* Header Modal */}
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
                             <div>
-                                <h3 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-rose-600" />
+                                <h3 className="flex items-center gap-2 text-base font-black text-slate-900">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-primary" />
                                     Catat Pembayaran Keluar (Vendor)
                                 </h3>
                                 <p className="mt-0.5 text-xs text-slate-500">
-                                    {selectedVendorForPay.vendorName} (
-                                    {selectedVendorForPay.poNumber})
+                                    Vendor: <strong className="font-semibold text-slate-700">{selectedVendorForPay.vendorName}</strong> &bull; No. PO: <span className="font-mono font-bold text-blue-600">{selectedVendorForPay.poNumber}</span>
                                 </p>
                             </div>
                             <button
@@ -1844,293 +1818,367 @@ export default function VendorPOTab({
                             </button>
                         </div>
 
-                        {/* Summary Box */}
-                        <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 p-3.5">
+                        {/* Top Summary Bar */}
+                        <div className="grid grid-cols-2 gap-4 rounded-2xl border border-slate-200/80 bg-slate-50 p-3.5 sm:grid-cols-4">
                             <div>
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Total Tagihan PO Vendor
+                                    Total Tagihan PO
                                 </div>
                                 <div className="font-mono text-sm font-black text-slate-900">
                                     {fmt(selectedVendorForPay.totalAmount)}
                                 </div>
                             </div>
-                            <div className="text-right">
+                            <div>
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Sisa Hutang
+                                    Sisa Hutang PO
                                 </div>
-                                <div className="font-mono text-xs font-bold text-rose-600">
+                                <div className="font-mono text-sm font-bold text-rose-600">
                                     {fmt(selectedVendorForPay.remainingAmount)}
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Jadwal Termin & Jatuh Tempo Selector */}
-                        {selectedVendorForPay.schedule &&
-                            selectedVendorForPay.schedule.length > 0 && (
-                                <div className="space-y-2">
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                                        Pilih Termin Pembayaran & Jatuh Tempo
-                                    </label>
-                                    <div className="grid max-h-48 grid-cols-1 gap-2 overflow-y-auto pr-1">
-                                        {selectedVendorForPay.schedule.map(
-                                            (term) => {
-                                                const isSelected =
-                                                    selectedVendorForPay.selectedTermId ===
-                                                    term.id;
-                                                return (
-                                                    <button
-                                                        key={term.id}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setSelectedVendorForPay(
-                                                                {
-                                                                    ...selectedVendorForPay,
-                                                                    selectedTermId:
-                                                                        term.id,
-                                                                    poId:
-                                                                        term.poId ||
-                                                                        selectedVendorForPay.poId,
-                                                                    poNumber:
-                                                                        term.poNumber ||
-                                                                        selectedVendorForPay.poNumber,
-                                                                },
-                                                            );
-                                                            setVPayType(
-                                                                'partial',
-                                                            );
-                                                            setVPayAmountInput(
-                                                                term.remainingAmount >
-                                                                    0
-                                                                    ? Math.round(
-                                                                          term.remainingAmount,
-                                                                      )
-                                                                    : Math.round(
-                                                                          term.targetAmount,
-                                                                      ),
-                                                            );
-                                                            setVPayNotesInput(
-                                                                `Pembayaran ${term.label} PO ${term.poNumber || selectedVendorForPay.poNumber}`,
-                                                            );
-                                                        }}
-                                                        className={`flex cursor-pointer items-center justify-between rounded-2xl border p-3 text-left transition-all ${
-                                                            isSelected
-                                                                ? 'border-rose-600 bg-rose-50 font-bold text-rose-900 ring-2 ring-rose-600/20'
-                                                                : term.isPaid
-                                                                  ? 'border-slate-200 bg-slate-100 text-slate-400 opacity-60'
-                                                                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                                                        }`}
-                                                    >
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center gap-2 text-xs font-bold">
-                                                                {term.poNumber && (
-                                                                    <span className="rounded bg-slate-200/80 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-slate-700">
-                                                                        {
-                                                                            term.poNumber
-                                                                        }
-                                                                    </span>
-                                                                )}
-                                                                <span>
-                                                                    {term.label}{' '}
-                                                                    (
-                                                                    {
-                                                                        term.percent
-                                                                    }
-                                                                    %)
-                                                                </span>
-                                                                {term.isPaid && (
-                                                                    <span className="py-0.2 rounded bg-emerald-100 px-1.5 text-[9px] font-bold text-emerald-800">
-                                                                        Lunas
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div className="mt-0.5 text-[10px] text-slate-500">
-                                                                Jatuh Tempo:{' '}
-                                                                <strong className="font-mono text-slate-700">
-                                                                    {formatIndoDate(
-                                                                        term.dueDate,
-                                                                    )}
-                                                                </strong>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="font-mono text-xs font-bold text-slate-900">
-                                                                {fmt(
-                                                                    term.targetAmount,
-                                                                )}
-                                                            </div>
-                                                            <div className="font-mono text-[10px] font-semibold text-rose-600">
-                                                                {term.isPaid
-                                                                    ? 'Rp 0'
-                                                                    : `Sisa: ${fmt(term.remainingAmount)}`}
-                                                            </div>
-                                                        </div>
-                                                    </button>
-                                                );
-                                            },
-                                        )}
-                                    </div>
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Status Pelunasan
                                 </div>
-                            )}
-
-                        {/* Opsi Jenis Pembayaran: Full vs Partial */}
-                        <div className="space-y-2">
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                                Opsi Nominal Pembayaran
-                            </label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setVPayType('full');
-                                        setVPayAmountInput(
-                                            selectedVendorForPay.remainingAmount >
-                                                0
-                                                ? selectedVendorForPay.remainingAmount
-                                                : selectedVendorForPay.totalAmount,
-                                        );
-                                        setVPayNotesInput(
-                                            `Pelunasan Total PO ${selectedVendorForPay.poNumber}`,
-                                        );
-                                    }}
-                                    className={`cursor-pointer rounded-2xl border p-3 text-left transition-all ${
-                                        vPayType === 'full'
-                                            ? 'border-rose-600 bg-rose-50 font-bold text-rose-900 ring-2 ring-rose-600/20'
-                                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                                    }`}
-                                >
-                                    <div className="text-xs font-bold">
-                                        Pelunasan Total
-                                    </div>
-                                    <div className="mt-0.5 text-[10px] text-slate-500">
-                                        Sisa sisa tagihan PO
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setVPayType('partial');
-                                    }}
-                                    className={`cursor-pointer rounded-2xl border p-3 text-left transition-all ${
-                                        vPayType === 'partial'
-                                            ? 'border-blue-600 bg-blue-50 font-bold text-blue-900 ring-2 ring-blue-600/20'
-                                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                                    }`}
-                                >
-                                    <div className="text-xs font-bold">
-                                        Cicil / Nominal Termin
-                                    </div>
-                                    <div className="mt-0.5 text-[10px] font-normal text-slate-500">
-                                        Sebagian nominal
-                                    </div>
-                                </button>
+                                <div className="mt-0.5">
+                                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold ${selectedVendorForPay.remainingAmount <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                        {selectedVendorForPay.remainingAmount <= 0 ? '✓ Lunas' : 'Belum Lunas'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Total Termin
+                                </div>
+                                <div className="font-mono text-sm font-bold text-slate-800">
+                                    {selectedVendorForPay.schedule?.length || 0} Termin
+                                </div>
                             </div>
                         </div>
 
-                        {/* Nominal Input */}
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-slate-700">
-                                Nominal Dibayar (Rp)
-                            </label>
-                            <input
-                                type="number"
-                                value={vPayAmountInput || ''}
-                                readOnly={vPayType === 'full'}
-                                onChange={(e) =>
-                                    setVPayAmountInput(
-                                        parseFloat(e.target.value) || 0,
-                                    )
-                                }
-                                placeholder="Masukkan nominal pembayaran..."
-                                className={`w-full rounded-xl border px-3.5 py-2.5 font-mono text-sm font-bold focus:outline-none ${
-                                    vPayType === 'full'
-                                        ? 'border-slate-300 bg-slate-100 text-slate-700'
-                                        : 'border-blue-400 bg-white text-blue-950 focus:border-blue-600'
-                                }`}
-                            />
-                        </div>
+                        {/* 2-Column Body Layout */}
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
+                            {/* Left Column: List Termin Selector (5 Cols) */}
+                            <div className="space-y-2.5 md:col-span-5 md:border-r md:border-slate-100 md:pr-6">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                        Pilih Termin Pembayaran
+                                    </label>
+                                    <span className="text-[10px] text-slate-400">
+                                        Pilih salah satu
+                                    </span>
+                                </div>
 
-                        {/* Tanggal Pembayaran & Metode Pembayaran */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                                <label className="block text-xs font-bold text-slate-700">
-                                    Tanggal Bayar
-                                </label>
-                                <div className="relative flex items-center">
-                                    <div className="shadow-2xs flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs font-semibold text-slate-800 hover:border-blue-600">
-                                        <span>
-                                            {formatIndoDate(vPayDateInput)}
-                                        </span>
-                                        <svg
-                                            className="h-3.5 w-3.5 text-slate-400"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                            strokeWidth={2}
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                            />
-                                        </svg>
+                                {selectedVendorForPay.schedule && selectedVendorForPay.schedule.length > 0 ? (
+                                    <div className="grid max-h-[340px] grid-cols-1 gap-2.5 overflow-y-auto pr-1">
+                                        {selectedVendorForPay.schedule.map((term, termIdx) => {
+                                            const isSelected = selectedVendorForPay.selectedTermId === term.id;
+                                            const isTermPaid = term.isPaid || term.remainingAmount <= 0;
+                                            
+                                            // Cek apakah ada termin sebelum ini dalam PO yang sama yang belum lunas
+                                            const hasUnpaidPriorTerm = selectedVendorForPay.schedule
+                                                .slice(0, termIdx)
+                                                .filter(t => !t.poNumber || !term.poNumber || t.poNumber === term.poNumber)
+                                                .some(priorTerm => !priorTerm.isPaid && priorTerm.remainingAmount > 0);
+
+                                            const isTermLocked = isTermPaid || hasUnpaidPriorTerm;
+
+                                            return (
+                                                <button
+                                                    key={term.id}
+                                                    type="button"
+                                                    disabled={isTermLocked}
+                                                    onClick={() => {
+                                                        if (isTermLocked) return;
+                                                        setSelectedVendorForPay({
+                                                            ...selectedVendorForPay,
+                                                            selectedTermId: term.id,
+                                                            poId: term.poId || selectedVendorForPay.poId,
+                                                            poNumber: term.poNumber || selectedVendorForPay.poNumber,
+                                                        });
+                                                        setVPayType('partial');
+                                                        setVPayAmountInput(
+                                                            term.remainingAmount > 0
+                                                                ? Math.round(term.remainingAmount)
+                                                                : Math.round(term.targetAmount),
+                                                        );
+                                                        setVPayNotesInput(
+                                                            `Pembayaran ${term.label} PO ${term.poNumber || selectedVendorForPay.poNumber}`,
+                                                        );
+                                                    }}
+                                                    className={`group relative flex flex-col justify-between rounded-2xl border p-3 text-left transition-all ${
+                                                        isTermPaid
+                                                            ? 'cursor-not-allowed border-emerald-100 bg-emerald-50/40 opacity-75'
+                                                            : hasUnpaidPriorTerm
+                                                              ? 'cursor-not-allowed border-slate-200/60 bg-slate-100/70 opacity-60'
+                                                              : isSelected
+                                                                ? 'cursor-pointer border-primary bg-primary/10 font-bold text-primary ring-2 ring-primary/20 shadow-xs'
+                                                                : 'cursor-pointer border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-xs font-bold text-slate-900">
+                                                                    {term.label}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-400">
+                                                                    ({term.percent}%)
+                                                                </span>
+                                                            </div>
+                                                            {term.poNumber && (
+                                                                <div className="mt-1">
+                                                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-slate-600">
+                                                                        {term.poNumber}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="flex-shrink-0">
+                                                            {isTermPaid ? (
+                                                                <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
+                                                                    ✓ Lunas
+                                                                </span>
+                                                            ) : hasUnpaidPriorTerm ? (
+                                                                <span className="inline-flex items-center rounded-md bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
+                                                                    Terkunci
+                                                                </span>
+                                                            ) : (
+                                                                <span className="font-mono text-xs font-black text-rose-600">
+                                                                    {fmt(term.remainingAmount)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-2.5 flex items-center justify-between border-t border-slate-100/80 pt-2 text-[10px] text-slate-500">
+                                                        <span>Target: <strong className="font-mono font-semibold text-slate-700">{fmt(term.targetAmount)}</strong></span>
+                                                        <span>Jatuh Tempo: <strong className="font-mono text-slate-700">{formatIndoDate(term.dueDate)}</strong></span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                    <input
-                                        type="date"
-                                        value={vPayDateInput}
-                                        onChange={(e) =>
-                                            setVPayDateInput(e.target.value)
+                                ) : (
+                                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+                                        Tidak ada jadwal termin terdaftar.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right Column: Payment Form Inputs (7 Cols) */}
+                            <div className="space-y-4 md:col-span-7">
+                                {/* Opsi Jenis Pembayaran */}
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                                        Opsi Nominal Pembayaran
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {/* Opsi 1: Pelunasan Penuh Termin Terpilih */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const currentTerm = selectedVendorForPay.schedule.find(
+                                                    (t) => t.id === selectedVendorForPay.selectedTermId,
+                                                ) || selectedVendorForPay.schedule.find((t) => !t.isPaid);
+
+                                                const fullTermAmount = currentTerm
+                                                    ? currentTerm.remainingAmount > 0
+                                                        ? currentTerm.remainingAmount
+                                                        : currentTerm.targetAmount
+                                                    : selectedVendorForPay.remainingAmount;
+
+                                                setVPayType('full');
+                                                setVPayAmountInput(Math.round(fullTermAmount));
+                                                setVPayNotesInput(
+                                                    `Pelunasan ${currentTerm?.label || 'Termin'} PO ${selectedVendorForPay.poNumber}`,
+                                                );
+                                            }}
+                                            className={`cursor-pointer rounded-2xl border p-2.5 text-left transition-all ${
+                                                vPayType === 'full'
+                                                    ? 'border-primary bg-primary/10 font-bold text-primary ring-2 ring-primary/20'
+                                                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            <div className="text-xs font-bold">
+                                                Pelunasan Penuh Termin
+                                            </div>
+                                            <div className="mt-0.5 text-[10px] text-slate-500">
+                                                Sesuai target/sisa termin ini
+                                            </div>
+                                        </button>
+
+                                        {/* Opsi 2: Cicil / Parsial Termin Terpilih */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setVPayType('partial');
+                                            }}
+                                            className={`cursor-pointer rounded-2xl border p-2.5 text-left transition-all ${
+                                                vPayType === 'partial'
+                                                    ? 'border-primary bg-primary/10 font-bold text-primary ring-2 ring-primary/20'
+                                                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            <div className="text-xs font-bold">
+                                                Cicil Sebagian Termin
+                                            </div>
+                                            <div className="mt-0.5 text-[10px] text-slate-500">
+                                                Nominal bebas / dicicil
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Nominal Input */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-xs font-bold text-slate-700">
+                                            Nominal Dibayar (Rp)
+                                        </label>
+                                        <span className="font-mono text-[11px] font-bold text-primary">
+                                            {fmt(vPayAmountInput)}
+                                        </span>
+                                    </div>
+                                    <div className="relative flex items-center">
+                                        <span className="absolute left-3.5 font-mono text-xs font-bold text-slate-400">
+                                            Rp
+                                        </span>
+                                        <input
+                                            type="text"
+                                            value={
+                                                vPayAmountInput
+                                                    ? new Intl.NumberFormat('id-ID').format(vPayAmountInput)
+                                                    : ''
+                                            }
+                                            readOnly={vPayType === 'full'}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.replace(/\D/g, '');
+                                                const parsed = raw ? parseInt(raw, 10) : 0;
+                                                setVPayAmountInput(parsed);
+                                            }}
+                                            placeholder="0"
+                                            className={`w-full rounded-xl border py-2.5 pr-3.5 pl-10 font-mono text-sm font-bold transition-all focus:outline-none ${
+                                                (() => {
+                                                    const curTerm = selectedVendorForPay.schedule.find(
+                                                        (t) => t.id === selectedVendorForPay.selectedTermId,
+                                                    ) || selectedVendorForPay.schedule.find((t) => !t.isPaid);
+                                                    const maxPayable = curTerm ? curTerm.remainingAmount : selectedVendorForPay.remainingAmount;
+                                                    const isOver = vPayAmountInput > maxPayable && maxPayable > 0;
+                                                    return isOver
+                                                        ? 'border-rose-400 bg-rose-50 text-rose-800 focus:border-rose-500 focus:ring-2 focus:ring-rose-200'
+                                                        : vPayType === 'full'
+                                                          ? 'border-slate-300 bg-slate-100 text-slate-700'
+                                                          : 'border-primary/40 bg-white text-slate-900 focus:border-primary focus:ring-2 focus:ring-primary/20';
+                                                })()
+                                            }`}
+                                        />
+                                    </div>
+
+                                    {/* Alert Validasi Kelebihan Bayar */}
+                                    {(() => {
+                                        const curTerm = selectedVendorForPay.schedule.find(
+                                            (t) => t.id === selectedVendorForPay.selectedTermId,
+                                        ) || selectedVendorForPay.schedule.find((t) => !t.isPaid);
+                                        const maxPayable = curTerm ? curTerm.remainingAmount : selectedVendorForPay.remainingAmount;
+                                        if (vPayAmountInput > maxPayable && maxPayable > 0) {
+                                            return (
+                                                <div className="flex items-center gap-1.5 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700">
+                                                    <svg className="h-3.5 w-3.5 flex-shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                    </svg>
+                                                    <span>Nominal melebihi sisa tagihan termin ({fmt(maxPayable)}).</span>
+                                                </div>
+                                            );
                                         }
-                                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                        return null;
+                                    })()}
+                                </div>
+
+                                {/* Tanggal Pembayaran & Metode Pembayaran */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label className="block text-xs font-bold text-slate-700">
+                                            Tanggal Bayar
+                                        </label>
+                                        <div className="relative flex items-center">
+                                            <div className="shadow-2xs flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs font-semibold text-slate-800 transition-all hover:border-primary">
+                                                <span>
+                                                    {formatIndoDate(vPayDateInput)}
+                                                </span>
+                                                <svg
+                                                    className="h-3.5 w-3.5 text-slate-400"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                    strokeWidth={2}
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                    />
+                                                </svg>
+                                            </div>
+                                            <input
+                                                type="date"
+                                                value={vPayDateInput}
+                                                onChange={(e) =>
+                                                    setVPayDateInput(e.target.value)
+                                                }
+                                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="block text-xs font-bold text-slate-700">
+                                            Rekening / Sumber Kas
+                                        </label>
+                                        <select
+                                            value={vPayAccountId}
+                                            onChange={(e) =>
+                                                setVPayAccountId(e.target.value)
+                                            }
+                                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                        >
+                                            {cashBankAccounts &&
+                                            cashBankAccounts.length > 0 ? (
+                                                cashBankAccounts.map((acc) => (
+                                                    <option key={acc.id} value={acc.id}>
+                                                        {acc.display_name ||
+                                                            `${acc.code} - ${acc.name}`}
+                                                    </option>
+                                                ))
+                                            ) : (
+                                                <option value="">
+                                                    Transfer Bank BCA (Default)
+                                                </option>
+                                            )}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Ref / Catatan */}
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-slate-700">
+                                        No. Ref / Bukti Transfer (Opsional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={vPayRefInput}
+                                        onChange={(e) =>
+                                            setVPayRefInput(e.target.value)
+                                        }
+                                        placeholder="Contoh: TRX-99234 / BCA ke Vendor"
+                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                                     />
                                 </div>
                             </div>
-
-                            <div className="space-y-1.5">
-                                <label className="block text-xs font-bold text-slate-700">
-                                    Rekening / Sumber Dana Kas
-                                </label>
-                                <select
-                                    value={vPayAccountId}
-                                    onChange={(e) =>
-                                        setVPayAccountId(e.target.value)
-                                    }
-                                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:outline-none"
-                                >
-                                    {cashBankAccounts &&
-                                    cashBankAccounts.length > 0 ? (
-                                        cashBankAccounts.map((acc) => (
-                                            <option key={acc.id} value={acc.id}>
-                                                {acc.display_name ||
-                                                    `${acc.code} - ${acc.name}`}
-                                            </option>
-                                        ))
-                                    ) : (
-                                        <option value="">
-                                            Transfer Bank BCA (Default)
-                                        </option>
-                                    )}
-                                </select>
-                            </div>
                         </div>
 
-                        {/* Ref / Catatan */}
-                        <div className="space-y-1.5">
-                            <label className="block text-xs font-bold text-slate-700">
-                                No. Ref / Bukti Transfer (Opsional)
-                            </label>
-                            <input
-                                type="text"
-                                value={vPayRefInput}
-                                onChange={(e) =>
-                                    setVPayRefInput(e.target.value)
-                                }
-                                placeholder="Contoh: TRX-99234 / BCA ke Vendor"
-                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:border-blue-600 focus:outline-none"
-                            />
-                        </div>
-
-                        {/* Actions */}
+                        {/* Actions Footer */}
                         <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
                             <button
                                 type="button"
@@ -2139,96 +2187,133 @@ export default function VendorPOTab({
                             >
                                 Batal
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const poId = selectedVendorForPay.poId;
-                                    const termId =
-                                        selectedVendorForPay.selectedTermId ||
-                                        selectedVendorForPay.schedule.find(
-                                            (t) => !t.isPaid,
-                                        )?.id;
+                            {(() => {
+                                const curTerm = selectedVendorForPay.schedule.find(
+                                    (t) => t.id === selectedVendorForPay.selectedTermId,
+                                ) || selectedVendorForPay.schedule.find((t) => !t.isPaid);
+                                const maxPayable = curTerm ? curTerm.remainingAmount : selectedVendorForPay.remainingAmount;
+                                const isInvalidAmount = vPayAmountInput <= 0 || (maxPayable > 0 && vPayAmountInput > maxPayable);
 
-                                    const selectedAccount =
-                                        cashBankAccounts.find(
-                                            (a) =>
-                                                String(a.id) ===
-                                                String(vPayAccountId),
-                                        );
-                                    const derivedMethod = selectedAccount
-                                        ? selectedAccount.name
-                                        : 'Transfer Bank BCA';
+                                return (
+                                    <button
+                                        type="button"
+                                        disabled={isInvalidAmount}
+                                        onClick={() => {
+                                            if (isInvalidAmount) return;
+                                            const poId = selectedVendorForPay.poId;
+                                            const termId =
+                                                selectedVendorForPay.selectedTermId ||
+                                                selectedVendorForPay.schedule.find(
+                                                    (t) => !t.isPaid,
+                                                )?.id;
 
-                                    // Jika termin dan PO terdaftar di database, kirim via endpoint backend
-                                    if (
-                                        poId &&
-                                        termId &&
-                                        !termId.startsWith('vterm-')
-                                    ) {
-                                        router.post(
-                                            `/projects/${projectId}/purchase-orders/${poId}/payment-terms/${termId}/settle`,
-                                            {
+                                            const selectedAccount =
+                                                cashBankAccounts.find(
+                                                    (a) =>
+                                                        String(a.id) ===
+                                                        String(vPayAccountId),
+                                                );
+                                            const derivedMethod = selectedAccount
+                                                ? selectedAccount.name
+                                                : 'Transfer Bank BCA';
+
+                                            // Jika termin dan PO terdaftar di database, kirim via endpoint backend
+                                            if (
+                                                poId &&
+                                                termId &&
+                                                !termId.startsWith('vterm-')
+                                            ) {
+                                                // Pastikan hash atau URL tetap di tab vendors
+                                                if (typeof window !== 'undefined') {
+                                                    const currentUrl = new URL(window.location.href);
+                                                    currentUrl.hash = 'vendors';
+                                                    window.history.replaceState(null, '', currentUrl.toString());
+                                                }
+
+                                                router.post(
+                                                    `/projects/${projectId}/purchase-orders/${poId}/payment-terms/${termId}/settle`,
+                                                    {
+                                                        amount: vPayAmountInput,
+                                                        paid_at:
+                                                            vPayDateInput ||
+                                                            new Date()
+                                                                .toISOString()
+                                                                .split('T')[0],
+                                                        payment_method: derivedMethod,
+                                                        account_id:
+                                                            vPayAccountId ||
+                                                            (cashBankAccounts[0]?.id
+                                                                ? String(
+                                                                      cashBankAccounts[0]
+                                                                          .id,
+                                                                  )
+                                                                : null),
+                                                        payment_ref:
+                                                            vPayRefInput || null,
+                                                        notes: vPayNotesInput || null,
+                                                    },
+                                                    {
+                                                        preserveScroll: true,
+                                                        preserveState: true,
+                                                        onSuccess: () => {
+                                                            setSelectedVendorForPay(
+                                                                null,
+                                                            );
+                                                            if (onTriggerToast) {
+                                                                onTriggerToast(
+                                                                    `Pembayaran vendor ${selectedVendorForPay.vendorName} (${selectedVendorForPay.poNumber}) sebesar ${fmt(vPayAmountInput)} berhasil dicatat.`,
+                                                                    'success',
+                                                                    'Pembayaran Berhasil',
+                                                                );
+                                                            }
+                                                            if (selectedVendorForPay.vendorId) {
+                                                                const vId = selectedVendorForPay.vendorId;
+                                                                setExpandedVendorTop(prev => ({
+                                                                    ...prev,
+                                                                    [vId]: true,
+                                                                }));
+                                                            }
+                                                        },
+                                                    },
+                                                );
+                                                return;
+                                            }
+
+                                            // Fallback simpan lokal jika belum ada DB record
+                                            const newRecord: VendorPaymentRecord = {
+                                                id: `vpay-${Date.now()}`,
+                                                poNumber: selectedVendorForPay.poNumber,
+                                                vendorName:
+                                                    selectedVendorForPay.vendorName,
                                                 amount: vPayAmountInput,
-                                                paid_at:
+                                                paidAt:
                                                     vPayDateInput ||
-                                                    new Date()
-                                                        .toISOString()
-                                                        .split('T')[0],
-                                                payment_method: derivedMethod,
-                                                account_id:
-                                                    vPayAccountId ||
-                                                    (cashBankAccounts[0]?.id
-                                                        ? String(
-                                                              cashBankAccounts[0]
-                                                                  .id,
-                                                          )
-                                                        : null),
-                                                payment_ref:
-                                                    vPayRefInput || null,
-                                                notes: vPayNotesInput || null,
-                                            },
-                                            {
-                                                preserveScroll: true,
-                                                onSuccess: () => {
-                                                    setSelectedVendorForPay(
-                                                        null,
-                                                    );
-                                                    router.reload();
-                                                },
-                                            },
-                                        );
-                                        return;
-                                    }
+                                                    new Date().toISOString(),
+                                                paymentMethod: derivedMethod,
+                                                paymentRef: vPayRefInput || undefined,
+                                                notes: vPayNotesInput || undefined,
+                                            };
 
-                                    // Fallback simpan lokal jika belum ada DB record
-                                    const newRecord: VendorPaymentRecord = {
-                                        id: `vpay-${Date.now()}`,
-                                        poNumber: selectedVendorForPay.poNumber,
-                                        vendorName:
-                                            selectedVendorForPay.vendorName,
-                                        amount: vPayAmountInput,
-                                        paidAt:
-                                            vPayDateInput ||
-                                            new Date().toISOString(),
-                                        paymentMethod: derivedMethod,
-                                        paymentRef: vPayRefInput || undefined,
-                                        notes: vPayNotesInput || undefined,
-                                    };
-
-                                    const updatedVendorPayments = [
-                                        ...(project.vendorPayments || []),
-                                        newRecord,
-                                    ];
-                                    onUpdateProject({
-                                        ...project,
-                                        vendorPayments: updatedVendorPayments,
-                                    });
-                                    setSelectedVendorForPay(null);
-                                }}
-                                className="cursor-pointer rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-rose-700"
-                            >
-                                Simpan Pembayaran Vendor
-                            </button>
+                                            const updatedVendorPayments = [
+                                                ...(project.vendorPayments || []),
+                                                newRecord,
+                                            ];
+                                            onUpdateProject({
+                                                ...project,
+                                                vendorPayments: updatedVendorPayments,
+                                            });
+                                            setSelectedVendorForPay(null);
+                                        }}
+                                        className={`shadow-xs rounded-xl px-5 py-2.5 text-xs font-bold transition-all ${
+                                            isInvalidAmount
+                                                ? 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-60'
+                                                : 'cursor-pointer bg-primary text-white shadow-neon-primary hover:bg-primary/90'
+                                        }`}
+                                    >
+                                        Simpan Pembayaran Vendor
+                                    </button>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

@@ -194,10 +194,13 @@ export interface Project {
     name: string;
     clientId: string;
     clientName: string;
+    salesId?: string;
     salesPIC: string;
+    salesCommissionRate?: number;
     period: string;
     startDate?: string;
     endDate?: string;
+    createdAt?: string;
     contractValue: number;
     status: 'Draft' | 'Active' | 'Completed' | 'Cancelled';
     locations: BillboardLocation[];
@@ -209,6 +212,9 @@ export interface Project {
     vendorPayments?: VendorPaymentRecord[];
     /** Purchase orders dari backend — populated di Show.tsx dari dbProject.purchase_orders */
     purchaseOrders?: PurchaseOrderWithPlan[];
+    /** Indikator apakah proyek sudah memiliki pembayaran riil (PO settlements atau Invoice payments) */
+    hasPayments?: boolean;
+    totalPaid?: number;
 }
 
 export type ActiveTab = 'info' | 'locations' | 'vendors' | 'invoice';
@@ -242,14 +248,35 @@ export function calcFinancials(
     const ppnKeluaran = isPPN ? dpp * PPN_RATE : 0;
     const totalInvoice = dpp + ppnKeluaran;
 
-    const totalDppVendor = locations.reduce(
+    const rawVendorSum = locations.reduce(
         (s, l) => s + l.vendorCost * (l.qty || 1),
         0,
     );
-    const ppnMasukan = isPPN ? totalDppVendor * PPN_RATE : 0;
-    const totalPO = totalDppVendor + ppnMasukan;
 
-    const netProfit = dpp - totalDppVendor;
+    // In PPN Mode, check if purchaseOrders exist or treat vendorCost as DPP
+    let totalDppVendor = rawVendorSum;
+    let totalPO = isPPN ? rawVendorSum * (1 + PPN_RATE) : rawVendorSum;
+    let ppnMasukan = isPPN ? rawVendorSum * PPN_RATE : 0;
+
+    if (project.purchaseOrders && project.purchaseOrders.length > 0) {
+        const poSum = project.purchaseOrders.reduce((s, po) => s + (Number(po.total) || 0), 0);
+        if (poSum > 0) {
+            totalPO = poSum;
+            totalDppVendor = isPPN ? Math.round(poSum / (1 + PPN_RATE)) : poSum;
+            ppnMasukan = isPPN ? totalPO - totalDppVendor : 0;
+        }
+    } else if (isPPN) {
+        // If totalPO was intended to be Rp 305.500.000 gross
+        // vendorCost might be stored as gross or net DPP
+        totalDppVendor = Math.round(rawVendorSum / (1 + PPN_RATE));
+        totalPO = rawVendorSum;
+        ppnMasukan = totalPO - totalDppVendor;
+    }
+
+    const commissionRate = project.salesCommissionRate ?? 0;
+    const salesCommission = (dpp * commissionRate) / 100;
+
+    const netProfit = dpp - totalDppVendor - salesCommission;
     const ppnNet = ppnKeluaran - ppnMasukan;
     const margin = dpp > 0 ? (netProfit / dpp) * 100 : 0;
 
@@ -260,6 +287,8 @@ export function calcFinancials(
         totalDppVendor,
         ppnMasukan,
         totalPO,
+        commissionRate,
+        salesCommission,
         netProfit,
         ppnNet,
         margin,

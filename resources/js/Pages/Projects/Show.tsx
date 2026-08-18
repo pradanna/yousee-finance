@@ -1,6 +1,7 @@
 import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import { PageProps } from '@/types';
+import { calcPeriodProgress, formatIndoPeriod } from '@/Utils/formatters';
 import { router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -127,7 +128,8 @@ interface DbProject {
     client?: { id: string; name: string };
     client_name?: string;
     sales_id?: string;
-    sales?: { id: string; name: string };
+    sales?: { id: string; name: string; commission_rate?: number | string };
+    sales_commission_rate?: number | string;
     sales_pic?: string;
     fiscal_mode?: 'ppn' | 'non-ppn';
     start_date: string;
@@ -157,7 +159,11 @@ interface DbProject {
 interface ShowProjectProps {
     project: DbProject;
     clients?: Array<{ id: string; name: string }>;
-    sales?: Array<{ id: string; name: string }>;
+    sales?: Array<{
+        id: string;
+        name: string;
+        commission_rate?: number | string;
+    }>;
     vendors?: Array<{ id: string; name: string }>;
     cashBankAccounts?: Array<{
         id: string | number;
@@ -207,6 +213,16 @@ export default function Show({
 
         const invoice = dbProject.invoices?.[0];
         const paymentPlan = invoice?.payment_plan;
+        const commRate =
+            Number(
+                dbProject.sales?.commission_rate ??
+                    dbProject.sales_commission_rate,
+            ) || 0;
+
+        const periodObj = formatIndoPeriod(
+            dbProject.start_date,
+            dbProject.end_date,
+        );
 
         return {
             id: dbProject.id,
@@ -214,8 +230,12 @@ export default function Show({
             name: dbProject.name,
             clientId: dbProject.client_id,
             clientName: dbProject.client?.name ?? dbProject.client_name ?? '-',
+            salesId: dbProject.sales_id,
             salesPIC: dbProject.sales?.name ?? dbProject.sales_pic ?? '-',
-            period: `${dbProject.start_date} - ${dbProject.end_date}`,
+            salesCommissionRate: commRate,
+            period:
+                periodObj.label ||
+                `${dbProject.start_date} - ${dbProject.end_date}`,
             startDate: dbProject.start_date,
             endDate: dbProject.end_date,
             contractValue: Number(dbProject.contract_value) || 0,
@@ -302,6 +322,16 @@ export default function Show({
                                       );
                                       const termAmount =
                                           Number(term.amount) || 0;
+                                      const isPaid =
+                                          term.status === 'paid' ||
+                                          (termAmount > 0 &&
+                                              totalPaid >= termAmount - 1);
+                                      const remaining = isPaid
+                                          ? 0
+                                          : Math.max(
+                                                0,
+                                                termAmount - totalPaid,
+                                            );
                                       return {
                                           id: term.id,
                                           sort_order: term.sort_order ?? 0,
@@ -309,9 +339,10 @@ export default function Show({
                                           amount: termAmount,
                                           percent: Number(term.percent) || 0,
                                           due_date: term.due_date ?? '',
-                                          status:
-                                              (term.status as PaymentTermStatus) ??
-                                              'unpaid',
+                                          status: isPaid
+                                              ? ('paid' as PaymentTermStatus)
+                                              : (term.status as PaymentTermStatus) ??
+                                                'unpaid',
                                           notes: term.notes ?? null,
                                           settlements,
                                           totalPaid,
@@ -555,8 +586,9 @@ export default function Show({
                     <div className="overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-900/5">
                         {/* HEADER — Clean Modern Executive Header */}
                         <div className="border-b border-slate-200 bg-white px-8 py-6">
-                            <div className="mb-5 flex items-start justify-between gap-6">
-                                <div className="min-w-0 space-y-1">
+                            <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+                                {/* Left Side: Project Core Info */}
+                                <div className="min-w-0 flex-1 space-y-1.5">
                                     <div className="flex flex-wrap items-center gap-2.5">
                                         <span className="rounded-md border border-slate-200 bg-slate-100 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-slate-600">
                                             {prj.code}
@@ -568,15 +600,11 @@ export default function Show({
                                                 : 'Mode Non-PPN'}
                                         </span>
                                     </div>
-                                    <h2 className="pt-0.5 text-xl font-black leading-snug tracking-tight text-slate-900">
+                                    <h2 className="pt-0.5 text-xl font-black leading-snug tracking-tight text-slate-900 sm:text-2xl">
                                         {prj.name}
                                     </h2>
-                                    <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                                        <span className="font-semibold text-slate-800">
-                                            {prj.clientName}
-                                        </span>
-                                        <span>&bull;</span>
-                                        <span className="flex items-center gap-1 text-slate-500">
+                                    <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+                                        <span className="flex items-center gap-1.5 font-semibold text-slate-800">
                                             <svg
                                                 className="h-3.5 w-3.5 text-slate-400"
                                                 fill="none"
@@ -587,67 +615,109 @@ export default function Show({
                                                 <path
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
-                                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m3 0h4M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
                                                 />
                                             </svg>
-                                            {prj.period}
+                                            {prj.clientName}
+                                        </span>
+                                        <span>&bull;</span>
+                                        <span className="flex items-center gap-1 text-slate-600">
+                                            <svg
+                                                className="h-3.5 w-3.5 text-slate-400"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                                />
+                                            </svg>
+                                            PIC:{' '}
+                                            <strong className="font-semibold text-slate-800">
+                                                {prj.salesPIC}
+                                            </strong>
                                         </span>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Executive Financial Metrics - Clean Grid */}
-                            <div className="grid grid-cols-4 gap-3.5 border-t border-slate-100 pt-4">
-                                {/* Card 1: Nilai DPP / Kontrak */}
-                                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3.5">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                                        {isPPN
-                                            ? 'Nilai DPP Kontrak'
-                                            : 'Nilai Kontrak'}
-                                    </div>
-                                    <div className="text-sm font-black tabular-nums tracking-tight text-slate-900">
-                                        {fmt(fin.dpp)}
-                                    </div>
-                                </div>
+                                {/* Right Side: Prominent Masa Tayang Card with Progress */}
+                                {(() => {
+                                    const prog = calcPeriodProgress(
+                                        prj.startDate,
+                                        prj.endDate,
+                                        prj.status,
+                                    );
+                                    return (
+                                        <div className="w-full shrink-0 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 sm:w-auto sm:min-w-[340px]">
+                                            <div className="mb-2 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                                                        <svg
+                                                            className="h-3.5 w-3.5"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                            strokeWidth={2.5}
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                            />
+                                                        </svg>
+                                                    </div>
+                                                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600">
+                                                        Masa Tayang Kampanye
+                                                    </span>
+                                                </div>
+                                                <span
+                                                    className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${prog.badgeBg}`}
+                                                >
+                                                    {prog.state === 'running'
+                                                        ? `${prog.percent}% Selesai`
+                                                        : prog.state ===
+                                                            'upcoming'
+                                                          ? 'Akan Tayang'
+                                                          : prog.state ===
+                                                              'completed'
+                                                            ? 'Selesai'
+                                                            : 'Jadwal'}
+                                                </span>
+                                            </div>
 
-                                {/* Card 2: Total Tagihan */}
-                                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3.5">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                                        Total Tagihan Client{' '}
-                                        {isPPN && (
-                                            <span className="text-[9px] font-black lowercase text-blue-600">
-                                                (+ppn)
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-sm font-black tabular-nums tracking-tight text-slate-900">
-                                        {fmt(fin.totalInvoice)}
-                                    </div>
-                                </div>
+                                            {/* Date Range String */}
+                                            <div className="font-mono text-xs font-bold text-slate-800">
+                                                {prj.period}
+                                            </div>
 
-                                {/* Card 3: Estimasi Laba Bersih */}
-                                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3.5">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700/70">
-                                        Estimasi Laba Bersih
-                                    </div>
-                                    <div
-                                        className={`text-sm font-black tabular-nums tracking-tight ${fin.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}
-                                    >
-                                        {fmt(fin.netProfit)}
-                                    </div>
-                                </div>
-
-                                {/* Card 4: Margin Keuntungan */}
-                                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3.5">
-                                    <div className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-indigo-700/70">
-                                        Margin Keuntungan
-                                    </div>
-                                    <div
-                                        className={`text-sm font-black tabular-nums tracking-tight ${fin.margin >= 30 ? 'text-indigo-700' : 'text-amber-700'}`}
-                                    >
-                                        {fin.margin.toFixed(1)}%
-                                    </div>
-                                </div>
+                                            {/* Progress Bar */}
+                                            <div className="mt-2.5 space-y-1.5">
+                                                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-500 ${prog.barClass}`}
+                                                        style={{
+                                                            width: `${prog.percent}%`,
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="flex items-center justify-between text-[10px]">
+                                                    <span className="font-semibold text-slate-500">
+                                                        {prog.label}
+                                                    </span>
+                                                    {prog.totalDays > 0 && (
+                                                        <span className="font-mono font-bold text-slate-700">
+                                                            {prog.totalDays}{' '}
+                                                            Hari
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 
@@ -664,14 +734,14 @@ export default function Show({
                                             }
                                             className={`flex cursor-pointer items-center gap-2 border-b-2 py-3.5 text-xs font-bold transition-all ${
                                                 isActive
-                                                    ? 'border-blue-600 text-blue-600'
+                                                    ? 'border-primary font-black text-primary'
                                                     : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
                                             }`}
                                         >
                                             <span
                                                 className={
                                                     isActive
-                                                        ? 'text-blue-600'
+                                                        ? 'text-primary'
                                                         : 'text-slate-400'
                                                 }
                                             >
@@ -682,7 +752,7 @@ export default function Show({
                                                 <span
                                                     className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${
                                                         isActive
-                                                            ? 'bg-blue-100 text-blue-700'
+                                                            ? 'bg-primary/10 ring-primary/20 text-primary ring-1'
                                                             : 'bg-slate-100 text-slate-500'
                                                     }`}
                                                 >
@@ -711,6 +781,7 @@ export default function Show({
                                     locations={locations}
                                     isPPN={isPPN}
                                     vendors={vendors}
+                                    purchaseOrders={prj.purchaseOrders ?? []}
                                     onAddLocation={(newLoc) => {
                                         if (!newLoc.vendorId) return;
                                         router.post(
@@ -735,9 +806,32 @@ export default function Show({
                                             },
                                         );
                                     }}
+                                    onUpdateLocation={(locId, updatedData) => {
+                                        router.put(
+                                            `/projects/${prj.id}/locations/${locId}`,
+                                            updatedData,
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    router.reload();
+                                                },
+                                            },
+                                        );
+                                    }}
                                     onDeleteLocation={(locId) => {
                                         router.delete(
                                             `/projects/${prj.id}/locations/${locId}`,
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    router.reload();
+                                                },
+                                            },
+                                        );
+                                    }}
+                                    onCancelPO={(poId) => {
+                                        router.delete(
+                                            `/projects/${prj.id}/purchase-orders/${poId}`,
                                             {
                                                 preserveScroll: true,
                                                 onSuccess: () => {
@@ -758,6 +852,9 @@ export default function Show({
                                     projectId={prj.id}
                                     purchaseOrders={prj.purchaseOrders ?? []}
                                     cashBankAccounts={cashBankAccounts}
+                                    onTriggerToast={(message, type, title) =>
+                                        triggerToast(message, type, title)
+                                    }
                                     onIssuePO={(
                                         locId,
                                         _poNumber,
@@ -880,6 +977,7 @@ export default function Show({
                                         setShowInvoiceModal(true)
                                     }
                                     onUpdateProject={onUpdateProject}
+                                    onTriggerToast={triggerToast}
                                     onOpenPaymentModal={(term, targetAmt) => {
                                         setSelectedPayTerm(term);
                                         setPayType('full');
@@ -1142,13 +1240,21 @@ export default function Show({
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        if (!selectedPayTerm) return;
+                                        if (payAmountInput <= 0) {
+                                            triggerToast(
+                                                'Nominal pembayaran harus lebih dari 0.',
+                                                'error',
+                                                'Validasi Gagal',
+                                            );
+                                            return;
+                                        }
+
                                         const targetAmt = isPPN
                                             ? Math.round(
                                                   selectedPayTerm.amount * 1.11,
                                               )
                                             : selectedPayTerm.amount;
-                                        const isFull =
-                                            payAmountInput >= targetAmt;
                                         const dppPaidAmt = isPPN
                                             ? Math.round(payAmountInput / 1.11)
                                             : payAmountInput;
@@ -1163,48 +1269,47 @@ export default function Show({
                                             ? selectedAccount.name
                                             : 'Transfer Bank BCA';
 
-                                        const updatedTerms =
-                                            prj.clientPaymentPlan!.terms.map(
-                                                (t) => {
-                                                    if (
-                                                        t.id ===
-                                                        selectedPayTerm.id
-                                                    ) {
-                                                        return {
-                                                            ...t,
-                                                            status: (isFull
-                                                                ? 'paid'
-                                                                : 'unpaid') as PaymentTermStatus,
-                                                            paidAmount:
-                                                                dppPaidAmt,
-                                                            paidAt:
-                                                                payDateInput ||
-                                                                new Date().toISOString(),
-                                                            paymentMethod:
-                                                                derivedMethod,
-                                                            paymentRef:
-                                                                payRefInput ||
-                                                                undefined,
-                                                        };
-                                                    }
-                                                    return t;
+                                        router.post(
+                                            `/projects/${prj.id}/invoice/payment-terms/${selectedPayTerm.id}/settle`,
+                                            {
+                                                amount: dppPaidAmt,
+                                                paid_at:
+                                                    payDateInput ||
+                                                    new Date()
+                                                        .toISOString()
+                                                        .split('T')[0],
+                                                payment_method: derivedMethod,
+                                                account_id: payAccountId
+                                                    ? String(payAccountId)
+                                                    : undefined,
+                                                payment_ref:
+                                                    payRefInput || undefined,
+                                                notes: `Penerimaan Pembayaran ${selectedPayTerm.label} - ${prj.clientName}`,
+                                            },
+                                            {
+                                                preserveScroll: true,
+                                                preserveState: true,
+                                                onSuccess: () => {
+                                                    setSelectedPayTerm(null);
+                                                    triggerToast(
+                                                        `Pembayaran ${selectedPayTerm.label} sebesar ${fmt(payAmountInput)} berhasil dicatat & dibukukan ke jurnal akuntansi.`,
+                                                        'success',
+                                                        'Pembayaran Diterima',
+                                                    );
                                                 },
-                                            );
-
-                                        const updatedPlan = {
-                                            ...prj.clientPaymentPlan!,
-                                            terms: updatedTerms,
-                                        };
-                                        const updatedPrj = {
-                                            ...prj,
-                                            clientPaymentPlan: updatedPlan,
-                                        };
-                                        onUpdateProject(updatedPrj);
-                                        setSelectedPayTerm(null);
-                                        triggerToast(
-                                            `Pembayaran ${selectedPayTerm.label} sebesar ${fmt(payAmountInput)} berhasil dicatat.`,
-                                            'success',
-                                            'Pembayaran Diterima',
+                                                onError: (errors) => {
+                                                    const errMsg =
+                                                        errors.amount ||
+                                                        errors.paid_at ||
+                                                        Object.values(errors)[0] ||
+                                                        'Gagal mencatat pembayaran.';
+                                                    triggerToast(
+                                                        String(errMsg),
+                                                        'error',
+                                                        'Gagal Menyimpan',
+                                                    );
+                                                },
+                                            },
                                         );
                                     }}
                                     className="cursor-pointer rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700"
@@ -1721,182 +1826,73 @@ export default function Show({
                                                 (a, b) => a + (Number(b) || 0),
                                                 0,
                                             );
-                                        if (sumPct !== 100) {
-                                            setModalPercentError(
-                                                `Total persentase termin harus tepat 100% (saat ini ${sumPct}%). Silakan sesuaikan persentase termin.`,
-                                            );
-                                            return;
-                                        }
-                                        setModalPercentError(null);
-
+                                        // Persiapkan array due_dates sesuai urutan termin
                                         const now = new Date();
-                                        const monthStr = String(
-                                            now.getMonth() + 1,
-                                        ).padStart(2, '0');
-                                        const yearStr = String(
-                                            now.getFullYear(),
-                                        ).slice(-2);
-                                        const seqStr = String(
-                                            Math.floor(Math.random() * 899) +
-                                                100,
-                                        ).padStart(3, '0');
-                                        const invNo =
-                                            prj.invoiceNumber ||
-                                            (isPPN
-                                                ? `INV-${monthStr}/${yearStr}/${seqStr}`
-                                                : `INV-NP-${monthStr}/${yearStr}/${seqStr}`);
-
-                                        const addDays = (
-                                            d: Date,
-                                            days: number,
-                                        ) => {
+                                        const addDays = (d: Date, days: number) => {
                                             const res = new Date(d);
                                             res.setDate(res.getDate() + days);
-                                            return res
-                                                .toISOString()
-                                                .split('T')[0];
+                                            return res.toISOString().split('T')[0];
                                         };
-
-                                        const addMonths = (
-                                            d: Date,
-                                            months: number,
-                                        ) => {
+                                        const addMonths = (d: Date, months: number) => {
                                             const res = new Date(d);
-                                            res.setMonth(
-                                                res.getMonth() + months,
-                                            );
-                                            return res
-                                                .toISOString()
-                                                .split('T')[0];
+                                            res.setMonth(res.getMonth() + months);
+                                            return res.toISOString().split('T')[0];
                                         };
 
-                                        const totalDpp = prj.contractValue;
-                                        let generatedTerms: PaymentTerm[] = [];
+                                        const percents = modalScheme === 'full'
+                                            ? [100]
+                                            : modalScheme === 'dp'
+                                              ? [modalTerminPercents[0] ?? 30, modalTerminPercents[1] ?? 70]
+                                              : modalTerminPercents;
 
-                                        if (modalScheme === 'full') {
-                                            const pct =
-                                                modalTerminPercents[0] ?? 100;
-                                            generatedTerms = [
-                                                {
-                                                    id: `term-full-${Date.now()}`,
-                                                    label: `Lunas Sekaligus (${pct}%)`,
-                                                    amount: Math.round(
-                                                        (totalDpp * pct) / 100,
-                                                    ),
-                                                    percent: pct,
-                                                    dueDate:
-                                                        modalDueDates[0] ||
-                                                        addDays(now, 7),
-                                                    status: 'unpaid',
-                                                },
-                                            ];
-                                        } else if (modalScheme === 'dp') {
-                                            const dpPct =
-                                                modalTerminPercents[0] ?? 30;
-                                            const pelPct =
-                                                modalTerminPercents[1] ??
-                                                100 - dpPct;
-                                            const dpAmt = Math.round(
-                                                (totalDpp * dpPct) / 100,
-                                            );
-                                            const pelAmt = Math.round(
-                                                (totalDpp * pelPct) / 100,
-                                            );
-                                            generatedTerms = [
-                                                {
-                                                    id: `term-dp-${Date.now()}`,
-                                                    label: `Termin 1 – Uang Muka (${dpPct}%)`,
-                                                    amount: dpAmt,
-                                                    percent: dpPct,
-                                                    dueDate:
-                                                        modalDueDates[0] ||
-                                                        addDays(now, 7),
-                                                    status: 'unpaid',
-                                                },
-                                                {
-                                                    id: `term-pel-${Date.now()}`,
-                                                    label: `Termin 2 – Pelunasan (${pelPct}%)`,
-                                                    amount: pelAmt,
-                                                    percent: pelPct,
-                                                    dueDate:
-                                                        modalDueDates[1] ||
-                                                        addDays(now, 14),
-                                                    status: 'unpaid',
-                                                },
-                                            ];
-                                        } else if (modalScheme === 'termin') {
-                                            const percents =
-                                                modalTerminPercents.length === 3
-                                                    ? modalTerminPercents
-                                                    : [30, 40, 30];
-                                            generatedTerms = percents.map(
-                                                (pct, i) => {
-                                                    const amount = Math.round(
-                                                        (totalDpp * pct) / 100,
-                                                    );
-                                                    return {
-                                                        id: `term-t${i + 1}-${Date.now() + i}`,
-                                                        label:
-                                                            i === 0
-                                                                ? `Termin 1 – Uang Muka (${pct}%)`
-                                                                : i ===
-                                                                    percents.length -
-                                                                        1
-                                                                  ? `Termin ${i + 1} – Pelunasan (${pct}%)`
-                                                                  : `Termin ${i + 1} (${pct}%)`,
-                                                        amount,
-                                                        percent: pct,
-                                                        dueDate:
-                                                            modalDueDates[i] ||
-                                                            addDays(
-                                                                now,
-                                                                (i + 1) * 7,
-                                                            ),
-                                                        status: 'unpaid',
-                                                    };
-                                                },
-                                            );
-                                        } else {
-                                            const percents =
-                                                modalTerminPercents;
-                                            generatedTerms = percents.map(
-                                                (pct, i) => {
-                                                    const amount = Math.round(
-                                                        (totalDpp * pct) / 100,
-                                                    );
-                                                    return {
-                                                        id: `term-ci${i + 1}-${Date.now() + i}`,
-                                                        label: `Cicilan ${i + 1} dari ${percents.length} (${pct}%)`,
-                                                        amount,
-                                                        percent: pct,
-                                                        dueDate:
-                                                            modalDueDates[i] ||
-                                                            addMonths(
-                                                                now,
-                                                                i + 1,
-                                                            ),
-                                                        status: 'unpaid',
-                                                    };
-                                                },
-                                            );
+                                        const dueDates = percents.map((_, idx) => {
+                                            if (modalDueDates[idx]) {
+                                                return modalDueDates[idx];
+                                            }
+                                            return modalScheme === 'installment'
+                                                ? addMonths(now, idx + 1)
+                                                : addDays(now, (idx + 1) * 7);
+                                        });
+
+                                        // Pastikan URL hash tetap di #invoice
+                                        if (typeof window !== 'undefined') {
+                                            const currentUrl = new URL(window.location.href);
+                                            currentUrl.hash = 'invoice';
+                                            window.history.replaceState(null, '', currentUrl.toString());
                                         }
 
-                                        const newPlan: ClientPaymentPlan = {
-                                            scheme: modalScheme,
-                                            totalAmount: fin.totalInvoice,
-                                            terms: generatedTerms,
-                                            createdAt: now.toISOString(),
-                                        };
-
-                                        const updated = {
-                                            ...prj,
-                                            invoiceIssued: true,
-                                            invoiceNumber: invNo,
-                                            clientPaymentPlan: newPlan,
-                                        };
-
-                                        onUpdateProject(updated);
-                                        setShowInvoiceModal(false);
+                                        router.post(
+                                            `/projects/${prj.id}/payment-plan`,
+                                            {
+                                                scheme: modalScheme,
+                                                percents: percents,
+                                                due_dates: dueDates,
+                                                notes: null,
+                                            },
+                                            {
+                                                preserveScroll: true,
+                                                preserveState: true,
+                                                onSuccess: () => {
+                                                    setShowInvoiceModal(false);
+                                                    setToast({
+                                                        show: true,
+                                                        type: 'success',
+                                                        title: 'Skema Pembayaran Disimpan',
+                                                        message: `Skema pembayaran termin client berhasil disimpan untuk proyek ${prj.name}.`,
+                                                    });
+                                                },
+                                                onError: (errs) => {
+                                                    const errorMsg = Object.values(errs).flat().join(' ') || 'Gagal menyimpan skema pembayaran.';
+                                                    setModalPercentError(errorMsg);
+                                                    setToast({
+                                                        show: true,
+                                                        type: 'error',
+                                                        title: 'Gagal Menyimpan',
+                                                        message: errorMsg,
+                                                    });
+                                                },
+                                            },
+                                        );
                                     }}
                                     className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-blue-700"
                                 >
@@ -1916,7 +1912,7 @@ export default function Show({
                                     {!prj.clientPaymentPlan
                                         ? 'Simpan Skema Pembayaran'
                                         : !prj.invoiceIssued
-                                          ? 'Simpan Skema & Terbitkan Invoice'
+                                          ? 'Simpan Skema Pembayaran'
                                           : 'Simpan Perubahan Skema'}
                                 </button>
                             </div>
