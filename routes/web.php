@@ -65,6 +65,7 @@ Route::middleware('auth')->group(function () {
     )->name('projects.po.payment-terms.settle');
     Route::post('projects/{project}/payment-plan', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'storePaymentPlan'])->name('projects.payment-plan.store');
     Route::post('projects/{project}/invoice/issue', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'issue'])->name('projects.invoice.issue');
+    Route::post('projects/{project}/invoice/payment-terms/{paymentTerm}/settle', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'settle'])->name('projects.invoice.payment-terms.settle');
 
     // Transaksi
     Route::get('/purchases', function () {
@@ -75,9 +76,7 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('CashOut');
     })->name('cash-out');
 
-    Route::get('/sales-transactions', function () {
-        return Inertia::render('SalesTransactions');
-    })->name('sales-transactions');
+    Route::get('/sales-transactions', [\App\Http\Controllers\Billing\SalesTransactionController::class, 'index'])->name('sales-transactions');
 
     Route::get('/debt-receivable', function () {
         return Inertia::render('DebtReceivable');

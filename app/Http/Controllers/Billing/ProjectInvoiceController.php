@@ -47,4 +47,18 @@ class ProjectInvoiceController extends Controller
 
         return redirect()->back()->with('success', 'Invoice berhasil diterbitkan.');
     }
+
+    /**
+     * Catat realisasi pembayaran termin Invoice client.
+     */
+    public function settle(
+        \App\Http\Requests\Billing\StoreClientPaymentSettlementRequest $request,
+        Project $project,
+        \App\Domains\Billing\Models\PaymentTerm $paymentTerm,
+        \App\Domains\Billing\Actions\SettleClientPaymentTerm $action,
+    ): RedirectResponse {
+        $action->execute($paymentTerm, $request->validated());
+
+        return redirect()->back()->with('success', 'Pembayaran termin invoice berhasil dicatat.');
+    }
 }

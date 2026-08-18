@@ -9,6 +9,7 @@ export interface RecordInvoicePaymentModalSubmitData {
     amount: number;
     date: string;
     method: string;
+    account_id?: string;
     referenceNo: string;
     notes: string;
 }
@@ -16,7 +17,7 @@ export interface RecordInvoicePaymentModalSubmitData {
 interface RecordInvoicePaymentModalProps {
     isOpen: boolean;
     invoice: {
-        id: number;
+        id: number | string;
         invoiceNumber: string;
         clientName: string;
         projectName: string;
@@ -31,6 +32,12 @@ interface RecordInvoicePaymentModalProps {
             }>;
         };
     } | null;
+    cashBankAccounts?: Array<{
+        id: string | number;
+        code: string;
+        name: string;
+        display_name: string;
+    }>;
     remainingAmount: number;
     onClose: () => void;
     onSubmit: (data: RecordInvoicePaymentModalSubmitData) => void;
@@ -55,11 +62,12 @@ const formatIndoDate = (dateStr?: string) => {
 
 export const RecordInvoicePaymentModal: React.FC<
     RecordInvoicePaymentModalProps
-> = ({ isOpen, invoice, remainingAmount, onClose, onSubmit }) => {
+> = ({ isOpen, invoice, cashBankAccounts = [], remainingAmount, onClose, onSubmit }) => {
     const [optionType, setOptionType] = useState<'lunas' | 'cicil'>('lunas');
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [method, setMethod] = useState('Transfer BCA');
+    const [accountId, setAccountId] = useState<string>('');
     const [referenceNo, setReferenceNo] = useState('');
     const [termLabel, setTermLabel] = useState('');
 
@@ -81,8 +89,12 @@ export const RecordInvoicePaymentModal: React.FC<
             } else {
                 setTermLabel('Pelunasan Invoice');
             }
+
+            if (cashBankAccounts.length > 0) {
+                setAccountId(String(cashBankAccounts[0].id));
+            }
         }
-    }, [isOpen, invoice, remainingAmount]);
+    }, [isOpen, invoice, remainingAmount, cashBankAccounts]);
 
     const handleSelectOption = (opt: 'lunas' | 'cicil') => {
         setOptionType(opt);
@@ -106,6 +118,7 @@ export const RecordInvoicePaymentModal: React.FC<
             amount: Number(amount),
             date,
             method,
+            account_id: accountId || undefined,
             referenceNo,
             notes: `${termLabel} via ${method}`,
         });
@@ -271,29 +284,37 @@ export const RecordInvoicePaymentModal: React.FC<
 
                         <div className="space-y-1.5">
                             <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                Metode Bayar
+                                Rekening Kas / Bank Penerima
                             </label>
-                            <select
-                                value={method}
-                                onChange={(e) => setMethod(e.target.value)}
-                                className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-800 focus:border-emerald-500 focus:outline-none"
-                            >
-                                <option value="Transfer BCA">
-                                    Transfer BCA
-                                </option>
-                                <option value="Transfer Mandiri">
-                                    Transfer Mandiri
-                                </option>
-                                <option value="Transfer BNI">
-                                    Transfer BNI
-                                </option>
-                                <option value="Transfer BRI">
-                                    Transfer BRI
-                                </option>
-                                <option value="Cash / Tunai">
-                                    Cash / Tunai
-                                </option>
-                            </select>
+                            {cashBankAccounts.length > 0 ? (
+                                <select
+                                    value={accountId}
+                                    onChange={(e) => setAccountId(e.target.value)}
+                                    className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-800 focus:border-emerald-500 focus:outline-none"
+                                >
+                                    {cashBankAccounts.map((acc) => (
+                                        <option key={acc.id} value={acc.id}>
+                                            {acc.display_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <select
+                                    value={method}
+                                    onChange={(e) => setMethod(e.target.value)}
+                                    className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-800 focus:border-emerald-500 focus:outline-none"
+                                >
+                                    <option value="Transfer BCA">
+                                        Transfer BCA
+                                    </option>
+                                    <option value="Transfer Mandiri">
+                                        Transfer Mandiri
+                                    </option>
+                                    <option value="Cash / Tunai">
+                                        Cash / Tunai
+                                    </option>
+                                </select>
+                            )}
                         </div>
                     </div>
 
