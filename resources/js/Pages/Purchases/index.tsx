@@ -21,6 +21,7 @@ import {
     PPN_RATE,
     fmt,
     formatDate,
+    formatPeriod,
     getPOPaymentSummary,
 } from './purchasesTypes';
 
@@ -30,7 +31,6 @@ import {
 
 export default function Purchases({
     projects: rawProjects = [],
-    vendors = [],
     cashBankAccounts = [],
 }: PurchasesPageProps) {
     const fiscalMode = useFiscalMode();
@@ -39,36 +39,61 @@ export default function Purchases({
     // Normalize rawProjects from DB
     const formattedProjects: PurchaseProject[] = useMemo(() => {
         return rawProjects.map((p) => {
-            const locs: BillboardLocation[] = (p.locations || []).map((loc) => ({
-                id: loc.id,
-                code: loc.code,
-                area: loc.area,
-                description: loc.description,
-                type: loc.type,
-                size: loc.size,
-                vendorId: loc.vendorId || null,
-                vendorName: loc.vendorName || 'Vendor',
-                qty: loc.qty || 1,
-                vendorCost: Number(loc.vendorCost || 0),
-                poIssued: loc.poIssued,
-                poNumber: loc.poNumber || '',
-                purchaseOrderId: loc.purchaseOrderId,
-            }));
+            const periodObj = formatPeriod(p.start_date, p.end_date);
+            const periodStr =
+                p.period ||
+                periodObj.label ||
+                (p.start_date && p.end_date
+                    ? `${p.start_date} - ${p.end_date}`
+                    : '');
+
+            const locs: BillboardLocation[] = (p.locations || []).map(
+                (loc) => ({
+                    id: loc.id,
+                    code: loc.code,
+                    area: loc.area,
+                    description: loc.description,
+                    type: loc.type || 'Billboard',
+                    size: loc.size || '',
+                    vendorId: loc.vendor_id ?? loc.vendorId ?? null,
+                    vendorName:
+                        loc.vendor?.name ??
+                        loc.vendor_name ??
+                        loc.vendorName ??
+                        'Vendor',
+                    qty: Number(loc.qty) || 1,
+                    vendorCost:
+                        Number(loc.vendor_cost ?? loc.vendorCost) || 0,
+                    poIssued: Boolean(loc.po_issued ?? loc.poIssued),
+                    poNumber: loc.po_number || loc.poNumber || '',
+                    purchaseOrderId:
+                        loc.purchase_order_id ?? loc.purchaseOrderId,
+                }),
+            );
 
             return {
                 id: p.id,
                 code: p.code,
                 name: p.name,
-                clientId: p.clientId,
-                clientName: p.clientName || 'Client',
-                salesPIC: p.salesPIC || '-',
-                period: p.period || '',
-                contractValue: Number(p.contractValue || 0),
+                clientId: p.client_id ?? p.clientId,
+                clientName:
+                    p.client?.name ??
+                    p.client_name ??
+                    p.clientName ??
+                    'Client',
+                salesPIC:
+                    p.sales?.name ??
+                    p.sales_pic ??
+                    p.salesPIC ??
+                    '-',
+                period: periodStr,
+                contractValue:
+                    Number(p.contract_value ?? p.contractValue) || 0,
                 status: p.status || 'Draft',
                 locations: locs,
-                invoiceIssued: p.invoiceIssued || false,
-                invoiceNumber: p.invoiceNumber || '',
-                targetQty: p.targetQty || 1,
+                invoiceIssued: Boolean(p.invoice_issued ?? p.invoiceIssued),
+                invoiceNumber: p.invoice_number || p.invoiceNumber || '',
+                targetQty: Number(p.target_qty ?? p.targetQty) || 1,
                 fiscal_mode: p.fiscal_mode,
                 purchase_orders: p.purchase_orders || [],
             };
@@ -81,7 +106,8 @@ export default function Purchases({
 
         formattedProjects.forEach((prj) => {
             (prj.purchase_orders || []).forEach((po) => {
-                const plan: VendorPaymentPlanDB | null = po.payment_plan || null;
+                const plan: VendorPaymentPlanDB | null =
+                    po.payment_plan || null;
                 const termsList: VendorPaymentTermDB[] = plan?.terms || [];
 
                 let terms: VendorPaymentTerm = {
@@ -190,9 +216,9 @@ export default function Purchases({
     }, [formattedProjects, fiscalMode]);
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedProjectId, setSelectedProjectId] = useState<number | string | null>(
-        getInitialProjectId,
-    );
+    const [selectedProjectId, setSelectedProjectId] = useState<
+        number | string | null
+    >(getInitialProjectId);
     const [successMessage, setSuccessMessage] = useState('');
     const [activePoTab, setActivePoTab] = useState<
         'all_projects' | 'pending_queue' | 'issued_pos' | 'top_schedule'
@@ -223,7 +249,7 @@ export default function Purchases({
 
     const [showPoForm, setShowPoForm] = useState(false);
     const [poFormVendor, setPoFormVendor] = useState<{
-        id: number;
+        id: number | string;
         name: string;
         locs: BillboardLocation[];
     } | null>(null);
@@ -238,7 +264,9 @@ export default function Purchases({
         null,
     );
 
-    const activeProject = projects.find((p) => String(p.id) === String(selectedProjectId));
+    const activeProject = projects.find(
+        (p) => String(p.id) === String(selectedProjectId),
+    );
 
     const filteredProjects = projects.filter(
         (p) =>
@@ -287,7 +315,10 @@ export default function Purchases({
     };
 
     // ─── Record Payment Handlers ──────────────────────────────────────────────
-    const handleOpenRecordPayment = (po: VendorPO, term?: VendorPaymentTermDB) => {
+    const handleOpenRecordPayment = (
+        po: VendorPO,
+        term?: VendorPaymentTermDB,
+    ) => {
         setSelectedPoForPayment(po);
         setSelectedPaymentTermDB(term || null);
         setShowRecordPaymentModal(true);
@@ -296,13 +327,15 @@ export default function Purchases({
     const handleSaveRecordPayment = (data: RecordPaymentModalSubmitData) => {
         if (!selectedPoForPayment) return;
 
-        const targetProjectId = selectedPoForPayment.projectId || activeProject?.id;
+        const targetProjectId =
+            selectedPoForPayment.projectId || activeProject?.id;
         const targetPoId = selectedPoForPayment.id;
         const terms = selectedPoForPayment.payment_plan?.terms || [];
 
         let targetTerm = selectedPaymentTermDB;
         if (!targetTerm) {
-            targetTerm = terms.find((t) => t.status !== 'paid') || terms[0] || null;
+            targetTerm =
+                terms.find((t) => t.status !== 'paid') || terms[0] || null;
         }
 
         if (!targetProjectId || !targetPoId || !targetTerm) {
@@ -397,12 +430,13 @@ export default function Purchases({
     // ─── Derived Data ─────────────────────────────────────────────────────────
 
     const locationsByVendor = activeLocations.reduce<
-        Record<number, { vendorName: string; locs: BillboardLocation[] }>
+        Record<string, { vendorName: string; locs: BillboardLocation[] }>
     >((acc, l) => {
         if (l.vendorId === null) return acc;
-        if (!acc[l.vendorId])
-            acc[l.vendorId] = { vendorName: l.vendorName, locs: [] };
-        acc[l.vendorId].locs.push(l);
+        const key = String(l.vendorId);
+        if (!acc[key])
+            acc[key] = { vendorName: l.vendorName, locs: [] };
+        acc[key].locs.push(l);
         return acc;
     }, {});
 
@@ -884,7 +918,7 @@ export default function Purchases({
                                         type GroupedPending = {
                                             key: string;
                                             project: PurchaseProject;
-                                            vendorId: number;
+                                            vendorId: number | string;
                                             vendorName: string;
                                             locations: BillboardLocation[];
                                         };
@@ -2455,8 +2489,11 @@ export default function Purchases({
                     vendorName={poFormVendor.name}
                     items={poFormVendor.locs.map((l) => ({
                         id: l.id,
+                        code: l.code,
                         description: l.description,
                         area: l.area,
+                        type: l.type,
+                        size: l.size,
                         vendorCost: l.vendorCost,
                         qty: l.qty,
                     }))}

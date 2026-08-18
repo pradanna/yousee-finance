@@ -96,6 +96,7 @@ export default function VendorPOTab({
     );
     const [vPayMethodInput, setVPayMethodInput] =
         useState<string>('Transfer Bank BCA');
+
     const [vPayAccountId, setVPayAccountId] = useState<string | number>(
         cashBankAccounts[0]?.id ? String(cashBankAccounts[0].id) : '',
     );

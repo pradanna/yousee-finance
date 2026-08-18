@@ -21,6 +21,65 @@ export const formatDate = (dateStr?: string): string => {
     }
 };
 
+export function formatPeriod(
+    startStr?: string,
+    endStr?: string,
+): { label: string; duration: string } {
+    if (!startStr || !endStr) return { label: '', duration: '' };
+
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+        return { label: '', duration: '' };
+    }
+
+    const monthNamesShort = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Agu',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+    ];
+
+    const startDay = String(start.getDate()).padStart(2, '0');
+    const startMonth = monthNamesShort[start.getMonth()];
+    const startYear = start.getFullYear();
+
+    const endDay = String(end.getDate()).padStart(2, '0');
+    const endMonth = monthNamesShort[end.getMonth()];
+    const endYear = end.getFullYear();
+
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    const months =
+        (end.getFullYear() - start.getFullYear()) * 12 +
+        (end.getMonth() - start.getMonth()) +
+        1;
+
+    let label = '';
+    if (startYear === endYear && start.getMonth() === end.getMonth()) {
+        label = `${startDay} - ${endDay} ${startMonth} ${startYear}`;
+    } else if (startYear === endYear) {
+        label = `${startMonth} - ${endMonth} ${startYear}`;
+    } else {
+        label = `${startMonth} ${startYear} - ${endMonth} ${endYear}`;
+    }
+
+    const duration =
+        months > 1 ? `${months} Bulan (${diffDays} Hari)` : `${diffDays} Hari`;
+
+    return { label, duration };
+}
+
 export interface VendorPaymentTerm {
     type: 'full' | 'dp' | 'termin';
     notes?: string;
@@ -135,15 +194,22 @@ export interface BillboardLocation {
     code: string;
     area: string;
     description: string;
-    type: 'Billboard' | 'Videotron' | 'Baliho' | 'Neonbox';
+    type: 'Billboard' | 'Videotron' | 'Baliho' | 'Neonbox' | string;
     size: string;
-    vendorId: number | null;
+    vendorId: number | string | null;
     vendorName: string;
+    vendor_id?: number | string | null;
+    vendor_name?: string;
+    vendor?: { id: number | string; name: string };
     qty?: number;
     vendorCost: number;
+    vendor_cost?: number;
     poIssued: boolean;
+    po_issued?: boolean;
     poNumber: string;
+    po_number?: string;
     purchaseOrderId?: string | number;
+    purchase_order_id?: string | number;
 }
 
 export interface PurchaseProject {
@@ -151,15 +217,27 @@ export interface PurchaseProject {
     code: string;
     name: string;
     clientId: number | string;
+    client_id?: number | string;
+    client?: { id: number | string; name: string };
     clientName: string;
+    client_name?: string;
+    sales_id?: number | string;
+    sales?: { id: number | string; name: string };
     salesPIC: string;
+    sales_pic?: string;
+    start_date?: string;
+    end_date?: string;
     period: string;
     contractValue: number;
-    status: 'Draft' | 'Active' | 'Completed' | 'Cancelled';
+    contract_value?: number;
+    status: 'Draft' | 'Active' | 'Completed' | 'Cancelled' | string;
     locations: BillboardLocation[];
     invoiceIssued: boolean;
+    invoice_issued?: boolean;
     invoiceNumber: string;
+    invoice_number?: string;
     targetQty: number;
+    target_qty?: number;
     fiscal_mode?: 'ppn' | 'non-ppn';
     purchase_orders?: Array<{
         id: string | number;

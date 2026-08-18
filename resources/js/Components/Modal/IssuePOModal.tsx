@@ -4,8 +4,11 @@ import React, { useEffect, useState } from 'react';
 
 export interface IssuePOItem {
     id: number | string;
+    code?: string;
     description: string;
     area: string;
+    type?: string;
+    size?: string;
     vendorCost: number;
     qty?: number;
 }
@@ -180,24 +183,72 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
                 {/* Content */}
                 <div className="flex-1 space-y-4 overflow-y-auto p-6">
                     {/* Item list summary */}
-                    <div className="bg-primary/5 border-primary/20 space-y-2 rounded-2xl border p-4">
-                        <p className="text-xs font-bold text-primary">
-                            Akan menerbitkan 1 nomor PO gabungan untuk{' '}
-                            {items.length} titik lokasi sekaligus:
-                        </p>
-                        <ul className="max-h-36 space-y-1.5 overflow-y-auto pr-1">
+                    <div className="bg-primary/5 border-primary/20 space-y-2.5 rounded-2xl border p-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold text-primary">
+                                Rincian {items.length} Titik Lokasi PO (Database):
+                            </p>
+                            <span className="font-mono text-xs font-bold text-slate-700">
+                                Total DPP: {fmt(sumDpp)}
+                            </span>
+                        </div>
+                        <ul className="max-h-48 space-y-2 overflow-y-auto pr-1">
                             {items.map((item, i) => (
                                 <li
                                     key={item.id}
-                                    className="flex items-center justify-between rounded-lg border border-slate-200/80 bg-white p-2 text-[11px] text-slate-700"
+                                    className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white p-2.5 text-xs text-slate-700 transition-all hover:border-slate-300"
                                 >
-                                    <span className="font-semibold">
-                                        {i + 1}. {item.description} ({item.area}
-                                        )
-                                    </span>
-                                    <span className="font-mono font-bold text-slate-900">
-                                        {fmt(item.vendorCost * (item.qty || 1))}
-                                    </span>
+                                    <div className="min-w-0 pr-3">
+                                        <div className="flex flex-wrap items-center gap-1.5 font-medium">
+                                            <span className="font-bold text-slate-900">
+                                                {i + 1}. {item.description}
+                                            </span>
+                                            {item.code && (
+                                                <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.2 font-mono text-[10px] font-bold text-slate-600">
+                                                    {item.code}
+                                                </span>
+                                            )}
+                                            {item.type && (
+                                                <span className="rounded border border-blue-100 bg-blue-50 px-1.5 py-0.2 text-[10px] font-medium text-blue-700">
+                                                    {item.type}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10.5px] text-slate-400">
+                                            <span>
+                                                Area:{' '}
+                                                <strong className="text-slate-600">
+                                                    {item.area}
+                                                </strong>
+                                            </span>
+                                            {item.size && (
+                                                <>
+                                                    <span>&bull;</span>
+                                                    <span>
+                                                        Ukuran:{' '}
+                                                        <strong className="text-slate-600">
+                                                            {item.size}
+                                                        </strong>
+                                                    </span>
+                                                </>
+                                            )}
+                                            <span>&bull;</span>
+                                            <span>
+                                                Qty:{' '}
+                                                <strong className="text-slate-600">
+                                                    {item.qty || 1}
+                                                </strong>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right font-mono flex-shrink-0">
+                                        <div className="text-[10px] text-slate-400">
+                                            {fmt(item.vendorCost)} &times; {item.qty || 1}
+                                        </div>
+                                        <span className="font-bold text-slate-900 text-xs">
+                                            {fmt(item.vendorCost * (item.qty || 1))}
+                                        </span>
+                                    </div>
                                 </li>
                             ))}
                         </ul>

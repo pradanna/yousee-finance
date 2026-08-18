@@ -27,6 +27,7 @@ class PurchaseOrderController extends Controller
                 'client',
                 'sales',
                 'locations.vendor',
+                'locations.purchaseOrder',
                 'purchaseOrders.items',
                 'purchaseOrders.vendor',
                 'purchaseOrders.paymentPlan.terms.settlements',
