@@ -68,9 +68,7 @@ Route::middleware('auth')->group(function () {
     Route::post('projects/{project}/invoice/payment-terms/{paymentTerm}/settle', [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'settle'])->name('projects.invoice.payment-terms.settle');
 
     // Transaksi
-    Route::get('/purchases', function () {
-        return Inertia::render('Purchases');
-    })->name('purchases');
+    Route::get('/purchases', [\App\Http\Controllers\Procurement\PurchaseOrderController::class, 'index'])->name('purchases');
 
     Route::get('/cash-out', function () {
         return Inertia::render('CashOut');

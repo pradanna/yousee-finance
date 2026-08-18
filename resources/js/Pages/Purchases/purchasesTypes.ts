@@ -48,7 +48,7 @@ export interface VendorPaymentTerm {
 }
 
 export interface VendorPaymentRecord {
-    id: string;
+    id: string | number;
     poNumber: string;
     termLabel: string; // e.g. "Termin 1 – DP", "Pelunasan", "Full Payment"
     amount: number;
@@ -82,7 +82,38 @@ export const getPOPaymentSummary = (po: VendorPO) => {
     };
 };
 
+export interface VendorPaymentSettlementDB {
+    id: string | number;
+    amount: number;
+    paid_at: string;
+    payment_method: string;
+    payment_ref?: string | null;
+    notes?: string | null;
+}
+
+export interface VendorPaymentTermDB {
+    id: string | number;
+    sort_order: number;
+    label: string;
+    amount: number;
+    percent: number;
+    due_date?: string;
+    status: 'unpaid' | 'paid' | 'overdue';
+    notes?: string | null;
+    settlements?: VendorPaymentSettlementDB[];
+}
+
+export interface VendorPaymentPlanDB {
+    id: string | number;
+    scheme: 'full' | 'dp' | 'termin' | 'installment';
+    total_amount: number;
+    notes?: string | null;
+    terms: VendorPaymentTermDB[];
+}
+
 export interface VendorPO {
+    id?: string | number;
+    projectId?: string | number;
     poNumber: string;
     vendorId: number;
     vendorName: string;
@@ -92,12 +123,15 @@ export interface VendorPO {
     // Fields from IssuePOModal — used for PDF generation
     lighting?: string;
     topNotes?: string;
+    notes?: string;
     // Payment records for this PO
     payments?: VendorPaymentRecord[];
+    // Real database payment plan relation
+    payment_plan?: VendorPaymentPlanDB | null;
 }
 
 export interface BillboardLocation {
-    id: number;
+    id: number | string;
     code: string;
     area: string;
     description: string;
@@ -109,13 +143,14 @@ export interface BillboardLocation {
     vendorCost: number;
     poIssued: boolean;
     poNumber: string;
+    purchaseOrderId?: string | number;
 }
 
 export interface PurchaseProject {
-    id: number;
+    id: number | string;
     code: string;
     name: string;
-    clientId: number;
+    clientId: number | string;
     clientName: string;
     salesPIC: string;
     period: string;
@@ -125,4 +160,37 @@ export interface PurchaseProject {
     invoiceIssued: boolean;
     invoiceNumber: string;
     targetQty: number;
+    fiscal_mode?: 'ppn' | 'non-ppn';
+    purchase_orders?: Array<{
+        id: string | number;
+        po_number: string;
+        vendor_id: number;
+        vendor?: { id: number; name: string };
+        transaction_date?: string;
+        issued_at?: string;
+        subtotal: number;
+        ppn: number;
+        total: number;
+        status?: string;
+        notes?: string;
+        items?: Array<{
+            id: string | number;
+            project_location_id: string | number;
+            name: string;
+            quantity: number;
+            price: number;
+        }>;
+        payment_plan?: VendorPaymentPlanDB | null;
+    }>;
+}
+
+export interface PurchasesPageProps {
+    projects?: PurchaseProject[];
+    vendors?: Array<{ id: number; name: string }>;
+    cashBankAccounts?: Array<{
+        id: string | number;
+        code: string;
+        name: string;
+        display_name: string;
+    }>;
 }

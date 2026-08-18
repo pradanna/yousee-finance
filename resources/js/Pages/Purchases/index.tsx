@@ -5,18 +5,17 @@ import type { RecordPaymentModalSubmitData } from '@/Components/Modal/RecordPaym
 import { RecordPaymentModal } from '@/Components/Modal/RecordPaymentModal';
 import Pagination from '@/Components/Table/Pagination';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
-import React, { useState } from 'react';
-import {
-    initialProjectsNonPPN,
-    initialProjectsPPN,
-    initialVendorPOs,
-} from './purchasesData';
+import { router } from '@inertiajs/react';
+import React, { useMemo, useState } from 'react';
 import type {
     BillboardLocation,
     PurchaseProject,
+    PurchasesPageProps,
     VendorPO,
+    VendorPaymentPlanDB,
     VendorPaymentRecord,
     VendorPaymentTerm,
+    VendorPaymentTermDB,
 } from './purchasesTypes';
 import {
     PPN_RATE,
@@ -29,16 +28,137 @@ import {
 // Purchases Page — Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Purchases() {
+export default function Purchases({
+    projects: rawProjects = [],
+    vendors = [],
+    cashBankAccounts = [],
+}: PurchasesPageProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
+    // Normalize rawProjects from DB
+    const formattedProjects: PurchaseProject[] = useMemo(() => {
+        return rawProjects.map((p) => {
+            const locs: BillboardLocation[] = (p.locations || []).map((loc) => ({
+                id: loc.id,
+                code: loc.code,
+                area: loc.area,
+                description: loc.description,
+                type: loc.type,
+                size: loc.size,
+                vendorId: loc.vendorId || null,
+                vendorName: loc.vendorName || 'Vendor',
+                qty: loc.qty || 1,
+                vendorCost: Number(loc.vendorCost || 0),
+                poIssued: loc.poIssued,
+                poNumber: loc.poNumber || '',
+                purchaseOrderId: loc.purchaseOrderId,
+            }));
+
+            return {
+                id: p.id,
+                code: p.code,
+                name: p.name,
+                clientId: p.clientId,
+                clientName: p.clientName || 'Client',
+                salesPIC: p.salesPIC || '-',
+                period: p.period || '',
+                contractValue: Number(p.contractValue || 0),
+                status: p.status || 'Draft',
+                locations: locs,
+                invoiceIssued: p.invoiceIssued || false,
+                invoiceNumber: p.invoiceNumber || '',
+                targetQty: p.targetQty || 1,
+                fiscal_mode: p.fiscal_mode,
+                purchase_orders: p.purchase_orders || [],
+            };
+        });
+    }, [rawProjects]);
+
+    // Build real vendorPOs lookup map from project purchase_orders relation
+    const vendorPOs: Record<string, VendorPO> = useMemo(() => {
+        const map: Record<string, VendorPO> = {};
+
+        formattedProjects.forEach((prj) => {
+            (prj.purchase_orders || []).forEach((po) => {
+                const plan: VendorPaymentPlanDB | null = po.payment_plan || null;
+                const termsList: VendorPaymentTermDB[] = plan?.terms || [];
+
+                let terms: VendorPaymentTerm = {
+                    type: 'full',
+                    notes: plan?.notes || undefined,
+                };
+
+                if (plan?.scheme === 'dp') {
+                    terms = {
+                        type: 'dp',
+                        notes: plan.notes || undefined,
+                        dpPercent: termsList[0]?.percent || 50,
+                        dpAmount: termsList[0]?.amount,
+                        dpDueDate: termsList[0]?.due_date,
+                        pelunasanDueDate: termsList[1]?.due_date,
+                    };
+                } else if (plan?.scheme === 'termin') {
+                    terms = {
+                        type: 'termin',
+                        notes: plan.notes || undefined,
+                        installments: termsList.map((t) => ({
+                            percent: t.percent,
+                            amount: t.amount,
+                            note: t.label,
+                            dueDate: t.due_date,
+                        })),
+                    };
+                } else {
+                    terms = {
+                        type: 'full',
+                        notes: plan?.notes || undefined,
+                        fullDueDate: termsList[0]?.due_date,
+                    };
+                }
+
+                // Compile payment records from real settlements
+                const pmtList: VendorPaymentRecord[] = [];
+                termsList.forEach((term) => {
+                    (term.settlements || []).forEach((s) => {
+                        pmtList.push({
+                            id: s.id,
+                            poNumber: po.po_number,
+                            termLabel: term.label,
+                            amount: Number(s.amount),
+                            date: s.paid_at,
+                            method: s.payment_method,
+                            referenceNo: s.payment_ref || '',
+                            notes: s.notes || `Pembayaran ${term.label}`,
+                        });
+                    });
+                });
+
+                map[po.po_number] = {
+                    id: po.id,
+                    projectId: prj.id,
+                    poNumber: po.po_number,
+                    vendorId: po.vendor_id,
+                    vendorName: po.vendor?.name || 'Vendor',
+                    paymentTerms: terms,
+                    issuedAt: po.issued_at || po.transaction_date || '',
+                    totalAmount: Number(po.total || 0),
+                    notes: po.notes,
+                    payments: pmtList,
+                    payment_plan: plan,
+                };
+            });
+        });
+
+        return map;
+    }, [formattedProjects]);
+
     // Read state from URL search params so browser refresh keeps the active view/project
-    const getInitialProjectId = (): number | null => {
+    const getInitialProjectId = (): number | string | null => {
         if (typeof window === 'undefined') return null;
         const params = new URLSearchParams(window.location.search);
         const projectParam = params.get('project_id');
-        return projectParam ? parseInt(projectParam, 10) : null;
+        return projectParam ? projectParam : null;
     };
 
     const getInitialPoTab = ():
@@ -59,11 +179,18 @@ export default function Purchases() {
         return 'all_projects';
     };
 
-    const [projects, setProjects] = useState<PurchaseProject[]>(
-        isPPN ? initialProjectsPPN : initialProjectsNonPPN,
-    );
+    // Filter projects based on active fiscal mode
+    const projects = useMemo(() => {
+        return formattedProjects.filter((p) => {
+            if (p.fiscal_mode) {
+                return p.fiscal_mode === fiscalMode;
+            }
+            return true;
+        });
+    }, [formattedProjects, fiscalMode]);
+
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
+    const [selectedProjectId, setSelectedProjectId] = useState<number | string | null>(
         getInitialProjectId,
     );
     const [successMessage, setSuccessMessage] = useState('');
@@ -94,8 +221,6 @@ export default function Purchases() {
         window.history.replaceState({}, '', url.toString());
     }, [selectedProjectId, activePoTab]);
 
-    const [vendorPOs, setVendorPOs] =
-        useState<Record<string, VendorPO>>(initialVendorPOs);
     const [showPoForm, setShowPoForm] = useState(false);
     const [poFormVendor, setPoFormVendor] = useState<{
         id: number;
@@ -106,12 +231,14 @@ export default function Purchases() {
     // State for Payment Recording & History Drawer
     const [selectedPoForPayment, setSelectedPoForPayment] =
         useState<VendorPO | null>(null);
+    const [selectedPaymentTermDB, setSelectedPaymentTermDB] =
+        useState<VendorPaymentTermDB | null>(null);
     const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
     const [expandedPoPayment, setExpandedPoPayment] = useState<string | null>(
         null,
     );
 
-    const activeProject = projects.find((p) => p.id === selectedProjectId);
+    const activeProject = projects.find((p) => String(p.id) === String(selectedProjectId));
 
     const filteredProjects = projects.filter(
         (p) =>
@@ -129,142 +256,84 @@ export default function Purchases() {
     // ─── Handlers ────────────────────────────────────────────────────────────
 
     const handleConfirmIssuePO = (data: IssuePOModalSubmitData) => {
-        if (!poFormVendor || !selectedProjectId) return;
+        if (!poFormVendor || !activeProject) return;
 
-        const totalCost = poFormVendor.locs.reduce(
-            (s, l) => s + l.vendorCost * (l.qty || 1),
-            0,
-        );
-        const ppnVal = isPPN ? totalCost * PPN_RATE : 0;
-        const finalTotal = totalCost + ppnVal;
+        const locationIds = poFormVendor.locs.map((l) => l.id);
 
-        // Convert IssuePOModalSubmitData → VendorPaymentTerm
-        let terms: VendorPaymentTerm;
-        if (data.scheme === 'full' || data.scheme === 'installment') {
-            terms = {
-                type: 'full',
-                notes: data.topNotes,
-                fullDueDate: data.termDates[0],
-            };
-        } else if (data.scheme === 'dp') {
-            const dpPct = data.termPercents[0] ?? 50;
-            terms = {
-                type: 'dp',
-                notes: data.topNotes,
-                dpPercent: dpPct,
-                dpAmount: Math.round(finalTotal * (dpPct / 100)),
-                dpDueDate: data.termDates[0],
-                pelunasanDueDate: data.termDates[1],
-            };
-        } else {
-            terms = {
-                type: 'termin',
-                notes: data.topNotes,
-                installments: data.termPercents.map((pct, i) => ({
-                    percent: pct,
-                    amount: Math.round(finalTotal * (pct / 100)),
-                    note: `Termin ${i + 1}`,
-                    dueDate: data.termDates[i],
-                })),
-            };
-        }
-
-        const nextPoNum = `PO-2026-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-        const newPO: VendorPO = {
-            poNumber: nextPoNum,
-            vendorId: poFormVendor.id,
-            vendorName: poFormVendor.name,
-            paymentTerms: terms,
-            issuedAt: new Date().toISOString().split('T')[0],
-            totalAmount: finalTotal,
-            // Save for PDF generation
-            lighting: data.lighting,
-            topNotes: data.topNotes,
-        };
-
-        setVendorPOs((prev) => ({ ...prev, [nextPoNum]: newPO }));
-
-        // IMPORTANT: only mark exactly the selected location IDs, not all vendor locations
-        const selectedLocIds = new Set(poFormVendor.locs.map((l) => l.id));
-        const updatedLocs = poFormVendor.locs.map((l) => ({
-            ...l,
-            poIssued: true,
-            poNumber: nextPoNum,
-        }));
-        setProjects((prevProjects) =>
-            prevProjects.map((p) => {
-                if (p.id !== selectedProjectId) return p;
-                return {
-                    ...p,
-                    locations: p.locations.map((l) =>
-                        selectedLocIds.has(l.id) && !l.poIssued
-                            ? { ...l, poIssued: true, poNumber: nextPoNum }
-                            : l,
-                    ),
-                };
-            }),
-        );
-
-        setShowPoForm(false);
-        setPoFormVendor(null);
-        setSuccessMessage(
-            `Berhasil menerbitkan PO ${nextPoNum} untuk ${poFormVendor.name}!`,
-        );
-        setTimeout(() => setSuccessMessage(''), 4000);
-
-        // Auto-download PDF after issuance
-        const projectData = projects.find((p) => p.id === selectedProjectId);
-        handleDownloadPO(
-            poFormVendor.name,
-            nextPoNum,
-            updatedLocs,
-            projectData?.name ?? '',
-            projectData?.period ?? '',
-            data.lighting,
-            data.topNotes,
+        router.post(
+            `/projects/${activeProject.id}/purchase-orders`,
+            {
+                vendor_id: poFormVendor.id,
+                location_ids: locationIds,
+                transaction_date: new Date().toISOString().split('T')[0],
+                lighting: data.lighting,
+                top_notes: data.topNotes,
+                term_scheme: data.scheme,
+                term_percents: data.termPercents,
+                term_due_dates: data.termDates,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowPoForm(false);
+                    setPoFormVendor(null);
+                    setSuccessMessage(
+                        `PO vendor untuk ${poFormVendor.name} berhasil diterbitkan dan dicatat dalam database!`,
+                    );
+                    setTimeout(() => setSuccessMessage(''), 4000);
+                },
+            },
         );
     };
 
     // ─── Record Payment Handlers ──────────────────────────────────────────────
-    const handleOpenRecordPayment = (po: VendorPO) => {
+    const handleOpenRecordPayment = (po: VendorPO, term?: VendorPaymentTermDB) => {
         setSelectedPoForPayment(po);
+        setSelectedPaymentTermDB(term || null);
         setShowRecordPaymentModal(true);
     };
 
     const handleSaveRecordPayment = (data: RecordPaymentModalSubmitData) => {
         if (!selectedPoForPayment) return;
 
-        const newPayment: VendorPaymentRecord = {
-            id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
-            poNumber: data.poNumber,
-            termLabel: data.termLabel,
-            amount: data.amount,
-            date: data.date,
-            method: data.method,
-            referenceNo: data.referenceNo,
-            notes: data.notes,
-        };
+        const targetProjectId = selectedPoForPayment.projectId || activeProject?.id;
+        const targetPoId = selectedPoForPayment.id;
+        const terms = selectedPoForPayment.payment_plan?.terms || [];
 
-        setVendorPOs((prev) => {
-            const currentPO = prev[data.poNumber];
-            if (!currentPO) return prev;
+        let targetTerm = selectedPaymentTermDB;
+        if (!targetTerm) {
+            targetTerm = terms.find((t) => t.status !== 'paid') || terms[0] || null;
+        }
 
-            const existingPayments = currentPO.payments || [];
-            return {
-                ...prev,
-                [data.poNumber]: {
-                    ...currentPO,
-                    payments: [...existingPayments, newPayment],
+        if (!targetProjectId || !targetPoId || !targetTerm) {
+            alert('Data PO atau Termin pembayaran tidak valid.');
+            return;
+        }
+
+        router.post(
+            `/projects/${targetProjectId}/purchase-orders/${targetPoId}/payment-terms/${targetTerm.id}/settle`,
+            {
+                amount: data.amount,
+                paid_at: data.date,
+                payment_method: data.method,
+                account_id: data.account_id || null,
+                payment_ref: data.referenceNo || null,
+                notes: data.notes || null,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowRecordPaymentModal(false);
+                    setSelectedPoForPayment(null);
+                    setSelectedPaymentTermDB(null);
+                    setExpandedPoPayment(data.poNumber);
+                    setSuccessMessage(
+                        `Berhasil mencatat pengeluaran kas ${fmt(data.amount)} untuk ${data.poNumber}!`,
+                    );
+                    setTimeout(() => setSuccessMessage(''), 4000);
                 },
-            };
-        });
-
-        setShowRecordPaymentModal(false);
-        setExpandedPoPayment(data.poNumber);
-        setSuccessMessage(
-            `Berhasil mencatat pembayaran ${fmt(data.amount)} untuk ${data.poNumber}!`,
+            },
         );
-        setTimeout(() => setSuccessMessage(''), 4000);
     };
 
     // ─── PDF Download (POST to /po-pdf via hidden form) ───────────────────────
@@ -2400,6 +2469,7 @@ export default function Purchases() {
             <RecordPaymentModal
                 isOpen={showRecordPaymentModal}
                 po={selectedPoForPayment}
+                cashBankAccounts={cashBankAccounts}
                 remainingAmount={
                     selectedPoForPayment
                         ? getPOPaymentSummary(selectedPoForPayment).remaining
@@ -2408,6 +2478,7 @@ export default function Purchases() {
                 onClose={() => {
                     setShowRecordPaymentModal(false);
                     setSelectedPoForPayment(null);
+                    setSelectedPaymentTermDB(null);
                 }}
                 onSubmit={handleSaveRecordPayment}
             />

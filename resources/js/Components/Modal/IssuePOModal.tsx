@@ -3,7 +3,7 @@ import SecondaryButton from '@/Components/Button/SecondaryButton';
 import React, { useEffect, useState } from 'react';
 
 export interface IssuePOItem {
-    id: number;
+    id: number | string;
     description: string;
     area: string;
     vendorCost: number;
