@@ -1,8 +1,8 @@
 import MetricCard from '@/Components/Card/MetricCard';
 import type { IssuePOModalSubmitData } from '@/Components/Modal/IssuePOModal';
 import { IssuePOModal } from '@/Components/Modal/IssuePOModal';
-import type { RecordPaymentModalSubmitData } from '@/Components/Modal/RecordPaymentModal';
-import { RecordPaymentModal } from '@/Components/Modal/RecordPaymentModal';
+import type { VendorPaymentModalSubmitData } from './VendorPaymentModal';
+import { VendorPaymentModal } from './VendorPaymentModal';
 import Pagination from '@/Components/Table/Pagination';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import { router } from '@inertiajs/react';
@@ -324,7 +324,7 @@ export default function Purchases({
         setShowRecordPaymentModal(true);
     };
 
-    const handleSaveRecordPayment = (data: RecordPaymentModalSubmitData) => {
+    const handleSaveRecordPayment = (data: VendorPaymentModalSubmitData) => {
         if (!selectedPoForPayment) return;
 
         const targetProjectId =
@@ -2419,16 +2419,11 @@ export default function Purchases({
                 />
             )}
 
-            {/* Record Payment Modal */}
-            <RecordPaymentModal
+            {/* Vendor Payment Modal */}
+            <VendorPaymentModal
                 isOpen={showRecordPaymentModal}
                 po={selectedPoForPayment}
                 cashBankAccounts={cashBankAccounts}
-                remainingAmount={
-                    selectedPoForPayment
-                        ? getPOPaymentSummary(selectedPoForPayment).remaining
-                        : 0
-                }
                 onClose={() => {
                     setShowRecordPaymentModal(false);
                     setSelectedPoForPayment(null);

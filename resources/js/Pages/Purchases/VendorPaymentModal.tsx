@@ -53,15 +53,30 @@ export function deriveSchedule(po: VendorPO): PaymentScheduleItem[] {
     return [];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// VendorPaymentModal
-// ─────────────────────────────────────────────────────────────────────────────
+export interface VendorPaymentModalSubmitData {
+    poNumber: string;
+    termLabel: string;
+    amount: number;
+    date: string;
+    method: string;
+    account_id?: string | number;
+    referenceNo: string;
+    notes: string;
+    term_id?: string | number;
+}
 
 interface VendorPaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    po: VendorPO;
-    onAddPayment: (poNumber: string, record: VendorPaymentRecord) => void;
+    po: VendorPO | null;
+    cashBankAccounts?: Array<{
+        id: string | number;
+        code: string;
+        name: string;
+        display_name: string;
+    }>;
+    onAddPayment?: (poNumber: string, record: VendorPaymentRecord) => void;
+    onSubmit?: (data: VendorPaymentModalSubmitData) => void;
 }
 
 const PAYMENT_METHODS = [
@@ -79,8 +94,11 @@ export function VendorPaymentModal({
     isOpen,
     onClose,
     po,
+    cashBankAccounts = [],
     onAddPayment,
+    onSubmit,
 }: VendorPaymentModalProps) {
+    if (!isOpen || !po) return null;
     const schedule = deriveSchedule(po);
     const payments = po.payments ?? [];
     const totalPaid = payments.reduce((s, r) => s + r.amount, 0);
@@ -113,13 +131,20 @@ export function VendorPaymentModal({
         firstUnpaid?.remaining ?? remaining,
     );
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [method, setMethod] = useState('Transfer Bank BCA');
-    const [refNo, setRefNo] = useState('');
+    const [accountId, setAccountId] = useState<string | number>(
+        cashBankAccounts[0]?.id || '',
+    );
+    const [method, setMethod] = useState(
+        cashBankAccounts[0]
+            ? `Transfer ${cashBankAccounts[0].name}`
+            : 'Transfer Bank BCA',
+    );
+    const [refNo, setRefNo] = useState(
+        `PAY-PO-${Math.floor(100000 + Math.random() * 900000)}`,
+    );
     const [notes, setNotes] = useState('');
     const [showHistory, setShowHistory] = useState(false);
     const [submitted, setSubmitted] = useState(false);
-
-    if (!isOpen) return null;
 
     const selectedTerm = scheduleWithStatus[selectedTermIdx];
 
@@ -130,22 +155,44 @@ export function VendorPaymentModal({
 
     const handleSubmit = () => {
         if (amount <= 0 || !date) return;
-        const record: VendorPaymentRecord = {
-            id: `pay-${Date.now()}`,
-            poNumber: po.poNumber,
-            termLabel: selectedTerm?.label ?? 'Pembayaran',
-            amount,
-            date,
-            method,
-            referenceNo: refNo,
-            notes,
-        };
-        onAddPayment(po.poNumber, record);
-        setSubmitted(true);
-        setTimeout(() => {
-            setSubmitted(false);
-            onClose();
-        }, 1200);
+        const termLabel = selectedTerm?.label ?? 'Pembayaran';
+
+        if (onSubmit) {
+            onSubmit({
+                poNumber: po.poNumber,
+                termLabel,
+                amount: Number(amount),
+                date,
+                method,
+                account_id: accountId || undefined,
+                referenceNo: refNo,
+                notes,
+            });
+            setSubmitted(true);
+            setTimeout(() => {
+                setSubmitted(false);
+            }, 1000);
+            return;
+        }
+
+        if (onAddPayment) {
+            const record: VendorPaymentRecord = {
+                id: `pay-${Date.now()}`,
+                poNumber: po.poNumber,
+                termLabel,
+                amount,
+                date,
+                method,
+                referenceNo: refNo,
+                notes,
+            };
+            onAddPayment(po.poNumber, record);
+            setSubmitted(true);
+            setTimeout(() => {
+                setSubmitted(false);
+                onClose();
+            }, 1200);
+        }
     };
 
     return (
@@ -400,19 +447,39 @@ export function VendorPaymentModal({
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Metode Pembayaran
+                                    Rekening Kas / Bank
                                 </label>
-                                <select
-                                    value={method}
-                                    onChange={(e) => setMethod(e.target.value)}
-                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 transition-all focus:border-primary focus:bg-white focus:outline-none"
-                                >
-                                    {PAYMENT_METHODS.map((m) => (
-                                        <option key={m} value={m}>
-                                            {m}
-                                        </option>
-                                    ))}
-                                </select>
+                                {cashBankAccounts && cashBankAccounts.length > 0 ? (
+                                    <select
+                                        value={accountId}
+                                        onChange={(e) => {
+                                            setAccountId(e.target.value);
+                                            const acc = cashBankAccounts.find((a) => String(a.id) === e.target.value);
+                                            if (acc) {
+                                                setMethod(`Transfer ${acc.name}`);
+                                            }
+                                        }}
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 transition-all focus:border-primary focus:bg-white focus:outline-none"
+                                    >
+                                        {cashBankAccounts.map((acc) => (
+                                            <option key={acc.id} value={acc.id}>
+                                                {acc.display_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <select
+                                        value={method}
+                                        onChange={(e) => setMethod(e.target.value)}
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 transition-all focus:border-primary focus:bg-white focus:outline-none"
+                                    >
+                                        {PAYMENT_METHODS.map((m) => (
+                                            <option key={m} value={m}>
+                                                {m}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                             <div>
                                 <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
