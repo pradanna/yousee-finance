@@ -29,25 +29,29 @@ export function formatIndoDate(dateStr?: string): string {
 }
 
 export function deriveScheduleItems(po: VendorPO): PaymentScheduleItem[] {
-    const totalAmount = po.totalAmount || 0;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const totalAmount = round2(po.totalAmount || 0);
     const payments = po.payments || [];
-    const totalPaid = payments.reduce((s, r) => s + r.amount, 0);
+    const totalPaid = round2(payments.reduce((s, r) => s + r.amount, 0));
 
     // If real database payment_plan exists, use its terms
     if (po.payment_plan && po.payment_plan.terms && po.payment_plan.terms.length > 0) {
         return po.payment_plan.terms.map((term) => {
-            const termSettlementsPaid = (term.settlements || []).reduce(
-                (sum, s) => sum + s.amount,
-                0,
+            const termSettlementsPaid = round2(
+                (term.settlements || []).reduce(
+                    (sum, s) => sum + s.amount,
+                    0,
+                ),
             );
-            const isPaid = term.status === 'paid' || termSettlementsPaid >= term.amount;
-            const remainingAmount = Math.max(0, term.amount - termSettlementsPaid);
+            const termAmt = round2(term.amount);
+            const isPaid = term.status === 'paid' || termSettlementsPaid >= termAmt - 1.0;
+            const remainingAmount = isPaid ? 0 : Math.max(0, round2(termAmt - termSettlementsPaid));
 
             return {
                 id: term.id,
                 label: term.label,
                 percent: term.percent,
-                targetAmount: term.amount,
+                targetAmount: termAmt,
                 remainingAmount,
                 dueDate: term.due_date,
                 isPaid,
@@ -173,6 +177,7 @@ interface VendorPaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     po: VendorPO | null;
+    initialTerm?: { id: string | number } | null;
     isPPN?: boolean;
     cashBankAccounts?: Array<{
         id: string | number;
@@ -188,6 +193,7 @@ export function VendorPaymentModal({
     isOpen,
     onClose,
     po,
+    initialTerm,
     isPPN = true,
     cashBankAccounts = [],
     onAddPayment,
@@ -200,15 +206,22 @@ export function VendorPaymentModal({
     const totalPaid = payments.reduce((s, r) => s + r.amount, 0);
     const remainingAmount = Math.max(0, po.totalAmount - totalPaid);
 
-    // Default to first unpaid termin or first termin
-    const firstUnpaid = schedule.find((s) => !s.isPaid) || schedule[0];
+    // Default to initialTerm if specified and unpaid, or first unpaid termin or first termin
+    const defaultTerm =
+        (initialTerm && schedule.find((s) => String(s.id) === String(initialTerm.id))) ||
+        schedule.find((s) => !s.isPaid) ||
+        schedule[0];
 
     const [selectedTermId, setSelectedTermId] = useState<string | number>(
-        firstUnpaid?.id ?? '',
+        defaultTerm?.id ?? '',
     );
-    const [payType, setPayType] = useState<'full' | 'partial'>('partial');
+    const [payType, setPayType] = useState<'full' | 'partial'>('full');
     const [amountInput, setAmountInput] = useState<number>(
-        firstUnpaid?.remainingAmount || firstUnpaid?.targetAmount || remainingAmount,
+        defaultTerm?.remainingAmount > 0
+            ? Math.round(defaultTerm.remainingAmount)
+            : defaultTerm?.targetAmount
+              ? Math.round(defaultTerm.targetAmount)
+              : 0,
     );
     const [dateInput, setDateInput] = useState<string>(
         new Date().toISOString().split('T')[0],
@@ -223,43 +236,67 @@ export function VendorPaymentModal({
     );
     const [refInput, setRefInput] = useState<string>('');
     const [notesInput, setNotesInput] = useState<string>(
-        firstUnpaid
-            ? `Pembayaran ${firstUnpaid.label} PO ${po.poNumber}`
+        defaultTerm
+            ? `Pelunasan ${defaultTerm.label} PO ${po.poNumber}`
             : `Pembayaran PO ${po.poNumber}`,
     );
 
     // Sync state when po or open status changes
     useEffect(() => {
-        const unpaid = schedule.find((s) => !s.isPaid) || schedule[0];
-        if (unpaid) {
-            setSelectedTermId(unpaid.id);
-            setAmountInput(unpaid.remainingAmount || unpaid.targetAmount);
-            setNotesInput(`Pembayaran ${unpaid.label} PO ${po.poNumber}`);
+        const activeT =
+            (initialTerm && schedule.find((s) => String(s.id) === String(initialTerm.id))) ||
+            schedule.find((s) => !s.isPaid) ||
+            schedule[0];
+
+        if (activeT) {
+            setSelectedTermId(activeT.id);
+            setPayType('full');
+            setAmountInput(
+                activeT.remainingAmount > 0
+                    ? Math.round(activeT.remainingAmount)
+                    : Math.round(activeT.targetAmount),
+            );
+            setNotesInput(`Pelunasan ${activeT.label} PO ${po.poNumber}`);
         }
         if (cashBankAccounts.length > 0 && !accountId) {
             setAccountId(cashBankAccounts[0].id);
         }
-    }, [po.poNumber, isOpen]);
+    }, [po.poNumber, initialTerm?.id, isOpen]);
 
     const selectedTerm = schedule.find((s) => s.id === selectedTermId) || schedule[0];
 
     const handleSelectTerm = (term: PaymentScheduleItem) => {
         setSelectedTermId(term.id);
-        setPayType('partial');
-        setAmountInput(term.remainingAmount > 0 ? Math.round(term.remainingAmount) : Math.round(term.targetAmount));
-        setNotesInput(`Pembayaran ${term.label} PO ${term.poNumber || po.poNumber}`);
+        setPayType('full');
+        setAmountInput(
+            term.remainingAmount > 0
+                ? Math.round(term.remainingAmount)
+                : Math.round(term.targetAmount),
+        );
+        setNotesInput(`Pelunasan ${term.label} PO ${term.poNumber || po.poNumber}`);
     };
 
     const handleSelectFull = () => {
         setPayType('full');
-        setAmountInput(remainingAmount > 0 ? remainingAmount : po.totalAmount);
-        setNotesInput(`Pelunasan Total PO ${po.poNumber}`);
+        if (selectedTerm) {
+            setAmountInput(
+                selectedTerm.remainingAmount > 0
+                    ? Math.round(selectedTerm.remainingAmount)
+                    : Math.round(selectedTerm.targetAmount),
+            );
+            setNotesInput(`Pelunasan ${selectedTerm.label} PO ${po.poNumber}`);
+        }
     };
 
     const handleSelectPartial = () => {
         setPayType('partial');
         if (selectedTerm) {
-            setAmountInput(selectedTerm.remainingAmount > 0 ? selectedTerm.remainingAmount : selectedTerm.targetAmount);
+            setAmountInput(
+                selectedTerm.remainingAmount > 0
+                    ? Math.round(selectedTerm.remainingAmount)
+                    : Math.round(selectedTerm.targetAmount),
+            );
+            setNotesInput(`Cicil ${selectedTerm.label} PO ${po.poNumber}`);
         }
     };
 
@@ -267,10 +304,7 @@ export function VendorPaymentModal({
         e.preventDefault();
         if (amountInput <= 0 || !dateInput) return;
 
-        const termLabel =
-            payType === 'full'
-                ? 'Pelunasan Total'
-                : selectedTerm?.label ?? 'Pembayaran';
+        const termLabel = selectedTerm?.label ?? (payType === 'full' ? 'Pelunasan Termin' : 'Cicil Termin');
 
         if (onSubmit) {
             onSubmit({
@@ -357,21 +391,34 @@ export function VendorPaymentModal({
                             PILIH TERMIN PEMBAYARAN & JATUH TEMPO
                         </label>
                         <div className="grid max-h-48 grid-cols-1 gap-2 overflow-y-auto pr-1">
-                            {schedule.map((term) => {
+                            {schedule.map((term, index) => {
                                 const isSelected = selectedTermId === term.id;
+                                // Sequential rule: all previous terms must be paid before this term can be selected
+                                const isPriorTermsPaid = schedule
+                                    .slice(0, index)
+                                    .every((prev) => prev.isPaid);
+                                const isLocked = !term.isPaid && !isPriorTermsPaid;
+
                                 return (
                                     <button
                                         key={term.id}
                                         type="button"
-                                        onClick={() => handleSelectTerm(term)}
-                                        className={`flex cursor-pointer items-center justify-between rounded-2xl border p-3 text-left transition-all ${
-                                            isSelected
-                                                ? isPPN
-                                                    ? 'border-blue-600 bg-blue-50 font-bold text-blue-900 ring-2 ring-blue-600/20'
-                                                    : 'border-slate-800 bg-slate-100 font-bold text-slate-900 ring-2 ring-slate-800/20'
-                                                : term.isPaid
-                                                  ? 'border-slate-200 bg-slate-100 text-slate-400 opacity-60'
-                                                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                        disabled={isLocked}
+                                        onClick={() => {
+                                            if (!isLocked) {
+                                                handleSelectTerm(term);
+                                            }
+                                        }}
+                                        className={`flex items-center justify-between rounded-2xl border p-3 text-left transition-all ${
+                                            isLocked
+                                                ? 'cursor-not-allowed border-slate-200 bg-slate-100/70 text-slate-400 opacity-60'
+                                                : isSelected
+                                                  ? isPPN
+                                                      ? 'cursor-pointer border-blue-600 bg-blue-50 font-bold text-blue-900 ring-2 ring-blue-600/20'
+                                                      : 'cursor-pointer border-slate-800 bg-slate-100 font-bold text-slate-900 ring-2 ring-slate-800/20'
+                                                  : term.isPaid
+                                                    ? 'cursor-pointer border-slate-200 bg-slate-100 text-slate-400 opacity-60'
+                                                    : 'cursor-pointer border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                                         }`}
                                     >
                                         <div className="min-w-0">
@@ -382,11 +429,18 @@ export function VendorPaymentModal({
                                                     </span>
                                                 )}
                                                 <span>{term.label}</span>
-                                                {term.isPaid && (
+                                                {term.isPaid ? (
                                                     <span className="py-0.2 rounded bg-emerald-100 px-1.5 text-[9px] font-bold text-emerald-800">
                                                         Lunas
                                                     </span>
-                                                )}
+                                                ) : isLocked ? (
+                                                    <span className="py-0.2 flex items-center gap-1 rounded bg-slate-200 px-1.5 text-[9px] font-bold text-slate-600">
+                                                        <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                        </svg>
+                                                        Terkunci (Bayar termin sebelumnya)
+                                                    </span>
+                                                ) : null}
                                             </div>
                                             <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
                                                 <span>{term.percent}%</span>
@@ -422,10 +476,10 @@ export function VendorPaymentModal({
                     </div>
                 )}
 
-                {/* Opsi Jenis Pembayaran: Full vs Partial */}
+                {/* Opsi Jenis Pembayaran: Full Termin vs Partial Termin */}
                 <div className="space-y-2">
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                        OPSI NOMINAL PEMBAYARAN
+                        OPSI NOMINAL PEMBAYARAN TERMIN
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                         <button
@@ -440,10 +494,10 @@ export function VendorPaymentModal({
                             }`}
                         >
                             <div className="text-xs font-bold">
-                                Pelunasan Total
+                                Pelunasan Termin
                             </div>
                             <div className="mt-0.5 text-[10px] text-slate-500">
-                                Sisa sisa tagihan PO
+                                Sisa tagihan termin ini ({fmt(selectedTerm?.remainingAmount > 0 ? selectedTerm.remainingAmount : selectedTerm?.targetAmount || 0)})
                             </div>
                         </button>
 
@@ -459,36 +513,50 @@ export function VendorPaymentModal({
                             }`}
                         >
                             <div className="text-xs font-bold">
-                                Cicil / Nominal Termin
+                                Cicil Sebagian Termin
                             </div>
                             <div className="mt-0.5 text-[10px] font-normal text-slate-500">
-                                Sebagian nominal
+                                Masukkan nominal manual
                             </div>
                         </button>
                     </div>
                 </div>
 
-                {/* Nominal Input */}
+                {/* Nominal Input with Thousands Separator */}
                 <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-slate-700">
-                        Nominal Dibayar (Rp)
-                    </label>
-                    <input
-                        type="number"
-                        value={amountInput || ''}
-                        readOnly={payType === 'full'}
-                        onChange={(e) =>
-                            setAmountInput(parseFloat(e.target.value) || 0)
-                        }
-                        placeholder="Masukkan nominal pembayaran..."
-                        className={`w-full rounded-xl border px-3.5 py-2.5 font-mono text-sm font-bold focus:outline-none ${
-                            payType === 'full'
-                                ? 'border-slate-300 bg-slate-100 text-slate-700'
-                                : isPPN
-                                  ? 'border-blue-400 bg-white text-blue-950 focus:border-blue-600'
-                                  : 'border-slate-400 bg-white text-slate-900 focus:border-slate-700'
-                        }`}
-                    />
+                    <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-700">
+                            Nominal Dibayar (Rp)
+                        </label>
+                        {amountInput > 0 && (
+                            <span className="font-mono text-[11px] font-bold text-slate-500">
+                                {fmt(amountInput)}
+                            </span>
+                        )}
+                    </div>
+                    <div className="relative">
+                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 font-mono text-sm font-bold text-slate-400">
+                            Rp
+                        </span>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            value={amountInput > 0 ? Math.round(amountInput).toLocaleString('id-ID') : ''}
+                            readOnly={payType === 'full'}
+                            onChange={(e) => {
+                                const rawValue = e.target.value.replace(/\D/g, '');
+                                setAmountInput(rawValue ? parseInt(rawValue, 10) : 0);
+                            }}
+                            placeholder="0"
+                            className={`w-full rounded-xl border pl-10 pr-3.5 py-2.5 font-mono text-sm font-bold focus:outline-none ${
+                                payType === 'full'
+                                    ? 'border-slate-300 bg-slate-100 text-slate-700'
+                                    : isPPN
+                                      ? 'border-blue-400 bg-white text-blue-950 focus:border-blue-600'
+                                      : 'border-slate-400 bg-white text-slate-900 focus:border-slate-700'
+                            }`}
+                        />
+                    </div>
                 </div>
 
                 {/* Tanggal Pembayaran & Metode Pembayaran */}

@@ -288,4 +288,101 @@ class VendorPaymentSettlementTest extends TestCase
         $this->assertEquals(55500000, (float) $settleJournal->items()->sum('debit'));
         $this->assertEquals(55500000, (float) $settleJournal->items()->sum('credit'));
     }
+
+    public function test_cannot_settle_later_term_before_earlier_term_is_paid(): void
+    {
+        $user = User::factory()->create();
+        $client = Client::create(['name' => 'PT Client Lima']);
+        $sales = Sales::create(['name' => 'Sales PIC 5', 'email' => 'sales5@yousee.com']);
+        $vendor = Vendor::create(['name' => 'PT Vendor Mega']);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'sales_id' => $sales->id,
+            'code' => 'PRJ-TEST-005',
+            'name' => 'Project Billboard E',
+            'fiscal_mode' => FiscalMode::NON_PPN,
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-31',
+            'contract_value' => 100000000,
+        ]);
+
+        $location = ProjectLocation::create([
+            'project_id' => $project->id,
+            'vendor_id' => $vendor->id,
+            'code' => 'LOC-005',
+            'type' => 'Billboard',
+            'area' => 'Jakarta',
+            'description' => 'Billboard Sudirman',
+            'size' => '4x8m',
+            'vendor_cost' => 50000000,
+            'qty' => 1,
+        ]);
+
+        $po = (new IssueVendorPurchaseOrder())->execute(
+            $project,
+            $vendor,
+            [$location->id],
+            '2026-08-17',
+            [
+                'term_scheme' => 'dp',
+                'term_percents' => [50, 50],
+                'term_due_dates' => ['2026-08-17', '2026-09-17'],
+            ],
+        );
+
+        $terms = $po->paymentPlan->terms()->orderBy('sort_order')->get();
+        $term1 = $terms[0];
+        $term2 = $terms[1];
+
+        // Coba bayar Termin 2 langsung padahal Termin 1 belum lunas
+        $response = $this->actingAs($user)->post(
+            route('projects.po.payment-terms.settle', [
+                'project' => $project->id,
+                'purchaseOrder' => $po->id,
+                'paymentTerm' => $term2->id,
+            ]),
+            [
+                'amount' => 25000000,
+                'paid_at' => '2026-08-17',
+                'payment_method' => 'Transfer Bank BCA',
+            ],
+        );
+
+        $response->assertSessionHasErrors('amount');
+        $this->assertEquals(PaymentTermStatus::UNPAID, $term2->fresh()->status);
+
+        // Lunasi Termin 1 terlebih dahulu
+        $response1 = $this->actingAs($user)->post(
+            route('projects.po.payment-terms.settle', [
+                'project' => $project->id,
+                'purchaseOrder' => $po->id,
+                'paymentTerm' => $term1->id,
+            ]),
+            [
+                'amount' => 25000000,
+                'paid_at' => '2026-08-17',
+                'payment_method' => 'Transfer Bank BCA',
+            ],
+        );
+
+        $response1->assertRedirect();
+        $this->assertEquals(PaymentTermStatus::PAID, $term1->fresh()->status);
+
+        // Setelah Termin 1 lunas, sekarang Termin 2 bisa dibayar
+        $response2 = $this->actingAs($user)->post(
+            route('projects.po.payment-terms.settle', [
+                'project' => $project->id,
+                'purchaseOrder' => $po->id,
+                'paymentTerm' => $term2->id,
+            ]),
+            [
+                'amount' => 25000000,
+                'paid_at' => '2026-08-17',
+                'payment_method' => 'Transfer Bank BCA',
+            ],
+        );
+
+        $response2->assertRedirect();
+        $this->assertEquals(PaymentTermStatus::PAID, $term2->fresh()->status);
+    }
 }

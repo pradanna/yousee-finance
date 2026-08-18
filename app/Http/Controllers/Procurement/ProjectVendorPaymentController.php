@@ -37,6 +37,18 @@ class ProjectVendorPaymentController extends Controller
             abort(403, 'Termin pembayaran tidak sesuai dengan PO ini.');
         }
 
+        // Aturan Urutan Termin: Termin sebelumnya (sort_order lebih kecil) harus sudah lunas (PAID) terlebih dahulu
+        $unpaidPriorTerm = $plan->terms()
+            ->where('sort_order', '<', $paymentTerm->sort_order)
+            ->where('status', '!=', \App\Domains\Billing\Enums\PaymentTermStatus::PAID)
+            ->first();
+
+        if ($unpaidPriorTerm) {
+            return redirect()->back()->withErrors([
+                'amount' => "Pembayaran harus urut mulai dari termin terkecil. Silakan lunasi {$unpaidPriorTerm->label} terlebih dahulu sebelum membayar {$paymentTerm->label}.",
+            ]);
+        }
+
         // Validasi agar nominal pembayaran tidak melebihi sisa tagihan termin
         $totalSettled = round((float) $paymentTerm->settlements()->sum('amount'), 2);
         $termAmount = round((float) $paymentTerm->amount, 2);

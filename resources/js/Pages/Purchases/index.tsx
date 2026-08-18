@@ -1,12 +1,17 @@
 import MetricCard from '@/Components/Card/MetricCard';
+import MonthPicker from '@/Components/Form/MonthPicker';
+import SelectInput from '@/Components/Form/SelectInput';
+import TextInput from '@/Components/Form/TextInput';
 import type { IssuePOModalSubmitData } from '@/Components/Modal/IssuePOModal';
 import { IssuePOModal } from '@/Components/Modal/IssuePOModal';
 import type { VendorPaymentModalSubmitData } from './VendorPaymentModal';
 import { VendorPaymentModal } from './VendorPaymentModal';
 import Pagination from '@/Components/Table/Pagination';
+import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
-import { router } from '@inertiajs/react';
-import React, { useMemo, useState } from 'react';
+import type { PageProps } from '@/types';
+import { router, usePage } from '@inertiajs/react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type {
     BillboardLocation,
     PurchaseProject,
@@ -17,6 +22,13 @@ import type {
     VendorPaymentTerm,
     VendorPaymentTermDB,
 } from './purchasesTypes';
+
+type PagePropsWithFlash = PageProps<{
+    flash?: {
+        success?: string;
+        error?: string;
+    };
+}>;
 import {
     PPN_RATE,
     fmt,
@@ -31,6 +43,7 @@ import {
 
 export default function Purchases({
     projects: rawProjects = [],
+    vendors = [],
     cashBankAccounts = [],
 }: PurchasesPageProps) {
     const fiscalMode = useFiscalMode();
@@ -87,6 +100,8 @@ export default function Purchases({
                     p.salesPIC ??
                     '-',
                 period: periodStr,
+                start_date: p.start_date,
+                end_date: p.end_date,
                 contractValue:
                     Number(p.contract_value ?? p.contractValue) || 0,
                 status: p.status || 'Draft',
@@ -206,7 +221,7 @@ export default function Purchases({
     };
 
     // Filter projects based on active fiscal mode
-    const projects = useMemo(() => {
+    const fiscalProjects = useMemo(() => {
         return formattedProjects.filter((p) => {
             if (p.fiscal_mode) {
                 return p.fiscal_mode === fiscalMode;
@@ -216,6 +231,13 @@ export default function Purchases({
     }, [formattedProjects, fiscalMode]);
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [vendorFilter, setVendorFilter] = useState<string>('all');
+    const [filterBasis, setFilterBasis] = useState<
+        'created_at' | 'active_period' | 'start_date'
+    >('created_at');
+    const [filterYear, setFilterYear] = useState<string>('all');
+    const [filterMonth, setFilterMonth] = useState<string>('all');
+
     const [selectedProjectId, setSelectedProjectId] = useState<
         number | string | null
     >(getInitialProjectId);
@@ -223,6 +245,49 @@ export default function Purchases({
     const [activePoTab, setActivePoTab] = useState<
         'all_projects' | 'pending_queue' | 'issued_pos' | 'top_schedule'
     >(getInitialPoTab);
+
+    // Toast state
+    const [toast, setToast] = useState<{
+        show: boolean;
+        type: ToastType;
+        title?: string;
+        message: string;
+    }>({
+        show: false,
+        type: 'success',
+        title: '',
+        message: '',
+    });
+
+    const triggerToast = (
+        message: string,
+        type: ToastType = 'success',
+        title?: string,
+    ) => {
+        setToast({
+            show: true,
+            type,
+            title:
+                title ||
+                (type === 'success'
+                    ? 'Berhasil'
+                    : type === 'error'
+                      ? 'Gagal'
+                      : 'Pemberitahuan'),
+            message,
+        });
+    };
+
+    // Sync flash messages from Inertia
+    const { flash } = usePage<PagePropsWithFlash>().props;
+    useEffect(() => {
+        if (flash?.success) {
+            triggerToast(flash.success, 'success', 'Operasi Berhasil');
+        }
+        if (flash?.error) {
+            triggerToast(flash.error, 'error', 'Operasi Gagal');
+        }
+    }, [flash]);
 
     // Pagination state for each tab
     const [allProjectsPage, setAllProjectsPage] = useState(1);
@@ -246,6 +311,100 @@ export default function Purchases({
         }
         window.history.replaceState({}, '', url.toString());
     }, [selectedProjectId, activePoTab]);
+
+    // Period filtered projects
+    const periodFilteredProjects = useMemo(() => {
+        return fiscalProjects.filter((p) => {
+            // Vendor Filter
+            if (vendorFilter !== 'all') {
+                const hasVendorInLocations = p.locations.some(
+                    (loc) => String(loc.vendorId) === String(vendorFilter),
+                );
+                const hasVendorInPOs = (p.purchase_orders || []).some(
+                    (po) => String(po.vendor_id) === String(vendorFilter),
+                );
+                if (!hasVendorInLocations && !hasVendorInPOs) {
+                    return false;
+                }
+            }
+
+            // Month / Year Period Filter
+            if (filterYear === 'all' && filterMonth === 'all') {
+                return true;
+            }
+
+            const startStr = p.start_date || '';
+            const endStr = p.end_date || startStr;
+
+            // Basis: start_date (Bulan Mulai)
+            if (filterBasis === 'start_date') {
+                if (!startStr) return false;
+                const pYear = startStr.substring(0, 4);
+                const pMonth = startStr.substring(5, 7);
+                const matchesYear =
+                    filterYear === 'all' || pYear === filterYear;
+                const matchesMonth =
+                    filterMonth === 'all' ||
+                    pMonth === filterMonth.padStart(2, '0');
+                return matchesYear && matchesMonth;
+            }
+
+            // Basis: created_at / po issued date
+            if (filterBasis === 'created_at') {
+                // Check if any PO in this project matches the period, or fallback to startStr
+                const poDates = (p.purchase_orders || []).map(
+                    (po) => po.issued_at || po.transaction_date || '',
+                ).filter(Boolean);
+
+                const refDates = poDates.length > 0 ? poDates : [startStr].filter(Boolean);
+                if (refDates.length === 0) return false;
+
+                return refDates.some((dateRef) => {
+                    const pYear = dateRef.substring(0, 4);
+                    const pMonth = dateRef.substring(5, 7);
+                    const matchesYear =
+                        filterYear === 'all' || pYear === filterYear;
+                    const matchesMonth =
+                        filterMonth === 'all' ||
+                        pMonth === filterMonth.padStart(2, '0');
+                    return matchesYear && matchesMonth;
+                });
+            }
+
+            // Default: 'active_period' (Masa Tayang Overlap test)
+            const targetYear = filterYear === 'all' ? null : Number(filterYear);
+            const targetMonth =
+                filterMonth === 'all' ? null : Number(filterMonth);
+
+            let periodStart: string;
+            let periodEnd: string;
+
+            if (targetYear && targetMonth) {
+                const monthStr = String(targetMonth).padStart(2, '0');
+                const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+                periodStart = `${targetYear}-${monthStr}-01`;
+                periodEnd = `${targetYear}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+            } else if (targetYear) {
+                periodStart = `${targetYear}-01-01`;
+                periodEnd = `${targetYear}-12-31`;
+            } else if (targetMonth) {
+                const currentYear = new Date().getFullYear();
+                const monthStr = String(targetMonth).padStart(2, '0');
+                const lastDay = new Date(currentYear, targetMonth, 0).getDate();
+                periodStart = `${currentYear}-${monthStr}-01`;
+                periodEnd = `${currentYear}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+            } else {
+                return true;
+            }
+
+            return (
+                (!startStr || startStr <= periodEnd) &&
+                (!endStr || endStr >= periodStart)
+            );
+        });
+    }, [fiscalProjects, vendorFilter, filterBasis, filterYear, filterMonth]);
+
+    const projects = periodFilteredProjects;
 
     const [showPoForm, setShowPoForm] = useState(false);
     const [poFormVendor, setPoFormVendor] = useState<{
@@ -273,7 +432,19 @@ export default function Purchases({
             p.locations.length > 0 &&
             (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.clientName.toLowerCase().includes(searchQuery.toLowerCase())),
+                p.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (p.purchase_orders || []).some((po) =>
+                    po.po_number.toLowerCase().includes(searchQuery.toLowerCase()),
+                ) ||
+                p.locations.some(
+                    (loc) =>
+                        loc.vendorName
+                            .toLowerCase()
+                            .includes(searchQuery.toLowerCase()) ||
+                        (loc.poNumber || '')
+                            .toLowerCase()
+                            .includes(searchQuery.toLowerCase()),
+                )),
     );
 
     const activeLocations = activeProject ? activeProject.locations : [];
@@ -305,10 +476,21 @@ export default function Purchases({
                 onSuccess: () => {
                     setShowPoForm(false);
                     setPoFormVendor(null);
-                    setSuccessMessage(
+                    triggerToast(
                         `PO vendor untuk ${poFormVendor.name} berhasil diterbitkan dan dicatat dalam database!`,
+                        'success',
+                        'Penerbitan PO Berhasil',
                     );
-                    setTimeout(() => setSuccessMessage(''), 4000);
+                },
+                onError: (errors) => {
+                    const firstError =
+                        Object.values(errors)[0] ||
+                        'Gagal menerbitkan PO vendor. Silakan periksa kembali data Anda.';
+                    triggerToast(
+                        String(firstError),
+                        'error',
+                        'Penerbitan PO Gagal',
+                    );
                 },
             },
         );
@@ -339,7 +521,11 @@ export default function Purchases({
         }
 
         if (!targetProjectId || !targetPoId || !targetTerm) {
-            alert('Data PO atau Termin pembayaran tidak valid.');
+            triggerToast(
+                'Data PO atau Termin pembayaran tidak valid.',
+                'error',
+                'Pembayaran Gagal',
+            );
             return;
         }
 
@@ -360,10 +546,21 @@ export default function Purchases({
                     setSelectedPoForPayment(null);
                     setSelectedPaymentTermDB(null);
                     setExpandedPoPayment(data.poNumber);
-                    setSuccessMessage(
-                        `Berhasil mencatat pengeluaran kas ${fmt(data.amount)} untuk ${data.poNumber}!`,
+                    triggerToast(
+                        `Berhasil mencatat pembayaran kas ${fmt(data.amount)} untuk ${data.poNumber} (${data.termLabel})!`,
+                        'success',
+                        'Pembayaran Vendor Berhasil',
                     );
-                    setTimeout(() => setSuccessMessage(''), 4000);
+                },
+                onError: (errors) => {
+                    const firstError =
+                        Object.values(errors)[0] ||
+                        'Gagal mencatat pembayaran vendor. Silakan periksa kembali nominal dan urutan termin.';
+                    triggerToast(
+                        String(firstError),
+                        'error',
+                        'Pembayaran Vendor Gagal',
+                    );
                 },
             },
         );
@@ -449,6 +646,7 @@ export default function Purchases({
                 issuedDpp: 0,
                 issuedGrandTotal: 0,
                 pendingDpp: 0,
+                pendingGrandTotal: 0,
             };
         }
 
@@ -467,6 +665,9 @@ export default function Purchases({
         const pendingDpp = activeLocations
             .filter((l) => !l.poIssued && l.vendorId !== null)
             .reduce((s, l) => s + (l.vendorCost || 0) * (l.qty || 1), 0);
+        const pendingGrandTotal = isPPN
+            ? pendingDpp * (1 + PPN_RATE)
+            : pendingDpp;
 
         return {
             totalDpp,
@@ -475,6 +676,7 @@ export default function Purchases({
             issuedDpp,
             issuedGrandTotal,
             pendingDpp,
+            pendingGrandTotal,
         };
     }, [activeProject, activeLocations, isPPN]);
 
@@ -680,9 +882,139 @@ export default function Purchases({
                 {!activeProject ? (
                     <div className="space-y-5">
                         {/* Unified Filter & Search Container */}
-                        <div className="shadow-2xs rounded-2xl border border-slate-200/90 bg-white p-3.5">
-                            <div className="flex flex-col items-stretch justify-between gap-3 lg:flex-row lg:items-center">
-                                {/* Tab Filter */}
+                        <div className="shadow-xs space-y-4 rounded-2xl border border-slate-200/80 bg-white p-4">
+                            {/* Top Row: Search Input, Vendor Filter, Period Basis & Month Picker */}
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+                                {/* Search Input */}
+                                <div className="space-y-1 sm:col-span-2 lg:col-span-4">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Cari PO / Proyek / Vendor
+                                    </label>
+                                    <div className="relative">
+                                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                            <svg
+                                                className="h-4 w-4"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <TextInput
+                                            type="text"
+                                            placeholder="Cari nomor PO, proyek, vendor..."
+                                            value={searchQuery}
+                                            onChange={(e) => {
+                                                setSearchQuery(e.target.value);
+                                                setAllProjectsPage(1);
+                                                setPendingQueuePage(1);
+                                                setIssuedPosPage(1);
+                                                setTopSchedulePage(1);
+                                            }}
+                                            className="block w-full pl-9 text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Vendor Filter Dropdown */}
+                                <div className="space-y-1 sm:col-span-1 lg:col-span-3">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Vendor
+                                    </label>
+                                    <SelectInput
+                                        value={vendorFilter}
+                                        onChange={(e) => {
+                                            setVendorFilter(e.target.value);
+                                            setAllProjectsPage(1);
+                                            setPendingQueuePage(1);
+                                            setIssuedPosPage(1);
+                                            setTopSchedulePage(1);
+                                        }}
+                                        options={[
+                                            { value: 'all', label: 'Semua Vendor' },
+                                            ...vendors.map((v) => ({
+                                                value: String(v.id),
+                                                label: v.name,
+                                            })),
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* Filter Basis Selector */}
+                                <div className="space-y-1 sm:col-span-1 lg:col-span-2">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Acuan Periode
+                                    </label>
+                                    <SelectInput
+                                        value={filterBasis}
+                                        onChange={(e) => {
+                                            setFilterBasis(
+                                                e.target.value as
+                                                    | 'created_at'
+                                                    | 'active_period'
+                                                    | 'start_date',
+                                            );
+                                            setAllProjectsPage(1);
+                                            setPendingQueuePage(1);
+                                            setIssuedPosPage(1);
+                                            setTopSchedulePage(1);
+                                        }}
+                                        options={[
+                                            {
+                                                value: 'created_at',
+                                                label: 'Tanggal Terbit PO',
+                                            },
+                                            {
+                                                value: 'active_period',
+                                                label: 'Masa Tayang',
+                                            },
+                                            {
+                                                value: 'start_date',
+                                                label: 'Bulan Mulai',
+                                            },
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* Month & Year Picker Component */}
+                                <div className="space-y-1 sm:col-span-1 lg:col-span-3">
+                                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Bulan &amp; Tahun
+                                    </label>
+                                    <MonthPicker
+                                        value={
+                                            filterYear !== 'all' &&
+                                            filterMonth !== 'all'
+                                                ? `${filterYear}-${filterMonth.padStart(2, '0')}`
+                                                : 'all'
+                                        }
+                                        onChange={(val, yr, mo) => {
+                                            setFilterYear(yr);
+                                            setFilterMonth(
+                                                mo === 'all'
+                                                    ? 'all'
+                                                    : String(Number(mo)),
+                                            );
+                                            setAllProjectsPage(1);
+                                            setPendingQueuePage(1);
+                                            setIssuedPosPage(1);
+                                            setTopSchedulePage(1);
+                                        }}
+                                        allowAll={true}
+                                        allLabel="Semua Periode"
+                                        className="w-full [&>button]:w-full [&>button]:justify-between"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Bottom Row: Tab Filter Navigation */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                                 <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1">
                                     {[
                                         {
@@ -788,32 +1120,6 @@ export default function Purchases({
                                             </span>
                                         )}
                                     </button>
-                                </div>
-
-                                {/* Search */}
-                                <div className="relative w-full flex-shrink-0 lg:w-72">
-                                    <svg
-                                        className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                        />
-                                    </svg>
-                                    <input
-                                        type="text"
-                                        value={searchQuery}
-                                        onChange={(e) =>
-                                            setSearchQuery(e.target.value)
-                                        }
-                                        placeholder="Cari proyek, kode, atau client..."
-                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs font-semibold text-slate-800 placeholder-slate-400 transition-all focus:border-primary focus:bg-white focus:outline-none"
-                                    />
                                 </div>
                             </div>
                         </div>
@@ -1310,6 +1616,7 @@ export default function Purchases({
                         )}
 
                         {/* TAB 3: ISSUED POs */}
+{/* TAB 3: ISSUED POs */}
                         {activePoTab === 'issued_pos' && (
                             <div className="shadow-2xs space-y-4 rounded-3xl border border-slate-200/90 bg-white p-6">
                                 <div className="flex items-center justify-between">
@@ -1341,7 +1648,14 @@ export default function Purchases({
                                         totalRemaining: number;
                                     };
 
-                                    const allPOs = Object.values(vendorPOs);
+                                    const allPOs = Object.values(vendorPOs).filter((po) => {
+                                        const proj = projects.find(
+                                            (p) =>
+                                                p.id === po.projectId ||
+                                                p.locations.some((l) => l.poNumber === po.poNumber),
+                                        );
+                                        return Boolean(proj);
+                                    });
                                     const groupedMap: Record<string, ProjectPOGroup> = {};
 
                                     allPOs.forEach((po) => {
@@ -1378,7 +1692,7 @@ export default function Purchases({
                                     if (projectGroups.length === 0) {
                                         return (
                                             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-xs font-semibold text-slate-400">
-                                                Belum ada dokumen PO vendor resmi yang diterbitkan.
+                                                Belum ada dokumen PO vendor resmi yang sesuai dengan filter.
                                             </div>
                                         );
                                     }
@@ -1456,63 +1770,43 @@ export default function Purchases({
                                                                 const isExpanded = expandedPoPayment === po.poNumber;
 
                                                                 return (
-                                                                    <div
-                                                                        key={po.poNumber}
-                                                                        className="divide-y divide-slate-100 bg-white transition-colors hover:bg-slate-50/40"
-                                                                    >
-                                                                        <div className="flex flex-wrap items-center justify-between gap-4 p-4">
-                                                                            <div className="min-w-0 flex-1 space-y-1.5">
-                                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                                    <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 font-mono text-xs font-bold text-emerald-800">
-                                                                                        {po.poNumber}
-                                                                                    </span>
-                                                                                    <span className="text-xs font-bold text-slate-900">
-                                                                                        {po.vendorName}
-                                                                                    </span>
-
-                                                                                    {/* Payment Status Badge */}
-                                                                                    {summary.status === 'paid' && (
-                                                                                        <span className="flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                                                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                                                                                            PAID / LUNAS
-                                                                                        </span>
-                                                                                    )}
-                                                                                    {summary.status === 'partial' && (
-                                                                                        <span className="flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">
-                                                                                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-600" />
-                                                                                            PARTIALLY PAID ({summary.percentage}%)
-                                                                                        </span>
-                                                                                    )}
-                                                                                    {summary.status === 'unpaid' && (
-                                                                                        <span className="flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                                                                                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                                                                                            BELUM DIBAYAR
-                                                                                        </span>
-                                                                                    )}
+                                                                    <div key={po.poNumber} className="transition-colors hover:bg-slate-50/50">
+                                                                        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                                                                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                                    </svg>
                                                                                 </div>
-
-                                                                                {/* Progress bar realisasi pembayaran */}
-                                                                                <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-100">
-                                                                                    <div
-                                                                                        className={`h-full transition-all duration-500 ${summary.status === 'paid' ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                                                                                        style={{
-                                                                                            width: `${summary.percentage}%`,
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-
-                                                                                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
-                                                                                    <span>
-                                                                                        Terbit: <strong className="text-slate-700">{formatDate(po.issuedAt)}</strong>
-                                                                                    </span>
-                                                                                    <span>&bull;</span>
-                                                                                    <span>
-                                                                                        Skema: <strong className="text-slate-700">{po.paymentTerms.notes || po.paymentTerms.type}</strong>
-                                                                                    </span>
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="font-mono text-xs font-bold text-slate-800">
+                                                                                            {po.poNumber}
+                                                                                        </span>
+                                                                                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                                                                            {po.vendorName}
+                                                                                        </span>
+                                                                                        {summary.status === 'paid' ? (
+                                                                                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9.5px] font-bold text-emerald-800">
+                                                                                                Lunas (100%)
+                                                                                            </span>
+                                                                                        ) : summary.status === 'partial' ? (
+                                                                                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9.5px] font-bold text-amber-800">
+                                                                                                {summary.percentage}% Terbayar
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9.5px] font-bold text-slate-600">
+                                                                                                Belum Dibayar
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="mt-0.5 text-[10px] text-slate-400">
+                                                                                        Terbit: {formatDate(po.issuedAt)} &bull; Skema: {po.paymentTerms.type === 'dp' ? `DP ${po.paymentTerms.dpPercent || 50}% + Pelunasan` : po.paymentTerms.type === 'termin' ? `Termin (${po.paymentTerms.installments?.length || 0}x)` : 'Pembayaran Penuh (Full)'}
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
 
-                                                                            <div className="flex flex-shrink-0 items-center gap-4">
+                                                                            <div className="flex items-center gap-4">
                                                                                 <div className="text-right">
                                                                                     <div className="font-mono text-xs font-bold text-slate-900">
                                                                                         {fmt(po.totalAmount)}
@@ -1565,15 +1859,15 @@ export default function Purchases({
                                                                                             po.vendorName,
                                                                                             po.poNumber,
                                                                                             poLocs,
-                                                                                            project?.name ?? '',
-                                                                                            project?.period ?? '',
-                                                                                            po.lighting,
-                                                                                            po.topNotes,
+                                                                                            project?.name || grp.projectName,
+                                                                                            project?.period || '-',
+                                                                                            po.lighting || 'Berlampu',
+                                                                                            po.topNotes || 'Lunas setelah visual terpasang',
                                                                                         );
                                                                                     }}
-                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-blue-700"
+                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700 transition-all hover:bg-slate-100"
                                                                                 >
-                                                                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                    <svg className="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                                                     </svg>
                                                                                     <span>PDF</span>
@@ -1673,108 +1967,182 @@ export default function Purchases({
                                         </p>
                                     </div>
                                     <span className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-800">
-                                        {Object.keys(vendorPOs).length} Dokumen
-                                        PO Terjadwal
+                                        {Object.values(vendorPOs).filter((po) =>
+                                            projects.some(
+                                                (p) =>
+                                                    p.id === po.projectId ||
+                                                    p.locations.some((l) => l.poNumber === po.poNumber),
+                                            ),
+                                        ).length} Dokumen PO Terjadwal
                                     </span>
                                 </div>
 
                                 <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80">
                                     {(() => {
-                                        const sortedPOs = Object.values(
+                                        const filteredPOs = Object.values(
                                             vendorPOs,
-                                        )
+                                        ).filter((po) =>
+                                            projects.some(
+                                                (p) =>
+                                                    p.id === po.projectId ||
+                                                    p.locations.some((l) => l.poNumber === po.poNumber),
+                                            ),
+                                        );
+
+                                        type TOPTermScheduleItem = {
+                                            id: string | number;
+                                            label: string;
+                                            dueDate?: string;
+                                            amount: number;
+                                            paidAmount: number;
+                                            remainingAmount: number;
+                                            isPaid: boolean;
+                                            isLocked: boolean;
+                                            termDB?: VendorPaymentTermDB;
+                                        };
+
+                                        const round2 = (n: number) => Math.round(n * 100) / 100;
+
+                                        const sortedPOs = filteredPOs
                                             .map((po) => {
                                                 const summary =
                                                     getPOPaymentSummary(po);
-                                                const scheduleItems: Array<{
-                                                    label: string;
-                                                    dueDate?: string;
-                                                    amount: number;
-                                                }> = [];
+                                                const scheduleItems: TOPTermScheduleItem[] = [];
 
-                                                if (
-                                                    po.paymentTerms.type ===
-                                                    'full'
-                                                ) {
-                                                    scheduleItems.push({
-                                                        label: 'Pembayaran Penuh (Full Payment)',
-                                                        dueDate:
-                                                            po.paymentTerms
-                                                                .fullDueDate,
-                                                        amount: po.totalAmount,
-                                                    });
-                                                } else if (
-                                                    po.paymentTerms.type ===
-                                                    'dp'
-                                                ) {
-                                                    scheduleItems.push({
-                                                        label: `DP ${po.paymentTerms.dpPercent || 50}%`,
-                                                        dueDate:
-                                                            po.paymentTerms
-                                                                .dpDueDate,
-                                                        amount:
-                                                            po.paymentTerms
-                                                                .dpAmount ||
-                                                            Math.round(
-                                                                po.totalAmount *
-                                                                    0.5,
-                                                            ),
-                                                    });
-                                                    scheduleItems.push({
-                                                        label: 'Pelunasan',
-                                                        dueDate:
-                                                            po.paymentTerms
-                                                                .pelunasanDueDate,
-                                                        amount:
-                                                            po.totalAmount -
-                                                            (po.paymentTerms
-                                                                .dpAmount ||
-                                                                Math.round(
-                                                                    po.totalAmount *
-                                                                        0.5,
-                                                                )),
-                                                    });
-                                                } else if (
-                                                    po.paymentTerms.type ===
-                                                        'termin' &&
-                                                    po.paymentTerms.installments
-                                                ) {
-                                                    po.paymentTerms.installments.forEach(
-                                                        (inst, idx) => {
-                                                            scheduleItems.push({
-                                                                label:
-                                                                    inst.note ||
-                                                                    `Termin ${idx + 1} (${inst.percent}%)`,
-                                                                dueDate:
-                                                                    inst.dueDate,
-                                                                amount: inst.amount,
-                                                            });
-                                                        },
+                                                // 1. If database payment_plan exists, prioritize real terms
+                                                if (po.payment_plan && po.payment_plan.terms && po.payment_plan.terms.length > 0) {
+                                                    const rawTerms = [...po.payment_plan.terms].sort(
+                                                        (a, b) => (a.sort_order || 0) - (b.sort_order || 0),
                                                     );
-                                                } else {
+                                                    let isPreviousAllPaid = true;
+
+                                                    rawTerms.forEach((term) => {
+                                                        const termSettled = round2(
+                                                            (term.settlements || []).reduce(
+                                                                (s, cur) => s + Number(cur.amount),
+                                                                0,
+                                                            ),
+                                                        );
+                                                        const termAmt = round2(Number(term.amount));
+                                                        const isTermPaid =
+                                                            term.status === 'paid' ||
+                                                            termSettled >= termAmt - 1.0;
+                                                        const rem = Math.max(0, round2(termAmt - termSettled));
+                                                        const isLocked = !isTermPaid && !isPreviousAllPaid;
+
+                                                        scheduleItems.push({
+                                                            id: term.id,
+                                                            label: term.label,
+                                                            dueDate: term.due_date,
+                                                            amount: termAmt,
+                                                            paidAmount: termSettled,
+                                                            remainingAmount: isTermPaid ? 0 : rem,
+                                                            isPaid: isTermPaid,
+                                                            isLocked,
+                                                            termDB: term,
+                                                        });
+
+                                                        if (!isTermPaid) {
+                                                            isPreviousAllPaid = false;
+                                                        }
+                                                    });
+                                                } else if (po.paymentTerms.type === 'full') {
+                                                    const isFullPaid = summary.status === 'paid' || summary.totalPaid >= po.totalAmount - 1.0;
                                                     scheduleItems.push({
+                                                        id: 'full-1',
+                                                        label: 'Pembayaran Penuh (Full Payment)',
+                                                        dueDate: po.paymentTerms.fullDueDate || po.issuedAt,
+                                                        amount: po.totalAmount,
+                                                        paidAmount: summary.totalPaid,
+                                                        remainingAmount: isFullPaid ? 0 : summary.remaining,
+                                                        isPaid: isFullPaid,
+                                                        isLocked: false,
+                                                    });
+                                                } else if (po.paymentTerms.type === 'dp') {
+                                                    const dpAmt = round2(po.paymentTerms.dpAmount || Math.round(po.totalAmount * 0.5));
+                                                    const pelunasanAmt = round2(po.totalAmount - dpAmt);
+                                                    const dpPaid = round2(Math.min(dpAmt, summary.totalPaid));
+                                                    const pelunasanPaid = round2(Math.max(0, summary.totalPaid - dpAmt));
+                                                    const isDpPaid = dpPaid >= dpAmt - 1.0;
+                                                    const isPelunasanPaid = pelunasanPaid >= pelunasanAmt - 1.0;
+
+                                                    scheduleItems.push({
+                                                        id: 'dp-1',
+                                                        label: `DP ${po.paymentTerms.dpPercent || 50}%`,
+                                                        dueDate: po.paymentTerms.dpDueDate || po.issuedAt,
+                                                        amount: dpAmt,
+                                                        paidAmount: dpPaid,
+                                                        remainingAmount: isDpPaid ? 0 : Math.max(0, round2(dpAmt - dpPaid)),
+                                                        isPaid: isDpPaid,
+                                                        isLocked: false,
+                                                    });
+                                                    scheduleItems.push({
+                                                        id: 'pelunasan-2',
+                                                        label: 'Pelunasan',
+                                                        dueDate: po.paymentTerms.pelunasanDueDate,
+                                                        amount: pelunasanAmt,
+                                                        paidAmount: pelunasanPaid,
+                                                        remainingAmount: isPelunasanPaid ? 0 : Math.max(0, round2(pelunasanAmt - pelunasanPaid)),
+                                                        isPaid: isPelunasanPaid,
+                                                        isLocked: !isDpPaid,
+                                                    });
+                                                } else if (po.paymentTerms.type === 'termin' && po.paymentTerms.installments) {
+                                                    let runningPaid = round2(summary.totalPaid);
+                                                    let isPreviousAllPaid = true;
+
+                                                    po.paymentTerms.installments.forEach((inst, idx) => {
+                                                        const termAmt = round2(inst.amount);
+                                                        const termPaid = round2(Math.min(termAmt, Math.max(0, runningPaid)));
+                                                        runningPaid = round2(runningPaid - termPaid);
+                                                        const isTermPaid = termPaid >= termAmt - 1.0;
+                                                        const rem = Math.max(0, round2(termAmt - termPaid));
+                                                        const isLocked = !isTermPaid && !isPreviousAllPaid;
+
+                                                        scheduleItems.push({
+                                                            id: `termin-${idx + 1}`,
+                                                            label: inst.note || `Termin ${idx + 1} (${inst.percent}%)`,
+                                                            dueDate: inst.dueDate,
+                                                            amount: termAmt,
+                                                            paidAmount: termPaid,
+                                                            remainingAmount: isTermPaid ? 0 : rem,
+                                                            isPaid: isTermPaid,
+                                                            isLocked,
+                                                        });
+
+                                                        if (!isTermPaid) {
+                                                            isPreviousAllPaid = false;
+                                                        }
+                                                    });
+                                                } else {
+                                                    const isFullPaid = summary.status === 'paid' || summary.totalPaid >= po.totalAmount - 1.0;
+                                                    scheduleItems.push({
+                                                        id: 'default-1',
                                                         label: 'Jadwal Pembayaran Vendor',
                                                         dueDate: po.issuedAt,
                                                         amount: po.totalAmount,
+                                                        paidAmount: summary.totalPaid,
+                                                        remainingAmount: isFullPaid ? 0 : summary.remaining,
+                                                        isPaid: isFullPaid,
+                                                        isLocked: false,
                                                     });
                                                 }
 
-                                                // Find earliest due date for sorting
-                                                const validDates = scheduleItems
+                                                // Find earliest due date of UNPAID terms for sorting (if all paid, use last date)
+                                                const unpaidDates = scheduleItems
+                                                    .filter((item) => !item.isPaid && item.dueDate)
+                                                    .map((item) => new Date(item.dueDate!).getTime());
+
+                                                const allValidDates = scheduleItems
                                                     .map((item) => item.dueDate)
-                                                    .filter((d): d is string =>
-                                                        Boolean(d),
-                                                    )
-                                                    .map((d) =>
-                                                        new Date(d).getTime(),
-                                                    );
+                                                    .filter((d): d is string => Boolean(d))
+                                                    .map((d) => new Date(d).getTime());
 
                                                 const nearestDueDateMs =
-                                                    validDates.length > 0
-                                                        ? Math.min(
-                                                              ...validDates,
-                                                          )
-                                                        : 9999999999999;
+                                                    unpaidDates.length > 0
+                                                        ? Math.min(...unpaidDates)
+                                                        : allValidDates.length > 0
+                                                          ? Math.min(...allValidDates)
+                                                          : 9999999999999;
 
                                                 return {
                                                     po,
@@ -1788,6 +2156,14 @@ export default function Purchases({
                                                     a.nearestDueDateMs -
                                                     b.nearestDueDateMs,
                                             );
+
+                                        if (sortedPOs.length === 0) {
+                                            return (
+                                                <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-xs font-semibold text-slate-400">
+                                                    Belum ada jadwal TOP vendor untuk periode ini.
+                                                </div>
+                                            );
+                                        }
 
                                         const paginatedPOs = sortedPOs.slice(
                                             (topSchedulePage - 1) *
@@ -1864,7 +2240,7 @@ export default function Purchases({
                                                                         'Sesuai Perjanjian TOP'}
                                                                 </span>
                                                             </div>
-                                                            <div className="space-y-1.5 divide-y divide-slate-200/50">
+                                                            <div className="space-y-2 divide-y divide-slate-200/50">
                                                                 {scheduleItems.map(
                                                                     (
                                                                         item,
@@ -1914,7 +2290,19 @@ export default function Purchases({
                                                                                 dot: 'bg-slate-400',
                                                                             };
 
-                                                                        if (
+                                                                        if (item.isPaid) {
+                                                                            statusTag = {
+                                                                                label: 'Lunas',
+                                                                                style: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold',
+                                                                                dot: 'bg-emerald-500',
+                                                                            };
+                                                                        } else if (item.isLocked) {
+                                                                            statusTag = {
+                                                                                label: 'Terkunci (Urutan)',
+                                                                                style: 'bg-slate-100 text-slate-500 border-slate-200',
+                                                                                dot: 'bg-slate-400',
+                                                                            };
+                                                                        } else if (
                                                                             diffDays !==
                                                                             null
                                                                         ) {
@@ -1957,7 +2345,7 @@ export default function Purchases({
                                                                                 key={
                                                                                     idx
                                                                                 }
-                                                                                className="flex items-center justify-between pt-1.5 text-[11px]"
+                                                                                className="flex flex-wrap items-center justify-between gap-3 pt-2 text-[11px]"
                                                                             >
                                                                                 <div className="flex items-center gap-2">
                                                                                     <span
@@ -1976,7 +2364,7 @@ export default function Purchases({
                                                                                         }
                                                                                     </span>
                                                                                 </div>
-                                                                                <div className="flex items-center gap-4 font-mono">
+                                                                                <div className="flex flex-wrap items-center gap-4 font-mono">
                                                                                     <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
                                                                                         <svg
                                                                                             className="h-3.5 w-3.5 text-slate-400"
@@ -2005,11 +2393,52 @@ export default function Purchases({
                                                                                             </strong>
                                                                                         </span>
                                                                                     </div>
-                                                                                    <span className="font-bold text-slate-900">
-                                                                                        {fmt(
-                                                                                            item.amount,
+                                                                                    <div className="text-right">
+                                                                                        <span className="font-bold text-slate-900">
+                                                                                            {fmt(
+                                                                                                item.amount,
+                                                                                            )}
+                                                                                        </span>
+                                                                                        {!item.isPaid && item.paidAmount > 0 && (
+                                                                                            <div className="text-[9.5px] font-medium text-amber-600">
+                                                                                                Sisa {fmt(item.remainingAmount)}
+                                                                                            </div>
                                                                                         )}
-                                                                                    </span>
+                                                                                    </div>
+
+                                                                                    {/* Tombol Bayar per Termin */}
+                                                                                    {item.isPaid ? (
+                                                                                        <span className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+                                                                                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                                            </svg>
+                                                                                            Lunas
+                                                                                        </span>
+                                                                                    ) : item.isLocked ? (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            disabled
+                                                                                            className="flex cursor-not-allowed items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-400 opacity-60"
+                                                                                            title="Selesaikan termin sebelumnya terlebih dahulu"
+                                                                                        >
+                                                                                            <svg className="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                                                            </svg>
+                                                                                            <span>Terkunci</span>
+                                                                                        </button>
+                                                                                    ) : (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleOpenRecordPayment(po, item.termDB)}
+                                                                                            className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-emerald-700 active:scale-95"
+                                                                                            title={`Bayar ${item.label}`}
+                                                                                        >
+                                                                                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                                                            </svg>
+                                                                                            <span>Bayar Termin</span>
+                                                                                        </button>
+                                                                                    )}
                                                                                 </div>
                                                                             </div>
                                                                         );
@@ -2028,11 +2457,15 @@ export default function Purchases({
                                 <Pagination
                                     currentPage={topSchedulePage}
                                     totalPages={Math.ceil(
-                                        Object.keys(vendorPOs).length /
+                                        Object.values(vendorPOs).filter((po) =>
+                                            projects.some(
+                                                (p) =>
+                                                    p.id === po.projectId ||
+                                                    p.locations.some((l) => l.poNumber === po.poNumber),
+                                            ),
+                                        ).length /
                                             itemsPerPage,
                                     )}
-                                    totalItems={Object.keys(vendorPOs).length}
-                                    itemsPerPage={itemsPerPage}
                                     onPageChange={(page) =>
                                         setTopSchedulePage(page)
                                     }
@@ -2075,31 +2508,40 @@ export default function Purchases({
                                     PO Diterbitkan
                                 </div>
                             </div>
-                            <div className="rounded-xl border border-slate-200/60 bg-slate-50 p-3.5 text-center">
-                                <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                    Nilai PO Tertunda
-                                </div>
-                                <div className="font-mono text-base font-black text-amber-600">
-                                    {fmt(
-                                        pendingLocations.reduce(
-                                            (s, l) =>
-                                                s + l.vendorCost * (l.qty || 1),
-                                            0,
-                                        ),
-                                    )}
-                                </div>
-                                <div className="mt-0.5 text-[10px] font-medium text-slate-500">
-                                    {pendingLocations.length} titik belum
-                                    dipesan
-                                </div>
-                            </div>
+                            {(() => {
+                                const pendingDpp = pendingLocations.reduce(
+                                    (s, l) => s + l.vendorCost * (l.qty || 1),
+                                    0,
+                                );
+                                const pendingPpn = isPPN ? pendingDpp * PPN_RATE : 0;
+                                const pendingTotal = pendingDpp + pendingPpn;
+
+                                return (
+                                    <div className="rounded-xl border border-slate-200/60 bg-slate-50 p-3.5 text-center">
+                                        <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                            Nilai PO Tertunda
+                                        </div>
+                                        <div className="font-mono text-base font-black text-amber-600">
+                                            {fmt(pendingTotal)}
+                                        </div>
+                                        <div className="mt-0.5 text-[10px] font-medium text-slate-500">
+                                            {pendingLocations.length} titik belum dipesan
+                                            {isPPN && pendingLocations.length > 0 && (
+                                                <span className="ml-1 text-slate-400">
+                                                    (DPP: {fmt(pendingDpp)})
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         {/* Vendor Location Groups */}
                         <div className="space-y-5">
                             {Object.entries(locationsByVendor).map(
                                 ([vIdStr, group]) => {
-                                    const vId = parseInt(vIdStr);
+                                    const vId = vIdStr;
                                     const vendorLocs = group.locs;
                                     const pendingVendorLocs = vendorLocs.filter(
                                         (l) => !l.poIssued,
@@ -2573,7 +3015,7 @@ export default function Purchases({
                                             }`}
                                         >
                                             {fmt(
-                                                activeProjectVendorSummary.pendingDpp,
+                                                activeProjectVendorSummary.pendingGrandTotal,
                                             )}
                                         </div>
                                         <span
@@ -2584,7 +3026,13 @@ export default function Purchases({
                                             }`}
                                         >
                                             {pendingLocations.length > 0
-                                                ? `${pendingLocations.length} titik belum diterbitkan`
+                                                ? `${pendingLocations.length} titik belum diterbitkan ${
+                                                      isPPN
+                                                          ? `(DPP: ${fmt(
+                                                                activeProjectVendorSummary.pendingDpp,
+                                                            )})`
+                                                          : ''
+                                                  }`
                                                 : 'Semua PO lokasi terbit'}
                                         </span>
                                     </div>
@@ -2660,6 +3108,7 @@ export default function Purchases({
             <VendorPaymentModal
                 isOpen={showRecordPaymentModal}
                 po={selectedPoForPayment}
+                initialTerm={selectedPaymentTermDB}
                 isPPN={isPPN}
                 cashBankAccounts={cashBankAccounts}
                 onClose={() => {
@@ -2668,6 +3117,15 @@ export default function Purchases({
                     setSelectedPaymentTermDB(null);
                 }}
                 onSubmit={handleSaveRecordPayment}
+            />
+
+            {/* Floating Toast Notification */}
+            <Toast
+                show={toast.show}
+                type={toast.type}
+                title={toast.title}
+                message={toast.message}
+                onClose={() => setToast((prev) => ({ ...prev, show: false }))}
             />
         </AppLayout>
     );

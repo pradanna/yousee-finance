@@ -141,7 +141,7 @@ export default function Toast({
 
     return (
         <div
-            className={`${getPositionClass()} z-50 max-w-sm w-full duration-300 pointer-events-auto`}
+            className={`${getPositionClass()} z-[9999] max-w-sm w-full duration-300 pointer-events-auto`}
         >
             <div
                 className={`flex items-start gap-3 rounded-2xl border p-4 shadow-lg backdrop-blur-sm ${style.bg}`}

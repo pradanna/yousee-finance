@@ -72,17 +72,12 @@ Route::middleware('auth')->group(function () {
     )->name('projects.invoice.payment-terms.settle');
 
     // Transaksi
-    Route::get('/purchases', function () {
-        return Inertia::render('Purchases');
-    })->name('purchases');
-
+    Route::get('/purchases', [\App\Http\Controllers\Procurement\PurchaseOrderController::class, 'index'])->name('purchases');
     Route::get('/cash-out', function () {
         return Inertia::render('CashOut');
     })->name('cash-out');
 
-    Route::get('/sales-transactions', function () {
-        return Inertia::render('SalesTransactions');
-    })->name('sales-transactions');
+    Route::get('/sales-transactions', [\App\Http\Controllers\Billing\SalesTransactionController::class, 'index'])->name('sales-transactions');
 
     Route::get('/debt-receivable', function () {
         return Inertia::render('DebtReceivable');
