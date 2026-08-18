@@ -1823,7 +1823,7 @@ export default function VendorPOTab({
 
             {/* Modal Catat Pembayaran Vendor */}
             {selectedVendorForPay && (
-                <div className="backdrop-blur-xs fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4">
+                <div className="backdrop-blur-xs fixed inset-0 z-[999] flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4">
                     <div className="animate-in fade-in zoom-in w-full max-w-lg space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl duration-200">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
                             <div>
