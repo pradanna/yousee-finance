@@ -7,6 +7,7 @@ import type {
     InvoicePaymentRecord,
     Kwitansi,
 } from '@/Pages/Invoices/invoiceTypes';
+import { router } from '@inertiajs/react';
 import React, { useEffect, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,13 +34,13 @@ export interface InvoicePaymentTerm {
 }
 
 interface BillboardLocation {
-    id: number;
+    id: string | number;
     code: string;
     area: string;
     description: string;
-    type: 'Billboard' | 'Videotron' | 'Baliho' | 'Neonbox';
+    type: string;
     size: string;
-    vendorId: number | null;
+    vendorId: string | number | null;
     vendorName: string;
     qty?: number;
     vendorCost: number;
@@ -47,11 +48,50 @@ interface BillboardLocation {
     poNumber: string;
 }
 
+interface PaymentSettlementItem {
+    id: string;
+    amount: number;
+    paid_at: string;
+    payment_method: string;
+    payment_ref?: string | null;
+    notes?: string | null;
+}
+
+interface PaymentPlanTermItem {
+    id: string;
+    sort_order: number;
+    label: string;
+    amount: number;
+    percent: number;
+    due_date?: string;
+    status: string;
+    notes?: string | null;
+    settlements?: PaymentSettlementItem[];
+}
+
+interface ProjectInvoiceItem {
+    id: string;
+    invoice_number?: string;
+    status?: string;
+    subtotal: number;
+    ppn: number;
+    total: number;
+    transaction_date?: string;
+    due_date?: string;
+    payment_plan?: {
+        id: string;
+        scheme?: string;
+        total_amount: number;
+        notes?: string;
+        terms: PaymentPlanTermItem[];
+    } | null;
+}
+
 interface Project {
-    id: number;
+    id: string | number;
     code: string;
     name: string;
-    clientId: number;
+    clientId: string | number;
     clientName: string;
     salesPIC: string;
     period: string;
@@ -62,7 +102,54 @@ interface Project {
     invoiceNumber: string;
     invoiceIssuedAt?: string;
     targetQty: number;
+    fiscal_mode?: 'ppn' | 'non-ppn';
     paymentTerms?: InvoicePaymentTerm;
+    invoices?: ProjectInvoiceItem[];
+}
+
+interface SalesTransactionProps {
+    projects: Array<{
+        id: string;
+        code: string;
+        name: string;
+        client_id: string;
+        client?: { id: string; name: string };
+        client_name?: string;
+        sales_id?: string;
+        sales?: { id: string; name: string };
+        sales_pic?: string;
+        fiscal_mode: 'ppn' | 'non-ppn';
+        start_date: string;
+        end_date: string;
+        contract_value: number;
+        target_qty: number;
+        status: 'draft' | 'active' | 'completed' | 'cancelled';
+        notes?: string;
+        locations?: Array<{
+            id: string;
+            code: string;
+            area: string;
+            description: string;
+            type: string;
+            size: string;
+            vendor_id?: string;
+            vendor?: { id: string; name: string };
+            vendor_cost: number;
+            po_issued: boolean;
+            po_number?: string;
+        }>;
+        invoices?: ProjectInvoiceItem[];
+        invoice_issued?: boolean;
+        invoice_number?: string;
+    }>;
+    clients: Array<{ id: string; name: string }>;
+    sales: Array<{ id: string; name: string }>;
+    cashBankAccounts?: Array<{
+        id: string | number;
+        code: string;
+        name: string;
+        display_name: string;
+    }>;
 }
 
 const PPN_RATE = 0.11;
@@ -83,322 +170,6 @@ const formatDate = (dateStr?: string): string => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mock Data
-// ─────────────────────────────────────────────────────────────────────────────
-const initialProjectsPPN: Project[] = [
-    {
-        id: 1,
-        targetQty: 5,
-        code: 'PRJ-2026-PPN01',
-        name: 'Kampanye Iklan Film Toystory 5 - Jawa Tengah',
-        clientId: 1,
-        clientName: 'PT. Walt Disney Pictures Indonesia',
-        salesPIC: 'Budi Santoso',
-        period: 'Jul - Sep 2026',
-        contractValue: 280000000,
-        status: 'Active',
-        invoiceIssued: false,
-        invoiceNumber: '',
-        locations: [
-            {
-                id: 1,
-                code: 'LOC-001',
-                area: 'Semarang',
-                description: 'Billboard Jl. Pandanaran KM 3 (Megah)',
-                type: 'Billboard',
-                size: '4x8m',
-                vendorId: 1,
-                vendorName: 'PT. Megah Billboard Jaya',
-                vendorCost: 8500000,
-                poIssued: true,
-                poNumber: 'PO-2026-0041',
-                qty: 1,
-            },
-            {
-                id: 2,
-                code: 'LOC-002',
-                area: 'Semarang',
-                description: 'Billboard Simpang Lima (Depan BCA)',
-                type: 'Billboard',
-                size: '6x12m',
-                vendorId: 1,
-                vendorName: 'PT. Megah Billboard Jaya',
-                vendorCost: 14000000,
-                poIssued: true,
-                poNumber: 'PO-2026-0041',
-                qty: 1,
-            },
-            {
-                id: 3,
-                code: 'LOC-003',
-                area: 'Solo',
-                description: 'Videotron Jl. Slamet Riyadi Pusat',
-                type: 'Videotron',
-                size: '3x5m',
-                vendorId: 2,
-                vendorName: 'CV. Media Ad Perkasa',
-                vendorCost: 22000000,
-                poIssued: true,
-                poNumber: 'PO-2026-0042',
-                qty: 1,
-            },
-            {
-                id: 4,
-                code: 'LOC-004',
-                area: 'Yogyakarta',
-                description: 'Baliho Jl. Malioboro (Dekat Kraton)',
-                type: 'Baliho',
-                size: '3x6m',
-                vendorId: 3,
-                vendorName: 'PT. Promosi Outdoor Kreasindo',
-                vendorCost: 7500000,
-                poIssued: false,
-                poNumber: '',
-                qty: 1,
-            },
-            {
-                id: 5,
-                code: 'LOC-005',
-                area: 'Yogyakarta',
-                description: 'Billboard Ring Road Utara Monjali',
-                type: 'Billboard',
-                size: '4x8m',
-                vendorId: 3,
-                vendorName: 'PT. Promosi Outdoor Kreasindo',
-                vendorCost: 9000000,
-                poIssued: false,
-                poNumber: '',
-                qty: 1,
-            },
-        ],
-    },
-    {
-        id: 2,
-        targetQty: 2,
-        code: 'PRJ-2026-PPN02',
-        name: 'Brand Awareness Shopee 12.12 - Jakarta',
-        clientId: 2,
-        clientName: 'Shopee Indonesia',
-        salesPIC: 'Rina Widayanti',
-        period: 'Nov - Des 2026',
-        contractValue: 450000000,
-        status: 'Draft',
-        invoiceIssued: false,
-        invoiceNumber: '',
-        locations: [
-            {
-                id: 6,
-                code: 'LOC-006',
-                area: 'Semarang',
-                description: 'Billboard Jl. Pemuda (Dekat Paragon Mall)',
-                type: 'Billboard',
-                size: '4x8m',
-                vendorId: 1,
-                vendorName: 'PT. Megah Billboard Jaya',
-                vendorCost: 9500000,
-                poIssued: false,
-                poNumber: '',
-                qty: 1,
-            },
-            {
-                id: 7,
-                code: 'LOC-007',
-                area: 'Solo',
-                description: 'Videotron Solo Grand Mall',
-                type: 'Videotron',
-                size: '3x5m',
-                vendorId: 1,
-                vendorName: 'PT. Megah Billboard Jaya',
-                vendorCost: 15000000,
-                poIssued: false,
-                poNumber: '',
-                qty: 1,
-            },
-        ],
-    },
-    {
-        id: 3,
-        targetQty: 2,
-        code: 'PRJ-2026-PPN03',
-        name: 'Samsung Galaxy S27 Launching - Jabodetabek',
-        clientId: 5,
-        clientName: 'Samsung Electronics Indonesia',
-        salesPIC: 'Budi Santoso',
-        period: 'Okt - Des 2026',
-        contractValue: 720000000,
-        status: 'Active',
-        invoiceIssued: true,
-        invoiceNumber: 'INV-2026-PPN-0011',
-        invoiceIssuedAt: '2026-07-01',
-        paymentTerms: {
-            type: 'dp',
-            dpPercent: 50,
-            dpAmount: 399600000,
-            dpDueDate: '2026-07-10',
-            pelunasanDueDate: '2026-09-01',
-            notes: 'DP 50% di muka, Pelunasan setelah serah terima',
-        },
-        locations: [
-            {
-                id: 12,
-                code: 'LOC-012',
-                area: 'Solo',
-                description: 'Videotron Jl. Slamet Riyadi Pusat',
-                type: 'Videotron',
-                size: '3x5m',
-                vendorId: 2,
-                vendorName: 'CV. Media Ad Perkasa',
-                vendorCost: 22000000,
-                poIssued: true,
-                poNumber: 'PO-2026-0091',
-                qty: 1,
-            },
-            {
-                id: 13,
-                code: 'LOC-013',
-                area: 'Semarang',
-                description: 'Videotron Jl. Pahlawan',
-                type: 'Videotron',
-                size: '4x8m',
-                vendorId: 2,
-                vendorName: 'CV. Media Ad Perkasa',
-                vendorCost: 19000000,
-                poIssued: true,
-                poNumber: 'PO-2026-0091',
-                qty: 1,
-            },
-        ],
-    },
-];
-
-const initialProjectsNonPPN: Project[] = [
-    {
-        id: 101,
-        targetQty: 3,
-        code: 'PRJ-2026-NON01',
-        name: 'Promosi Gojek UMKM - Jawa Timur',
-        clientId: 3,
-        clientName: 'PT. Gojek Tokopedia',
-        salesPIC: 'Andi Prasetyo',
-        period: 'Agu - Okt 2026',
-        contractValue: 180000000,
-        status: 'Active',
-        invoiceIssued: false,
-        invoiceNumber: '',
-        locations: [
-            {
-                id: 8,
-                code: 'LOC-008',
-                area: 'Surabaya',
-                description: 'Baliho Jl. Darmo (Depan Taman Bungkul)',
-                type: 'Baliho',
-                size: '3x6m',
-                vendorId: 3,
-                vendorName: 'PT. Promosi Outdoor Kreasindo',
-                vendorCost: 5500000,
-                poIssued: true,
-                poNumber: 'PO-2026-0055',
-                qty: 1,
-            },
-            {
-                id: 9,
-                code: 'LOC-009',
-                area: 'Malang',
-                description: 'Billboard Jl. Kahuripan (Alun-alun Kota)',
-                type: 'Billboard',
-                size: '4x8m',
-                vendorId: 4,
-                vendorName: 'UD. Spanduk & Baliho Makmur',
-                vendorCost: 4200000,
-                poIssued: true,
-                poNumber: 'PO-2026-0056',
-                qty: 1,
-            },
-            {
-                id: 10,
-                code: 'LOC-010',
-                area: 'Banyuwangi',
-                description: 'Neonbox Terminal Blambangan',
-                type: 'Neonbox',
-                size: '1.5x2m',
-                vendorId: 4,
-                vendorName: 'UD. Spanduk & Baliho Makmur',
-                vendorCost: 2800000,
-                poIssued: false,
-                poNumber: '',
-                qty: 1,
-            },
-        ],
-    },
-    {
-        id: 102,
-        targetQty: 1,
-        code: 'PRJ-2026-NON02',
-        name: 'Baliho Kuliner Lokal Soto Bangkong - Solo',
-        clientId: 4,
-        clientName: 'CV. Soto Bangkong Lestari',
-        salesPIC: 'Eko Prasetyo',
-        period: 'Sep - Nov 2026',
-        contractValue: 45000000,
-        status: 'Active',
-        invoiceIssued: false,
-        invoiceNumber: '',
-        locations: [
-            {
-                id: 11,
-                code: 'LOC-011',
-                area: 'Solo',
-                description: 'Baliho Jl. Adi Sucipto KM 5',
-                type: 'Baliho',
-                size: '3x6m',
-                vendorId: 4,
-                vendorName: 'UD. Spanduk & Baliho Makmur',
-                vendorCost: 3500000,
-                poIssued: true,
-                poNumber: 'PO-2026-0060',
-                qty: 1,
-            },
-        ],
-    },
-    {
-        id: 103,
-        targetQty: 1,
-        code: 'PRJ-2026-NON03',
-        name: 'Papan Nama Neonbox Laundry Express - Yogya',
-        clientId: 6,
-        clientName: 'Sari Laundry Express',
-        salesPIC: 'Andi Prasetyo',
-        period: 'Mei 2026',
-        contractValue: 12500000,
-        status: 'Completed',
-        invoiceIssued: true,
-        invoiceNumber: 'INV-2026-N001',
-        invoiceIssuedAt: '2026-05-01',
-        paymentTerms: {
-            type: 'full',
-            fullDueDays: 30,
-            fullDueDate: '2026-05-31',
-            notes: 'Pembayaran 100% dalam 30 hari setelah invoice diterima',
-        },
-        locations: [
-            {
-                id: 14,
-                code: 'LOC-014',
-                area: 'Yogyakarta',
-                description: 'Neonbox Perempatan Tugu Yogyakarta',
-                type: 'Neonbox',
-                size: '2x3m',
-                vendorId: 2,
-                vendorName: 'CV. Media Ad Perkasa',
-                vendorCost: 4500000,
-                poIssued: true,
-                poNumber: 'PO-2026-0099',
-                qty: 1,
-            },
-        ],
-    },
-];
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-Components
 // ─────────────────────────────────────────────────────────────────────────────
@@ -428,7 +199,7 @@ const ProjectStatusBadge = ({ status }: { status: Project['status'] }) => {
             text: 'Dibatalkan',
         },
     };
-    const s = map[status];
+    const s = map[status] || map.Draft;
     return (
         <span
             className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold ${s.bg}`}
@@ -465,7 +236,7 @@ const InvoiceStatusBadge = ({
             text: 'PAID / LUNAS',
         },
     };
-    const s = map[status];
+    const s = map[status] || map.draft;
     return (
         <span
             className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold ${s.bg}`}
@@ -476,28 +247,110 @@ const InvoiceStatusBadge = ({
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main Page Component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function SalesTransactions() {
+export default function SalesTransactions({
+    projects: rawProjects = [],
+    clients = [],
+    sales = [],
+    cashBankAccounts = [],
+}: SalesTransactionProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
-    const [projectsPPN, setProjectsPPN] =
-        useState<Project[]>(initialProjectsPPN);
-    const [projectsNonPPN, setProjectsNonPPN] = useState<Project[]>(
-        initialProjectsNonPPN,
-    );
+    // Normalize raw projects from backend to match frontend Project shape
+    const formattedProjects: Project[] = rawProjects.map((p) => {
+        const primaryInv = p.invoices?.[0];
+        const hasIssuedInvoice = p.invoice_issued || (primaryInv && primaryInv.status !== 'draft') || false;
+        const invNumber = p.invoice_number || primaryInv?.invoice_number || '';
+        
+        let paymentTerms: InvoicePaymentTerm | undefined = undefined;
+        if (primaryInv?.payment_plan) {
+            const plan = primaryInv.payment_plan;
+            const terms = plan.terms || [];
+            if (plan.scheme === 'full') {
+                paymentTerms = {
+                    type: 'full',
+                    fullDueDate: terms[0]?.due_date,
+                    notes: plan.notes || undefined,
+                };
+            } else if (plan.scheme === 'dp') {
+                paymentTerms = {
+                    type: 'dp',
+                    dpPercent: terms[0]?.percent,
+                    dpAmount: terms[0]?.amount,
+                    dpDueDate: terms[0]?.due_date,
+                    pelunasanDueDate: terms[1]?.due_date,
+                    notes: plan.notes || undefined,
+                };
+            } else if (plan.scheme === 'termin') {
+                paymentTerms = {
+                    type: 'termin',
+                    installments: terms.map((t) => ({
+                        percent: t.percent,
+                        amount: t.amount,
+                        note: t.label,
+                        dueDate: t.due_date,
+                    })),
+                    notes: plan.notes || undefined,
+                };
+            } else if (plan.scheme === 'installment') {
+                paymentTerms = {
+                    type: 'installment',
+                    fullDueDate: terms[0]?.due_date,
+                    notes: plan.notes || undefined,
+                };
+            }
+        }
+
+        return {
+            id: p.id,
+            code: p.code,
+            name: p.name,
+            clientId: p.client_id,
+            clientName: p.client?.name || p.client_name || 'Client',
+            salesPIC: p.sales?.name || p.sales_pic || '-',
+            period: `${p.start_date || ''} - ${p.end_date || ''}`,
+            contractValue: Number(p.contract_value || 0),
+            status: (p.status ? (p.status.charAt(0).toUpperCase() + p.status.slice(1)) : 'Draft') as Project['status'],
+            locations: (p.locations || []).map((loc) => ({
+                id: loc.id,
+                code: loc.code,
+                area: loc.area,
+                description: loc.description,
+                type: loc.type,
+                size: loc.size,
+                vendorId: loc.vendor_id || null,
+                vendorName: loc.vendor?.name || 'Vendor',
+                qty: 1,
+                vendorCost: Number(loc.vendor_cost || 0),
+                poIssued: loc.po_issued,
+                poNumber: loc.po_number || '',
+            })),
+            invoiceIssued: hasIssuedInvoice,
+            invoiceNumber: invNumber,
+            invoiceIssuedAt: primaryInv?.transaction_date,
+            targetQty: p.target_qty || 1,
+            fiscal_mode: p.fiscal_mode,
+            paymentTerms,
+            invoices: p.invoices,
+        };
+    });
+
+    // Filter projects based on active fiscal mode
+    const projects = formattedProjects.filter((p) => {
+        if (p.fiscal_mode) {
+            return p.fiscal_mode === fiscalMode;
+        }
+        return true;
+    });
 
     // Initial state from URL query parameters (?project=103&tab=issued)
-    const [selectedProjectId, setSelectedProjectIdState] = useState<
-        number | null
-    >(() => {
+    const [selectedProjectId, setSelectedProjectIdState] = useState<string | number | null>(() => {
         if (typeof window === 'undefined') return null;
         const params = new URLSearchParams(window.location.search);
         const pId = params.get('project');
-        return pId ? parseInt(pId, 10) : null;
+        return pId || null;
     });
 
     const [activeTab, setActiveTabState] = useState<
@@ -512,7 +365,7 @@ export default function SalesTransactions() {
         return 'all';
     });
 
-    const setSelectedProjectId = (id: number | null) => {
+    const setSelectedProjectId = (id: string | number | null) => {
         setSelectedProjectIdState(id);
         if (typeof window !== 'undefined') {
             const url = new URL(window.location.href);
@@ -540,7 +393,7 @@ export default function SalesTransactions() {
         const handlePopState = () => {
             const params = new URLSearchParams(window.location.search);
             const pId = params.get('project');
-            setSelectedProjectIdState(pId ? parseInt(pId, 10) : null);
+            setSelectedProjectIdState(pId || null);
             const tab = params.get('tab');
             if (
                 tab &&
@@ -552,6 +405,7 @@ export default function SalesTransactions() {
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
     }, []);
+
     const [expandedInvoicePayment, setExpandedInvoicePayment] = useState<
         string | null
     >(null);
@@ -566,43 +420,56 @@ export default function SalesTransactions() {
     const [issuedPage, setIssuedPage] = useState(1);
     const [arPage, setArPage] = useState(1);
 
-    // State for Client Payment Recording & Kwitansi
-    const [paymentsByInvoice, setPaymentsByInvoice] = useState<
-        Record<string, InvoicePaymentRecord[]>
-    >({
-        'INV-2026-N001': [
-            {
-                id: 'PAY-INV-001',
-                invoiceNumber: 'INV-2026-N001',
-                termLabel: 'Pelunasan Full',
-                amount: 12500000,
-                date: '2026-05-18',
-                method: 'Transfer Bank BCA',
-                referenceNo: 'BKM-2026-0518',
-                notes: 'Pelunasan 100% Invoice Sari Laundry',
-            },
-        ],
+    // Derive paymentsByInvoice & kwitansiByInvoice directly from DB settlements
+    const paymentsByInvoice: Record<string, InvoicePaymentRecord[]> = {};
+    const kwitansiByInvoice: Record<string, Kwitansi> = {};
+
+    formattedProjects.forEach((p) => {
+        const inv = p.invoices?.[0];
+        if (!inv || !p.invoiceNumber) return;
+        const invNum = p.invoiceNumber;
+        const pmtList: InvoicePaymentRecord[] = [];
+
+        inv.payment_plan?.terms.forEach((term) => {
+            (term.settlements || []).forEach((set) => {
+                pmtList.push({
+                    id: set.id,
+                    invoiceNumber: invNum,
+                    termLabel: term.label,
+                    amount: Number(set.amount),
+                    date: set.paid_at,
+                    method: set.payment_method,
+                    referenceNo: set.payment_ref || '',
+                    notes: set.notes || `Pembayaran ${term.label} (${set.payment_method})`,
+                });
+            });
+        });
+
+        if (pmtList.length > 0) {
+            paymentsByInvoice[invNum] = pmtList;
+            const totalPaid = pmtList.reduce((s, pay) => s + pay.amount, 0);
+            const totalInvVal = p.contractValue * (isPPN ? 1 + PPN_RATE : 1);
+            if (totalPaid >= totalInvVal) {
+                const latestPaid = pmtList[pmtList.length - 1];
+                kwitansiByInvoice[invNum] = {
+                    receiptNumber: `KW-${invNum}`,
+                    amount: totalInvVal,
+                    paidAt: latestPaid?.date || new Date().toISOString().split('T')[0],
+                    receivedFrom: p.clientName,
+                    forPaymentOf: `Pelunasan Sewa Media Iklan - ${p.name}`,
+                };
+            }
+        }
     });
-    const [kwitansiByInvoice, setKwitansiByInvoice] = useState<
-        Record<string, Kwitansi>
-    >({
-        'INV-2026-N001': {
-            receiptNumber: 'KW-2026-0518-01',
-            amount: 12500000,
-            paidAt: '2026-05-18',
-            receivedFrom: 'Sari Laundry Express',
-            forPaymentOf: 'Pelunasan Sewa Neonbox Perempatan Tugu Yogyakarta',
-        },
-    });
+
     const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
     const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] =
         useState<Project | null>(null);
+    const [selectedPaymentTerm, setSelectedPaymentTerm] =
+        useState<PaymentPlanTermItem | null>(null);
     const [successMessage, setSuccessMessage] = useState('');
 
-    const projects = isPPN ? projectsPPN : projectsNonPPN;
-    const setProjects = isPPN ? setProjectsPPN : setProjectsNonPPN;
-
-    const activeProject = projects.find((p) => p.id === selectedProjectId);
+    const activeProject = projects.find((p) => String(p.id) === String(selectedProjectId));
 
     // ── Derived data ──────────────────────────────────────────────────────────
     const allSalesPICs = Array.from(
@@ -648,134 +515,95 @@ export default function SalesTransactions() {
     }, 0);
 
     // ── Handlers ─────────────────────────────────────────────────────────────
-    const handleConfirmIssueInvoice = (terms: InvoicePaymentTerm) => {
+    const handleConfigurePaymentPlan = (data: {
+        scheme: 'full' | 'dp' | 'termin' | 'installment';
+        termPercents: number[];
+        termDates: string[];
+        notes?: string;
+    }) => {
         if (!activeProject) return;
-        const nextInvNum = `INV-2026-${isPPN ? 'PPN' : 'NON'}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-        setProjects((prev) =>
-            prev.map((p) =>
-                p.id === activeProject.id
-                    ? {
-                          ...p,
-                          invoiceIssued: true,
-                          invoiceNumber: nextInvNum,
-                          invoiceIssuedAt: new Date()
-                              .toISOString()
-                              .split('T')[0],
-                          paymentTerms: terms,
-                      }
-                    : p,
-            ),
+
+        router.post(
+            `/projects/${activeProject.id}/payment-plan`,
+            {
+                scheme: data.scheme,
+                percents: data.termPercents,
+                due_dates: data.termDates,
+                notes: data.notes,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowInvoiceForm(false);
+                    setSuccessMessage(
+                        `Skema pembayaran untuk ${activeProject.name} berhasil disimpan!`,
+                    );
+                    setTimeout(() => setSuccessMessage(''), 4000);
+                },
+            },
         );
-        setShowInvoiceForm(false);
-        setSuccessMessage(
-            `Berhasil menerbitkan Invoice ${nextInvNum} untuk ${activeProject.clientName}!`,
-        );
-        setTimeout(() => setSuccessMessage(''), 4000);
     };
 
-    const handleCancelInvoice = () => {
+    const handleIssueOfficialInvoice = () => {
         if (!activeProject) return;
-        const payments = paymentsByInvoice[activeProject.invoiceNumber] || [];
-        if (payments.length > 0) {
-            alert(
-                'Tidak dapat membatalkan invoice yang sudah memiliki catatan penerimaan pembayaran.',
-            );
-            return;
-        }
-        if (
-            confirm(
-                'Apakah Anda yakin ingin membatalkan invoice ini? Status akan kembali ke Draft.',
-            )
-        ) {
-            setProjects((prev) =>
-                prev.map((p) =>
-                    p.id === activeProject.id
-                        ? {
-                              ...p,
-                              invoiceIssued: false,
-                              invoiceNumber: '',
-                              invoiceIssuedAt: undefined,
-                              paymentTerms: undefined,
-                          }
-                        : p,
-                ),
-            );
-        }
+
+        router.post(
+            `/projects/${activeProject.id}/invoice/issue`,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSuccessMessage(
+                        `Invoice resmi berhasil diterbitkan untuk ${activeProject.clientName}!`,
+                    );
+                    setTimeout(() => setSuccessMessage(''), 4000);
+                },
+            },
+        );
     };
 
     const handleSaveInvoicePayment = (
         data: RecordInvoicePaymentModalSubmitData,
     ) => {
-        if (
-            !selectedInvoiceForPayment ||
-            !selectedInvoiceForPayment.invoiceNumber
-        )
-            return;
-        const invNum = selectedInvoiceForPayment.invoiceNumber;
-        const totalInvoiceVal =
-            selectedInvoiceForPayment.contractValue *
-            (isPPN ? 1 + PPN_RATE : 1);
+        if (!selectedInvoiceForPayment) return;
 
-        const locDetails =
-            selectedInvoiceForPayment.locations &&
-            selectedInvoiceForPayment.locations.length > 0
-                ? selectedInvoiceForPayment.locations
-                      .map(
-                          (loc) =>
-                              `Pemasangan ${loc.type} ${loc.size} ${loc.description}${loc.area ? ' (' + loc.area + ')' : ''}`,
-                      )
-                      .join(' dan ')
-                : selectedInvoiceForPayment.name;
-
-        const totalTerms =
-            selectedInvoiceForPayment.paymentTerms?.installments?.length ||
-            (selectedInvoiceForPayment.paymentTerms?.type === 'dp' ? 2 : 1);
-
-        const newPaymentRecord: InvoicePaymentRecord = {
-            id: `PAY-INV-${Math.floor(1000 + Math.random() * 9000)}`,
-            invoiceNumber: invNum,
-            termLabel: data.termLabel,
-            amount: data.amount,
-            date: data.date,
-            method: data.method,
-            referenceNo: data.referenceNo,
-            notes:
-                data.notes ||
-                `Pembayaran ${data.termLabel}${totalTerms > 1 ? ' dari ' + totalTerms + ' Termin' : ''} Sewa Media Iklan - ${locDetails}`,
-        };
-
-        const updatedPayments = [
-            ...(paymentsByInvoice[invNum] || []),
-            newPaymentRecord,
-        ];
-        setPaymentsByInvoice((prev) => ({
-            ...prev,
-            [invNum]: updatedPayments,
-        }));
-
-        const newTotalPaid = updatedPayments.reduce(
-            (sum, p) => sum + p.amount,
-            0,
-        );
-        if (newTotalPaid >= totalInvoiceVal && !kwitansiByInvoice[invNum]) {
-            setKwitansiByInvoice((prev) => ({
-                ...prev,
-                [invNum]: {
-                    receiptNumber: `KW-2026-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-                    amount: totalInvoiceVal,
-                    paidAt: data.date,
-                    receivedFrom: selectedInvoiceForPayment.clientName,
-                    forPaymentOf: `Pelunasan Sewa Media Iklan - ${selectedInvoiceForPayment.name}`,
-                },
-            }));
+        // Find target payment term id from invoice
+        const primaryInv = selectedInvoiceForPayment.invoices?.[0];
+        const terms = primaryInv?.payment_plan?.terms || [];
+        
+        let targetTerm = selectedPaymentTerm;
+        if (!targetTerm) {
+            targetTerm = terms.find((t: PaymentPlanTermItem) => t.status !== 'paid') || terms[0] || null;
         }
 
-        setShowRecordPaymentModal(false);
-        setExpandedInvoicePayment(invNum);
-        setSuccessMessage(
-            `Berhasil mencatat penerimaan ${fmt(data.amount)} untuk ${invNum}!`,
+        if (!targetTerm) {
+            alert('Tidak ditemukan data termin untuk dicatat pembayarannya.');
+            return;
+        }
+
+        router.post(
+            `/projects/${selectedInvoiceForPayment.id}/invoice/payment-terms/${targetTerm.id}/settle`,
+            {
+                amount: data.amount,
+                paid_at: data.date,
+                payment_method: data.method,
+                account_id: data.account_id || null,
+                payment_ref: data.referenceNo || null,
+                notes: data.notes || null,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowRecordPaymentModal(false);
+                    setSelectedInvoiceForPayment(null);
+                    setSelectedPaymentTerm(null);
+                    setSuccessMessage(
+                        `Berhasil mencatat penerimaan ${fmt(data.amount)}!`,
+                    );
+                    setTimeout(() => setSuccessMessage(''), 4000);
+                },
+            },
         );
-        setTimeout(() => setSuccessMessage(''), 4000);
     };
 
     // ── Active project computed values ────────────────────────────────────────
@@ -2666,40 +2494,32 @@ export default function SalesTransactions() {
                                     <div className="flex flex-wrap items-center justify-between gap-4">
                                         <div>
                                             <h4 className="text-xs font-bold text-slate-800">
-                                                Penerbitan Invoice Belum
-                                                Dilakukan
+                                                {activeProject.paymentTerms ? 'Skema Pembayaran Telah Diatur' : 'Penerbitan Invoice Belum Dilakukan'}
                                             </h4>
                                             <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-                                                {activeProject.status ===
-                                                'Draft'
-                                                    ? '⚠ Proyek masih berstatus Draft. Aktifkan proyek dahulu sebelum menerbitkan invoice.'
-                                                    : 'Terbitkan invoice resmi untuk mulai menagih client.'}
+                                                {activeProject.paymentTerms
+                                                    ? 'Klik tombol terbitkan invoice resmi untuk mencatat piutang dan mengaktifkan penagihan.'
+                                                    : 'Atur termin dan skema pembayaran client terlebih dahulu.'}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={() =>
-                                                setShowInvoiceForm(true)
-                                            }
-                                            disabled={
-                                                activeProject.status === 'Draft'
-                                            }
-                                            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold shadow-sm transition-all ${activeProject.status === 'Draft' ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'cursor-pointer bg-primary text-white shadow-neon-primary hover:bg-primary-700'}`}
-                                        >
-                                            <svg
-                                                className="h-4 w-4"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                stroke="currentColor"
-                                                strokeWidth={2.5}
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowInvoiceForm(true)}
+                                                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="M12 4v16m8-8H4"
-                                                />
-                                            </svg>
-                                            Tetapkan Skema Pembayaran
-                                        </button>
+                                                {activeProject.paymentTerms ? 'Ubah Skema Termin' : 'Atur Skema Pembayaran'}
+                                            </button>
+                                            {activeProject.paymentTerms && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleIssueOfficialInvoice}
+                                                    className="shadow-neon-primary cursor-pointer rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"
+                                                >
+                                                    Terbitkan Invoice Resmi
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
@@ -2730,6 +2550,22 @@ export default function SalesTransactions() {
                                                     {activeProject.paymentTerms
                                                         ?.notes || '-'}
                                                 </p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowInvoiceForm(true)}
+                                                    className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                                                >
+                                                    Ubah Skema
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDownloadInvoicePdf(activeProject)}
+                                                    className="cursor-pointer rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                                                >
+                                                    Cetak Invoice PDF
+                                                </button>
                                             </div>
                                         </div>
 
@@ -2778,38 +2614,30 @@ export default function SalesTransactions() {
                                         <div className="shadow-2xs overflow-hidden rounded-2xl border border-slate-200 bg-white">
                                             <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-100/90 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-600">
                                                 <span>
-                                                    Rincian Tagihan & Skema
-                                                    Termin (
-                                                    {activeProject.paymentTerms
-                                                        ?.notes ||
-                                                        activeProject
-                                                            .paymentTerms
-                                                            ?.type ||
-                                                        'Full Payment'}
-                                                    )
+                                                    Rincian Termin & Status Pembayaran
                                                 </span>
-                                                <span className="rounded-md bg-slate-200/70 px-2 py-0.5 font-mono text-[9.5px] font-bold text-slate-500">
+                                                <span>
                                                     {activeScheduleItems.length}{' '}
-                                                    TERMIN TAGIHAN
+                                                    Termin
                                                 </span>
                                             </div>
                                             <table className="w-full border-collapse text-left text-xs">
                                                 <thead>
-                                                    <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                                    <tr className="border-b border-slate-200/80 bg-slate-50/50 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                                                         <th className="px-4 py-2.5">
-                                                            Termin / Deskripsi
+                                                            Tahap / Label
                                                         </th>
-                                                        <th className="px-4 py-2.5 text-center">
+                                                        <th className="px-4 py-2.5">
                                                             Porsi (%)
                                                         </th>
                                                         <th className="px-4 py-2.5">
                                                             Jatuh Tempo
                                                         </th>
-                                                        <th className="px-4 py-2.5 text-right">
-                                                            Nominal Tagihan
+                                                        <th className="px-4 py-2.5">
+                                                            Status
                                                         </th>
-                                                        <th className="px-4 py-2.5 text-center">
-                                                            Status Tagihan
+                                                        <th className="px-4 py-2.5 text-right">
+                                                            Nominal
                                                         </th>
                                                         <th className="px-4 py-2.5 text-center">
                                                             Aksi
@@ -2818,180 +2646,60 @@ export default function SalesTransactions() {
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
                                                     {activeScheduleItems.map(
-                                                        (item, idx) => {
-                                                            const dueDateStatus =
-                                                                getDueDateStatus(
-                                                                    item.dueDate,
-                                                                );
-                                                            const paidSum =
-                                                                activePayments.reduce(
-                                                                    (s, p) =>
-                                                                        s +
-                                                                        p.amount,
-                                                                    0,
-                                                                );
-                                                            let isItemPaid = false;
-                                                            if (
-                                                                activeInvoiceStatus ===
-                                                                'paid'
-                                                            ) {
-                                                                isItemPaid = true;
-                                                            } else if (
-                                                                idx === 0 &&
-                                                                paidSum >=
-                                                                    item.amount
-                                                            ) {
-                                                                isItemPaid = true;
-                                                            }
+                                                        (item, i) => {
+                                                            const termsList = activeProject.invoices?.[0]?.payment_plan?.terms || [];
+                                                            const dbTerm = termsList[i] || null;
+                                                            const termPaidAmt = dbTerm ? (dbTerm.settlements || []).reduce((s, set) => s + Number(set.amount), 0) : 0;
+                                                            const isTermFullyPaid = dbTerm ? (termPaidAmt >= Number(dbTerm.amount) || dbTerm.status === 'paid') : false;
 
                                                             return (
                                                                 <tr
-                                                                    key={idx}
-                                                                    className="transition-colors hover:bg-slate-50/70"
+                                                                    key={i}
+                                                                    className="hover:bg-slate-50/60"
                                                                 >
-                                                                    <td className="px-4 py-3 font-bold text-slate-900">
-                                                                        {
-                                                                            item.label
-                                                                        }
+                                                                    <td className="px-4 py-2.5 font-bold text-slate-800">
+                                                                        {item.label}
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-center font-mono font-bold text-slate-600">
-                                                                        {item.percent
-                                                                            ? `${item.percent}%`
+                                                                    <td className="px-4 py-2.5 font-mono text-slate-600">
+                                                                        {item.percent}%
+                                                                    </td>
+                                                                    <td className="px-4 py-2.5 text-slate-600">
+                                                                        {item.dueDate
+                                                                            ? formatDate(item.dueDate)
                                                                             : '-'}
                                                                     </td>
-                                                                    <td className="px-4 py-3">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span
-                                                                                className={`h-2 w-2 rounded-full ${dueDateStatus.dot}`}
-                                                                            />
-                                                                            <span className="font-medium text-slate-700">
-                                                                                {item.dueDate
-                                                                                    ? formatDate(
-                                                                                          item.dueDate,
-                                                                                      )
-                                                                                    : 'Sesuai Kesepakatan'}
+                                                                    <td className="px-4 py-2.5">
+                                                                        {isTermFullyPaid ? (
+                                                                            <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9.5px] font-bold text-emerald-700">
+                                                                                LUNAS
                                                                             </span>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-right font-mono font-black text-slate-900">
-                                                                        {fmt(
-                                                                            item.amount,
-                                                                        )}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-center">
-                                                                        {isItemPaid ? (
-                                                                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                                                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                                                                Lunas
+                                                                        ) : termPaidAmt > 0 ? (
+                                                                            <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9.5px] font-bold text-amber-700">
+                                                                                PARSIAL ({fmt(termPaidAmt)})
                                                                             </span>
                                                                         ) : (
-                                                                            <span
-                                                                                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[9.5px] ${dueDateStatus.style}`}
-                                                                            >
-                                                                                <span
-                                                                                    className={`h-1.5 w-1.5 rounded-full ${dueDateStatus.dot}`}
-                                                                                />
-                                                                                {
-                                                                                    dueDateStatus.label
-                                                                                }
+                                                                            <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9.5px] font-bold text-slate-600">
+                                                                                BELUM BAYAR
                                                                             </span>
                                                                         )}
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-center">
-                                                                        <div className="flex items-center justify-center gap-2">
-                                                                            {!isItemPaid && (
+                                                                    <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900">
+                                                                        {fmt(item.amount)}
+                                                                    </td>
+                                                                    <td className="px-4 py-2.5 text-center">
+                                                                        <div className="flex items-center justify-center gap-1.5">
+                                                                            {!isTermFullyPaid && (
                                                                                 <button
                                                                                     type="button"
-                                                                                    onClick={() =>
-                                                                                        handleRecordPaymentForTermin(
-                                                                                            item,
-                                                                                        )
-                                                                                    }
+                                                                                    onClick={() => {
+                                                                                        setSelectedInvoiceForPayment(activeProject);
+                                                                                        setSelectedPaymentTerm(dbTerm);
+                                                                                        setShowRecordPaymentModal(true);
+                                                                                    }}
                                                                                     className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-emerald-600 px-2.5 py-1 text-[10.5px] font-bold text-white transition-all hover:bg-emerald-700"
                                                                                     title={`Catat pembayaran untuk ${item.label}`}
                                                                                 >
-                                                                                    <svg
-                                                                                        className="h-3.5 w-3.5"
-                                                                                        fill="none"
-                                                                                        viewBox="0 0 24 24"
-                                                                                        stroke="currentColor"
-                                                                                        strokeWidth={
-                                                                                            2.5
-                                                                                        }
-                                                                                    >
-                                                                                        <path
-                                                                                            strokeLinecap="round"
-                                                                                            strokeLinejoin="round"
-                                                                                            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                                                                        />
-                                                                                    </svg>
-                                                                                    <span>
-                                                                                        Catat
-                                                                                        Pembayaran
-                                                                                    </span>
-                                                                                </button>
-                                                                            )}
-                                                                            {activeProject.invoiceIssued ? (
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() =>
-                                                                                        handleDownloadInvoicePdf(
-                                                                                            activeProject,
-                                                                                        )
-                                                                                    }
-                                                                                    className="flex cursor-pointer items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10.5px] font-bold text-indigo-700 transition-all hover:bg-indigo-100"
-                                                                                    title={`Download Invoice PDF untuk ${item.label}`}
-                                                                                >
-                                                                                    <svg
-                                                                                        className="h-3.5 w-3.5"
-                                                                                        fill="none"
-                                                                                        viewBox="0 0 24 24"
-                                                                                        stroke="currentColor"
-                                                                                        strokeWidth={
-                                                                                            2.5
-                                                                                        }
-                                                                                    >
-                                                                                        <path
-                                                                                            strokeLinecap="round"
-                                                                                            strokeLinejoin="round"
-                                                                                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                        />
-                                                                                    </svg>
-                                                                                    <span>
-                                                                                        Download
-                                                                                        Invoice
-                                                                                    </span>
-                                                                                </button>
-                                                                            ) : (
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() =>
-                                                                                        setShowInvoiceForm(
-                                                                                            true,
-                                                                                        )
-                                                                                    }
-                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-blue-600 px-2.5 py-1 text-[10.5px] font-bold text-white transition-all hover:bg-blue-700"
-                                                                                    title={`Terbitkan Invoice untuk ${item.label}`}
-                                                                                >
-                                                                                    <svg
-                                                                                        className="h-3.5 w-3.5"
-                                                                                        fill="none"
-                                                                                        viewBox="0 0 24 24"
-                                                                                        stroke="currentColor"
-                                                                                        strokeWidth={
-                                                                                            2.5
-                                                                                        }
-                                                                                    >
-                                                                                        <path
-                                                                                            strokeLinecap="round"
-                                                                                            strokeLinejoin="round"
-                                                                                            d="M12 4v16m8-8H4"
-                                                                                        />
-                                                                                    </svg>
-                                                                                    <span>
-                                                                                        Terbitkan
-                                                                                        Invoice
-                                                                                    </span>
+                                                                                    <span>Catat Bayar</span>
                                                                                 </button>
                                                                             )}
                                                                         </div>
@@ -3125,46 +2833,14 @@ export default function SalesTransactions() {
                     clientName={activeProject.clientName}
                     totalAmount={activeTotalAmount}
                     isPPN={isPPN}
-                    onSubmit={(data) => {
-                        // Map the structured modal data back to InvoicePaymentTerm
-                        const terms: InvoicePaymentTerm = {
-                            type: data.scheme,
-                            notes: data.notes,
-                        };
-                        if (data.scheme === 'full') {
-                            terms.fullDueDays = 30;
-                            terms.fullDueDate = data.termDates[0];
-                        } else if (data.scheme === 'dp') {
-                            terms.dpPercent = data.termPercents[0];
-                            terms.dpAmount = Math.round(
-                                activeTotalAmount *
-                                    (data.termPercents[0] / 100),
-                            );
-                            terms.dpDueDate = data.termDates[0];
-                            terms.pelunasanDueDate = data.termDates[1];
-                        } else if (data.scheme === 'termin') {
-                            terms.installments = data.termPercents.map(
-                                (pct, idx) => ({
-                                    percent: pct,
-                                    amount: Math.round(
-                                        activeTotalAmount * (pct / 100),
-                                    ),
-                                    note: `Termin ${idx + 1}`,
-                                    dueDate: data.termDates[idx],
-                                }),
-                            );
-                        } else if (data.scheme === 'installment') {
-                            terms.fullDueDays = 30;
-                            terms.fullDueDate = data.termDates[0];
-                        }
-                        handleConfirmIssueInvoice(terms);
-                    }}
+                    onSubmit={handleConfigurePaymentPlan}
                 />
             )}
 
             {/* Record Invoice Payment Modal */}
             <RecordInvoicePaymentModal
                 isOpen={showRecordPaymentModal}
+                cashBankAccounts={cashBankAccounts}
                 invoice={
                     selectedInvoiceForPayment
                         ? {
@@ -3199,6 +2875,7 @@ export default function SalesTransactions() {
                 onClose={() => {
                     setShowRecordPaymentModal(false);
                     setSelectedInvoiceForPayment(null);
+                    setSelectedPaymentTerm(null);
                 }}
                 onSubmit={handleSaveInvoicePayment}
             />

@@ -2,7 +2,7 @@ import PrimaryButton from '@/Components/Button/PrimaryButton';
 import SecondaryButton from '@/Components/Button/SecondaryButton';
 import type { VendorPO } from '@/Pages/Purchases/purchasesTypes';
 import { fmt } from '@/Pages/Purchases/purchasesTypes';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 export interface RecordPaymentModalSubmitData {
     poNumber: string;
@@ -10,6 +10,7 @@ export interface RecordPaymentModalSubmitData {
     amount: number;
     date: string;
     method: string;
+    account_id?: string | number;
     referenceNo: string;
     notes: string;
 }
@@ -18,6 +19,12 @@ interface RecordPaymentModalProps {
     isOpen: boolean;
     po: VendorPO | null;
     remainingAmount: number;
+    cashBankAccounts?: Array<{
+        id: string | number;
+        code: string;
+        name: string;
+        display_name: string;
+    }>;
     onClose: () => void;
     onSubmit: (data: RecordPaymentModalSubmitData) => void;
 }
@@ -26,6 +33,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     isOpen,
     po,
     remainingAmount,
+    cashBankAccounts = [],
     onClose,
     onSubmit,
 }) => {
@@ -33,10 +41,22 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     const [amount, setAmount] = useState<number>(remainingAmount);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [method, setMethod] = useState('Transfer Bank BCA');
+    const [accountId, setAccountId] = useState<string | number>(
+        cashBankAccounts[0]?.id || '',
+    );
     const [referenceNo, setReferenceNo] = useState(
         `PAY-PO-${Math.floor(100000 + Math.random() * 900000)}`,
     );
     const [notes, setNotes] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setAmount(remainingAmount);
+            if (cashBankAccounts.length > 0 && !accountId) {
+                setAccountId(cashBankAccounts[0].id);
+            }
+        }
+    }, [isOpen, remainingAmount, cashBankAccounts]);
 
     if (!isOpen || !po) return null;
 
@@ -49,6 +69,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
             amount: Number(amount),
             date,
             method,
+            account_id: accountId || undefined,
             referenceNo,
             notes,
         });
@@ -144,7 +165,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                         />
                     </div>
 
-                    {/* Grid: Tanggal & Metode */}
+                    {/* Grid: Tanggal & Rekening Kas / Bank */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -160,27 +181,47 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                         </div>
                         <div>
                             <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                                Sumber Kas / Bank
+                                Rekening Kas / Bank
                             </label>
-                            <select
-                                value={method}
-                                onChange={(e) => setMethod(e.target.value)}
-                                className="w-full rounded-xl border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                            >
-                                <option value="Transfer Bank BCA">
-                                    Transfer Bank BCA
-                                </option>
-                                <option value="Transfer Bank Mandiri">
-                                    Transfer Bank Mandiri
-                                </option>
-                                <option value="Transfer Bank BRI">
-                                    Transfer Bank BRI
-                                </option>
-                                <option value="Kas Kecil">
-                                    Kas Kecil (Operational)
-                                </option>
-                                <option value="Kas Utama">Kas Utama</option>
-                            </select>
+                            {cashBankAccounts && cashBankAccounts.length > 0 ? (
+                                <select
+                                    value={accountId}
+                                    onChange={(e) => {
+                                        setAccountId(e.target.value);
+                                        const selectedAcc = cashBankAccounts.find((a) => String(a.id) === e.target.value);
+                                        if (selectedAcc) {
+                                            setMethod(`Transfer ${selectedAcc.name}`);
+                                        }
+                                    }}
+                                    className="w-full rounded-xl border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                                >
+                                    {cashBankAccounts.map((acc) => (
+                                        <option key={acc.id} value={acc.id}>
+                                            {acc.display_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <select
+                                    value={method}
+                                    onChange={(e) => setMethod(e.target.value)}
+                                    className="w-full rounded-xl border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                                >
+                                    <option value="Transfer Bank BCA">
+                                        Transfer Bank BCA
+                                    </option>
+                                    <option value="Transfer Bank Mandiri">
+                                        Transfer Bank Mandiri
+                                    </option>
+                                    <option value="Transfer Bank BRI">
+                                        Transfer Bank BRI
+                                    </option>
+                                    <option value="Kas Kecil">
+                                        Kas Kecil (Operational)
+                                    </option>
+                                    <option value="Kas Utama">Kas Utama</option>
+                                </select>
+                            )}
                         </div>
                     </div>
 

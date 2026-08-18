@@ -1,27 +1,27 @@
 import MetricCard from '@/Components/Card/MetricCard';
 import type { IssuePOModalSubmitData } from '@/Components/Modal/IssuePOModal';
 import { IssuePOModal } from '@/Components/Modal/IssuePOModal';
-import type { RecordPaymentModalSubmitData } from '@/Components/Modal/RecordPaymentModal';
-import { RecordPaymentModal } from '@/Components/Modal/RecordPaymentModal';
+import type { VendorPaymentModalSubmitData } from './VendorPaymentModal';
+import { VendorPaymentModal } from './VendorPaymentModal';
 import Pagination from '@/Components/Table/Pagination';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
-import React, { useState } from 'react';
-import {
-    initialProjectsNonPPN,
-    initialProjectsPPN,
-    initialVendorPOs,
-} from './purchasesData';
+import { router } from '@inertiajs/react';
+import React, { useMemo, useState } from 'react';
 import type {
     BillboardLocation,
     PurchaseProject,
+    PurchasesPageProps,
     VendorPO,
+    VendorPaymentPlanDB,
     VendorPaymentRecord,
     VendorPaymentTerm,
+    VendorPaymentTermDB,
 } from './purchasesTypes';
 import {
     PPN_RATE,
     fmt,
     formatDate,
+    formatPeriod,
     getPOPaymentSummary,
 } from './purchasesTypes';
 
@@ -29,16 +29,162 @@ import {
 // Purchases Page — Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Purchases() {
+export default function Purchases({
+    projects: rawProjects = [],
+    cashBankAccounts = [],
+}: PurchasesPageProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
+    // Normalize rawProjects from DB
+    const formattedProjects: PurchaseProject[] = useMemo(() => {
+        return rawProjects.map((p) => {
+            const periodObj = formatPeriod(p.start_date, p.end_date);
+            const periodStr =
+                p.period ||
+                periodObj.label ||
+                (p.start_date && p.end_date
+                    ? `${p.start_date} - ${p.end_date}`
+                    : '');
+
+            const locs: BillboardLocation[] = (p.locations || []).map(
+                (loc) => ({
+                    id: loc.id,
+                    code: loc.code,
+                    area: loc.area,
+                    description: loc.description,
+                    type: loc.type || 'Billboard',
+                    size: loc.size || '',
+                    vendorId: loc.vendor_id ?? loc.vendorId ?? null,
+                    vendorName:
+                        loc.vendor?.name ??
+                        loc.vendor_name ??
+                        loc.vendorName ??
+                        'Vendor',
+                    qty: Number(loc.qty) || 1,
+                    vendorCost:
+                        Number(loc.vendor_cost ?? loc.vendorCost) || 0,
+                    poIssued: Boolean(loc.po_issued ?? loc.poIssued),
+                    poNumber: loc.po_number || loc.poNumber || '',
+                    purchaseOrderId:
+                        loc.purchase_order_id ?? loc.purchaseOrderId,
+                }),
+            );
+
+            return {
+                id: p.id,
+                code: p.code,
+                name: p.name,
+                clientId: p.client_id ?? p.clientId,
+                clientName:
+                    p.client?.name ??
+                    p.client_name ??
+                    p.clientName ??
+                    'Client',
+                salesPIC:
+                    p.sales?.name ??
+                    p.sales_pic ??
+                    p.salesPIC ??
+                    '-',
+                period: periodStr,
+                contractValue:
+                    Number(p.contract_value ?? p.contractValue) || 0,
+                status: p.status || 'Draft',
+                locations: locs,
+                invoiceIssued: Boolean(p.invoice_issued ?? p.invoiceIssued),
+                invoiceNumber: p.invoice_number || p.invoiceNumber || '',
+                targetQty: Number(p.target_qty ?? p.targetQty) || 1,
+                fiscal_mode: p.fiscal_mode,
+                purchase_orders: p.purchase_orders || [],
+            };
+        });
+    }, [rawProjects]);
+
+    // Build real vendorPOs lookup map from project purchase_orders relation
+    const vendorPOs: Record<string, VendorPO> = useMemo(() => {
+        const map: Record<string, VendorPO> = {};
+
+        formattedProjects.forEach((prj) => {
+            (prj.purchase_orders || []).forEach((po) => {
+                const plan: VendorPaymentPlanDB | null =
+                    po.payment_plan || null;
+                const termsList: VendorPaymentTermDB[] = plan?.terms || [];
+
+                let terms: VendorPaymentTerm = {
+                    type: 'full',
+                    notes: plan?.notes || undefined,
+                };
+
+                if (plan?.scheme === 'dp') {
+                    terms = {
+                        type: 'dp',
+                        notes: plan.notes || undefined,
+                        dpPercent: termsList[0]?.percent || 50,
+                        dpAmount: termsList[0]?.amount,
+                        dpDueDate: termsList[0]?.due_date,
+                        pelunasanDueDate: termsList[1]?.due_date,
+                    };
+                } else if (plan?.scheme === 'termin') {
+                    terms = {
+                        type: 'termin',
+                        notes: plan.notes || undefined,
+                        installments: termsList.map((t) => ({
+                            percent: t.percent,
+                            amount: t.amount,
+                            note: t.label,
+                            dueDate: t.due_date,
+                        })),
+                    };
+                } else {
+                    terms = {
+                        type: 'full',
+                        notes: plan?.notes || undefined,
+                        fullDueDate: termsList[0]?.due_date,
+                    };
+                }
+
+                // Compile payment records from real settlements
+                const pmtList: VendorPaymentRecord[] = [];
+                termsList.forEach((term) => {
+                    (term.settlements || []).forEach((s) => {
+                        pmtList.push({
+                            id: s.id,
+                            poNumber: po.po_number,
+                            termLabel: term.label,
+                            amount: Number(s.amount),
+                            date: s.paid_at,
+                            method: s.payment_method,
+                            referenceNo: s.payment_ref || '',
+                            notes: s.notes || `Pembayaran ${term.label}`,
+                        });
+                    });
+                });
+
+                map[po.po_number] = {
+                    id: po.id,
+                    projectId: prj.id,
+                    poNumber: po.po_number,
+                    vendorId: po.vendor_id,
+                    vendorName: po.vendor?.name || 'Vendor',
+                    paymentTerms: terms,
+                    issuedAt: po.issued_at || po.transaction_date || '',
+                    totalAmount: Number(po.total || 0),
+                    notes: po.notes,
+                    payments: pmtList,
+                    payment_plan: plan,
+                };
+            });
+        });
+
+        return map;
+    }, [formattedProjects]);
+
     // Read state from URL search params so browser refresh keeps the active view/project
-    const getInitialProjectId = (): number | null => {
+    const getInitialProjectId = (): number | string | null => {
         if (typeof window === 'undefined') return null;
         const params = new URLSearchParams(window.location.search);
         const projectParam = params.get('project_id');
-        return projectParam ? parseInt(projectParam, 10) : null;
+        return projectParam ? projectParam : null;
     };
 
     const getInitialPoTab = ():
@@ -59,13 +205,20 @@ export default function Purchases() {
         return 'all_projects';
     };
 
-    const [projects, setProjects] = useState<PurchaseProject[]>(
-        isPPN ? initialProjectsPPN : initialProjectsNonPPN,
-    );
+    // Filter projects based on active fiscal mode
+    const projects = useMemo(() => {
+        return formattedProjects.filter((p) => {
+            if (p.fiscal_mode) {
+                return p.fiscal_mode === fiscalMode;
+            }
+            return true;
+        });
+    }, [formattedProjects, fiscalMode]);
+
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
-        getInitialProjectId,
-    );
+    const [selectedProjectId, setSelectedProjectId] = useState<
+        number | string | null
+    >(getInitialProjectId);
     const [successMessage, setSuccessMessage] = useState('');
     const [activePoTab, setActivePoTab] = useState<
         'all_projects' | 'pending_queue' | 'issued_pos' | 'top_schedule'
@@ -94,11 +247,9 @@ export default function Purchases() {
         window.history.replaceState({}, '', url.toString());
     }, [selectedProjectId, activePoTab]);
 
-    const [vendorPOs, setVendorPOs] =
-        useState<Record<string, VendorPO>>(initialVendorPOs);
     const [showPoForm, setShowPoForm] = useState(false);
     const [poFormVendor, setPoFormVendor] = useState<{
-        id: number;
+        id: number | string;
         name: string;
         locs: BillboardLocation[];
     } | null>(null);
@@ -106,12 +257,16 @@ export default function Purchases() {
     // State for Payment Recording & History Drawer
     const [selectedPoForPayment, setSelectedPoForPayment] =
         useState<VendorPO | null>(null);
+    const [selectedPaymentTermDB, setSelectedPaymentTermDB] =
+        useState<VendorPaymentTermDB | null>(null);
     const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
     const [expandedPoPayment, setExpandedPoPayment] = useState<string | null>(
         null,
     );
 
-    const activeProject = projects.find((p) => p.id === selectedProjectId);
+    const activeProject = projects.find(
+        (p) => String(p.id) === String(selectedProjectId),
+    );
 
     const filteredProjects = projects.filter(
         (p) =>
@@ -129,142 +284,89 @@ export default function Purchases() {
     // ─── Handlers ────────────────────────────────────────────────────────────
 
     const handleConfirmIssuePO = (data: IssuePOModalSubmitData) => {
-        if (!poFormVendor || !selectedProjectId) return;
+        if (!poFormVendor || !activeProject) return;
 
-        const totalCost = poFormVendor.locs.reduce(
-            (s, l) => s + l.vendorCost * (l.qty || 1),
-            0,
-        );
-        const ppnVal = isPPN ? totalCost * PPN_RATE : 0;
-        const finalTotal = totalCost + ppnVal;
+        const locationIds = poFormVendor.locs.map((l) => l.id);
 
-        // Convert IssuePOModalSubmitData → VendorPaymentTerm
-        let terms: VendorPaymentTerm;
-        if (data.scheme === 'full' || data.scheme === 'installment') {
-            terms = {
-                type: 'full',
-                notes: data.topNotes,
-                fullDueDate: data.termDates[0],
-            };
-        } else if (data.scheme === 'dp') {
-            const dpPct = data.termPercents[0] ?? 50;
-            terms = {
-                type: 'dp',
-                notes: data.topNotes,
-                dpPercent: dpPct,
-                dpAmount: Math.round(finalTotal * (dpPct / 100)),
-                dpDueDate: data.termDates[0],
-                pelunasanDueDate: data.termDates[1],
-            };
-        } else {
-            terms = {
-                type: 'termin',
-                notes: data.topNotes,
-                installments: data.termPercents.map((pct, i) => ({
-                    percent: pct,
-                    amount: Math.round(finalTotal * (pct / 100)),
-                    note: `Termin ${i + 1}`,
-                    dueDate: data.termDates[i],
-                })),
-            };
-        }
-
-        const nextPoNum = `PO-2026-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-        const newPO: VendorPO = {
-            poNumber: nextPoNum,
-            vendorId: poFormVendor.id,
-            vendorName: poFormVendor.name,
-            paymentTerms: terms,
-            issuedAt: new Date().toISOString().split('T')[0],
-            totalAmount: finalTotal,
-            // Save for PDF generation
-            lighting: data.lighting,
-            topNotes: data.topNotes,
-        };
-
-        setVendorPOs((prev) => ({ ...prev, [nextPoNum]: newPO }));
-
-        // IMPORTANT: only mark exactly the selected location IDs, not all vendor locations
-        const selectedLocIds = new Set(poFormVendor.locs.map((l) => l.id));
-        const updatedLocs = poFormVendor.locs.map((l) => ({
-            ...l,
-            poIssued: true,
-            poNumber: nextPoNum,
-        }));
-        setProjects((prevProjects) =>
-            prevProjects.map((p) => {
-                if (p.id !== selectedProjectId) return p;
-                return {
-                    ...p,
-                    locations: p.locations.map((l) =>
-                        selectedLocIds.has(l.id) && !l.poIssued
-                            ? { ...l, poIssued: true, poNumber: nextPoNum }
-                            : l,
-                    ),
-                };
-            }),
-        );
-
-        setShowPoForm(false);
-        setPoFormVendor(null);
-        setSuccessMessage(
-            `Berhasil menerbitkan PO ${nextPoNum} untuk ${poFormVendor.name}!`,
-        );
-        setTimeout(() => setSuccessMessage(''), 4000);
-
-        // Auto-download PDF after issuance
-        const projectData = projects.find((p) => p.id === selectedProjectId);
-        handleDownloadPO(
-            poFormVendor.name,
-            nextPoNum,
-            updatedLocs,
-            projectData?.name ?? '',
-            projectData?.period ?? '',
-            data.lighting,
-            data.topNotes,
+        router.post(
+            `/projects/${activeProject.id}/purchase-orders`,
+            {
+                vendor_id: poFormVendor.id,
+                location_ids: locationIds,
+                transaction_date: new Date().toISOString().split('T')[0],
+                lighting: data.lighting,
+                top_notes: data.topNotes,
+                term_scheme: data.scheme,
+                term_percents: data.termPercents,
+                term_due_dates: data.termDates,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowPoForm(false);
+                    setPoFormVendor(null);
+                    setSuccessMessage(
+                        `PO vendor untuk ${poFormVendor.name} berhasil diterbitkan dan dicatat dalam database!`,
+                    );
+                    setTimeout(() => setSuccessMessage(''), 4000);
+                },
+            },
         );
     };
 
     // ─── Record Payment Handlers ──────────────────────────────────────────────
-    const handleOpenRecordPayment = (po: VendorPO) => {
+    const handleOpenRecordPayment = (
+        po: VendorPO,
+        term?: VendorPaymentTermDB,
+    ) => {
         setSelectedPoForPayment(po);
+        setSelectedPaymentTermDB(term || null);
         setShowRecordPaymentModal(true);
     };
 
-    const handleSaveRecordPayment = (data: RecordPaymentModalSubmitData) => {
+    const handleSaveRecordPayment = (data: VendorPaymentModalSubmitData) => {
         if (!selectedPoForPayment) return;
 
-        const newPayment: VendorPaymentRecord = {
-            id: `PAY-${Math.floor(1000 + Math.random() * 9000)}`,
-            poNumber: data.poNumber,
-            termLabel: data.termLabel,
-            amount: data.amount,
-            date: data.date,
-            method: data.method,
-            referenceNo: data.referenceNo,
-            notes: data.notes,
-        };
+        const targetProjectId =
+            selectedPoForPayment.projectId || activeProject?.id;
+        const targetPoId = selectedPoForPayment.id;
+        const terms = selectedPoForPayment.payment_plan?.terms || [];
 
-        setVendorPOs((prev) => {
-            const currentPO = prev[data.poNumber];
-            if (!currentPO) return prev;
+        let targetTerm = selectedPaymentTermDB;
+        if (!targetTerm) {
+            targetTerm =
+                terms.find((t) => t.status !== 'paid') || terms[0] || null;
+        }
 
-            const existingPayments = currentPO.payments || [];
-            return {
-                ...prev,
-                [data.poNumber]: {
-                    ...currentPO,
-                    payments: [...existingPayments, newPayment],
+        if (!targetProjectId || !targetPoId || !targetTerm) {
+            alert('Data PO atau Termin pembayaran tidak valid.');
+            return;
+        }
+
+        router.post(
+            `/projects/${targetProjectId}/purchase-orders/${targetPoId}/payment-terms/${targetTerm.id}/settle`,
+            {
+                amount: data.amount,
+                paid_at: data.date,
+                payment_method: data.method,
+                account_id: data.account_id || null,
+                payment_ref: data.referenceNo || null,
+                notes: data.notes || null,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowRecordPaymentModal(false);
+                    setSelectedPoForPayment(null);
+                    setSelectedPaymentTermDB(null);
+                    setExpandedPoPayment(data.poNumber);
+                    setSuccessMessage(
+                        `Berhasil mencatat pengeluaran kas ${fmt(data.amount)} untuk ${data.poNumber}!`,
+                    );
+                    setTimeout(() => setSuccessMessage(''), 4000);
                 },
-            };
-        });
-
-        setShowRecordPaymentModal(false);
-        setExpandedPoPayment(data.poNumber);
-        setSuccessMessage(
-            `Berhasil mencatat pembayaran ${fmt(data.amount)} untuk ${data.poNumber}!`,
+            },
         );
-        setTimeout(() => setSuccessMessage(''), 4000);
     };
 
     // ─── PDF Download (POST to /po-pdf via hidden form) ───────────────────────
@@ -328,14 +430,53 @@ export default function Purchases() {
     // ─── Derived Data ─────────────────────────────────────────────────────────
 
     const locationsByVendor = activeLocations.reduce<
-        Record<number, { vendorName: string; locs: BillboardLocation[] }>
+        Record<string, { vendorName: string; locs: BillboardLocation[] }>
     >((acc, l) => {
         if (l.vendorId === null) return acc;
-        if (!acc[l.vendorId])
-            acc[l.vendorId] = { vendorName: l.vendorName, locs: [] };
-        acc[l.vendorId].locs.push(l);
+        const key = String(l.vendorId);
+        if (!acc[key])
+            acc[key] = { vendorName: l.vendorName, locs: [] };
+        acc[key].locs.push(l);
         return acc;
     }, {});
+
+    const activeProjectVendorSummary = useMemo(() => {
+        if (!activeProject) {
+            return {
+                totalDpp: 0,
+                totalPpn: 0,
+                grandTotal: 0,
+                issuedDpp: 0,
+                issuedGrandTotal: 0,
+                pendingDpp: 0,
+            };
+        }
+
+        const totalDpp = activeLocations.reduce(
+            (s, l) => s + (l.vendorCost || 0) * (l.qty || 1),
+            0,
+        );
+        const totalPpn = isPPN ? totalDpp * PPN_RATE : 0;
+        const grandTotal = totalDpp + totalPpn;
+
+        const issuedDpp = activeLocations
+            .filter((l) => l.poIssued)
+            .reduce((s, l) => s + (l.vendorCost || 0) * (l.qty || 1), 0);
+        const issuedGrandTotal = isPPN ? issuedDpp * (1 + PPN_RATE) : issuedDpp;
+
+        const pendingDpp = activeLocations
+            .filter((l) => !l.poIssued && l.vendorId !== null)
+            .reduce((s, l) => s + (l.vendorCost || 0) * (l.qty || 1), 0);
+
+        return {
+            totalDpp,
+            totalPpn,
+            grandTotal,
+            issuedDpp,
+            issuedGrandTotal,
+            pendingDpp,
+        };
+    }, [activeProject, activeLocations, isPPN]);
 
     const allLocations = projects.flatMap((p) => p.locations);
     const totalIssuedPO = allLocations.filter((l) => l.poIssued).length;
@@ -746,13 +887,23 @@ export default function Purchases() {
                                                     <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs">
                                                         <div className="h-1.5 w-full flex-1 overflow-hidden rounded-full bg-slate-100">
                                                             <div
-                                                                className="h-full bg-primary transition-all duration-300"
+                                                                className={`h-full transition-all duration-300 ${
+                                                                    percent === 100
+                                                                        ? 'bg-emerald-500 shadow-xs'
+                                                                        : 'bg-primary'
+                                                                }`}
                                                                 style={{
                                                                     width: `${percent}%`,
                                                                 }}
                                                             />
                                                         </div>
-                                                        <span className="flex-shrink-0 font-mono text-[10px] font-bold text-slate-400">
+                                                        <span
+                                                            className={`flex-shrink-0 font-mono text-[10px] font-bold ${
+                                                                percent === 100
+                                                                    ? 'text-emerald-600'
+                                                                    : 'text-slate-400'
+                                                            }`}
+                                                        >
                                                             {issuedCount}/
                                                             {
                                                                 proj.locations
@@ -815,7 +966,7 @@ export default function Purchases() {
                                         type GroupedPending = {
                                             key: string;
                                             project: PurchaseProject;
-                                            vendorId: number;
+                                            vendorId: number | string;
                                             vendorName: string;
                                             locations: BillboardLocation[];
                                         };
@@ -1165,436 +1316,343 @@ export default function Purchases() {
                                     <div>
                                         <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-800">
                                             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                                            Daftar Dokumen PO Vendor Resmi
-                                            Terbit
+                                            Daftar Dokumen PO Vendor Resmi Terbit
                                         </h3>
                                         <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-                                            Dokumen PO resmi yang telah
-                                            diterbitkan beserta status dan
-                                            riwayat pembayaran
+                                            Dokumen PO resmi yang telah diterbitkan dikelompokkan berdasarkan Proyek beserta status dan riwayat pembayaran
                                         </p>
                                     </div>
                                     <span className="rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800">
-                                        {Object.keys(vendorPOs).length} Dokumen
-                                        PO
+                                        {Object.keys(vendorPOs).length} Dokumen PO
                                     </span>
                                 </div>
-                                <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80">
-                                    {(() => {
-                                        const allPOs = Object.values(vendorPOs);
-                                        const paginatedPOs = allPOs.slice(
-                                            (issuedPosPage - 1) * itemsPerPage,
-                                            issuedPosPage * itemsPerPage,
+
+                                {(() => {
+                                    // Group POs by Project
+                                    type ProjectPOGroup = {
+                                        project: PurchaseProject | null;
+                                        projectCode: string;
+                                        projectName: string;
+                                        clientName: string;
+                                        salesPIC: string;
+                                        pos: VendorPO[];
+                                        totalAmount: number;
+                                        totalPaid: number;
+                                        totalRemaining: number;
+                                    };
+
+                                    const allPOs = Object.values(vendorPOs);
+                                    const groupedMap: Record<string, ProjectPOGroup> = {};
+
+                                    allPOs.forEach((po) => {
+                                        const proj = projects.find(
+                                            (p) =>
+                                                p.id === po.projectId ||
+                                                p.locations.some((l) => l.poNumber === po.poNumber),
+                                        ) || null;
+
+                                        const key = proj ? String(proj.id) : 'other';
+                                        if (!groupedMap[key]) {
+                                            groupedMap[key] = {
+                                                project: proj,
+                                                projectCode: proj?.code || 'NO-PROJECT',
+                                                projectName: proj?.name || 'Proyek Tanpa Nama',
+                                                clientName: proj?.clientName || '-',
+                                                salesPIC: proj?.salesPIC || '-',
+                                                pos: [],
+                                                totalAmount: 0,
+                                                totalPaid: 0,
+                                                totalRemaining: 0,
+                                            };
+                                        }
+
+                                        const summary = getPOPaymentSummary(po);
+                                        groupedMap[key].pos.push(po);
+                                        groupedMap[key].totalAmount += po.totalAmount;
+                                        groupedMap[key].totalPaid += summary.totalPaid;
+                                        groupedMap[key].totalRemaining += summary.remaining;
+                                    });
+
+                                    const projectGroups = Object.values(groupedMap);
+
+                                    if (projectGroups.length === 0) {
+                                        return (
+                                            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-xs font-semibold text-slate-400">
+                                                Belum ada dokumen PO vendor resmi yang diterbitkan.
+                                            </div>
                                         );
+                                    }
 
-                                        return paginatedPOs.map((po) => {
-                                            const summary =
-                                                getPOPaymentSummary(po);
-                                            const isExpanded =
-                                                expandedPoPayment ===
-                                                po.poNumber;
+                                    // Pagination by Project Group
+                                    const paginatedGroups = projectGroups.slice(
+                                        (issuedPosPage - 1) * itemsPerPage,
+                                        issuedPosPage * itemsPerPage,
+                                    );
 
-                                            // Find project this PO belongs to
-                                            const poProject = projects.find(
-                                                (p) =>
-                                                    p.locations.some(
-                                                        (l) =>
-                                                            l.poNumber ===
-                                                            po.poNumber,
-                                                    ),
-                                            );
+                                    return (
+                                        <div className="space-y-6">
+                                            {paginatedGroups.map((grp) => {
+                                                const allPaid = grp.totalRemaining <= 0 && grp.pos.length > 0;
+                                                const groupProgress = grp.totalAmount > 0
+                                                    ? Math.round((grp.totalPaid / grp.totalAmount) * 100)
+                                                    : 0;
 
-                                            return (
-                                                <div
-                                                    key={po.poNumber}
-                                                    className="divide-y divide-slate-100 bg-white transition-colors hover:bg-slate-50/40"
-                                                >
-                                                    <div className="flex flex-wrap items-center justify-between gap-4 p-4">
-                                                        <div className="min-w-0 flex-1 space-y-1.5">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 font-mono text-xs font-bold text-emerald-800">
-                                                                    {
-                                                                        po.poNumber
-                                                                    }
-                                                                </span>
-                                                                <span className="text-xs font-bold text-slate-900">
-                                                                    {
-                                                                        po.vendorName
-                                                                    }
-                                                                </span>
-
-                                                                {/* Payment Status Badge */}
-                                                                {summary.status ===
-                                                                    'paid' && (
-                                                                    <span className="flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                                                                        PAID /
-                                                                        LUNAS
+                                                return (
+                                                    <div
+                                                        key={grp.projectCode}
+                                                        className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs transition-all"
+                                                    >
+                                                        {/* Project Group Header */}
+                                                        <div className="border-b border-slate-200/80 bg-slate-50/80 px-5 py-3.5">
+                                                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-black text-slate-700 shadow-2xs">
+                                                                        {grp.projectCode}
                                                                     </span>
-                                                                )}
-                                                                {summary.status ===
-                                                                    'partial' && (
-                                                                    <span className="flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">
-                                                                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-600" />
-                                                                        PARTIALLY
-                                                                        PAID (
-                                                                        {
-                                                                            summary.percentage
-                                                                        }
-                                                                        %)
-                                                                    </span>
-                                                                )}
-                                                                {summary.status ===
-                                                                    'unpaid' && (
-                                                                    <span className="flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                                                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                                                                        BELUM
-                                                                        DIBAYAR
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                                    <div>
+                                                                        <h4 className="text-xs font-bold text-slate-900">
+                                                                            {grp.projectName}
+                                                                        </h4>
+                                                                        <p className="text-[10px] font-medium text-slate-500">
+                                                                            Client: <strong className="text-slate-700">{grp.clientName}</strong> &bull; PIC: <strong className="text-slate-700">{grp.salesPIC}</strong> &bull; {grp.pos.length} Dokumen PO
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
 
-                                                            {/* Progress bar realisasi pembayaran */}
-                                                            <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-100">
-                                                                <div
-                                                                    className={`h-full transition-all duration-500 ${summary.status === 'paid' ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                                                                    style={{
-                                                                        width: `${summary.percentage}%`,
-                                                                    }}
-                                                                />
-                                                            </div>
-
-                                                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
-                                                                <span>
-                                                                    Terbit:{' '}
-                                                                    <strong className="text-slate-700">
-                                                                        {formatDate(
-                                                                            po.issuedAt,
-                                                                        )}
-                                                                    </strong>
-                                                                </span>
-                                                                <span>
-                                                                    &bull;
-                                                                </span>
-                                                                <span>
-                                                                    Skema:{' '}
-                                                                    <strong className="text-slate-700">
-                                                                        {po
-                                                                            .paymentTerms
-                                                                            .notes ||
-                                                                            po
-                                                                                .paymentTerms
-                                                                                .type}
-                                                                    </strong>
-                                                                </span>
-                                                                {poProject && (
-                                                                    <>
-                                                                        <span>
-                                                                            &bull;
+                                                                <div className="flex flex-wrap items-center gap-4">
+                                                                    <div className="text-right">
+                                                                        <div className="text-[10px] font-medium text-slate-400">
+                                                                            Total Beban PO Proyek
+                                                                        </div>
+                                                                        <div className="font-mono text-xs font-bold text-slate-900">
+                                                                            {fmt(grp.totalAmount)}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <div className="text-[10px] font-medium text-slate-400">
+                                                                            Sisa Belum Dibayar
+                                                                        </div>
+                                                                        <div className={`font-mono text-xs font-bold ${grp.totalRemaining > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                                                            {fmt(grp.totalRemaining)}
+                                                                        </div>
+                                                                    </div>
+                                                                    {allPaid ? (
+                                                                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                                            Semua PO Lunas
                                                                         </span>
-                                                                        <span className="flex items-center gap-1">
-                                                                            Proyek:
-                                                                            <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700">
-                                                                                {
-                                                                                    poProject.code
-                                                                                }
-                                                                            </span>
-                                                                            <strong className="text-slate-700">
-                                                                                {
-                                                                                    poProject.name
-                                                                                }
-                                                                            </strong>
+                                                                    ) : (
+                                                                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700">
+                                                                            {groupProgress}% Terbayar
                                                                         </span>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex flex-shrink-0 items-center gap-4">
-                                                            <div className="text-right">
-                                                                <div className="font-mono text-xs font-bold text-slate-900">
-                                                                    {fmt(
-                                                                        po.totalAmount,
                                                                     )}
                                                                 </div>
-                                                                <div className="text-[9.5px] font-medium text-slate-500">
-                                                                    Terbayar:{' '}
-                                                                    <strong className="font-mono text-emerald-700">
-                                                                        {fmt(
-                                                                            summary.totalPaid,
-                                                                        )}
-                                                                    </strong>{' '}
-                                                                    &bull; Sisa:{' '}
-                                                                    <strong className="font-mono text-amber-700">
-                                                                        {fmt(
-                                                                            summary.remaining,
-                                                                        )}
-                                                                    </strong>
-                                                                </div>
                                                             </div>
+                                                        </div>
 
-                                                            {/* Record Payment Button */}
-                                                            {summary.remaining >
-                                                                0 && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        handleOpenRecordPayment(
-                                                                            po,
-                                                                        )
-                                                                    }
-                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-emerald-700"
-                                                                >
-                                                                    <svg
-                                                                        className="h-3.5 w-3.5"
-                                                                        fill="none"
-                                                                        viewBox="0 0 24 24"
-                                                                        stroke="currentColor"
-                                                                        strokeWidth={
-                                                                            2.5
-                                                                        }
+                                                        {/* PO Items in this Project */}
+                                                        <div className="divide-y divide-slate-100">
+                                                            {grp.pos.map((po) => {
+                                                                const summary = getPOPaymentSummary(po);
+                                                                const isExpanded = expandedPoPayment === po.poNumber;
+
+                                                                return (
+                                                                    <div
+                                                                        key={po.poNumber}
+                                                                        className="divide-y divide-slate-100 bg-white transition-colors hover:bg-slate-50/40"
                                                                     >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                                                        />
-                                                                    </svg>
-                                                                    <span>
-                                                                        Catat
-                                                                        Bayar
-                                                                    </span>
-                                                                </button>
-                                                            )}
+                                                                        <div className="flex flex-wrap items-center justify-between gap-4 p-4">
+                                                                            <div className="min-w-0 flex-1 space-y-1.5">
+                                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                                    <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 font-mono text-xs font-bold text-emerald-800">
+                                                                                        {po.poNumber}
+                                                                                    </span>
+                                                                                    <span className="text-xs font-bold text-slate-900">
+                                                                                        {po.vendorName}
+                                                                                    </span>
 
-                                                            {/* Toggle History Button */}
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setExpandedPoPayment(
-                                                                        isExpanded
-                                                                            ? null
-                                                                            : po.poNumber,
-                                                                    )
-                                                                }
-                                                                className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-all ${
-                                                                    isExpanded
-                                                                        ? 'border-slate-300 bg-slate-200 text-slate-800'
-                                                                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                                                                }`}
-                                                            >
-                                                                <span>
-                                                                    Riwayat (
-                                                                    {po.payments
-                                                                        ?.length ||
-                                                                        0}
-                                                                    )
-                                                                </span>
-                                                                <svg
-                                                                    className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                                                    fill="none"
-                                                                    viewBox="0 0 24 24"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth={
-                                                                        2.5
-                                                                    }
-                                                                >
-                                                                    <path
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        d="M19 9l-7 7-7-7"
-                                                                    />
-                                                                </svg>
-                                                            </button>
+                                                                                    {/* Payment Status Badge */}
+                                                                                    {summary.status === 'paid' && (
+                                                                                        <span className="flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                                                                                            PAID / LUNAS
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {summary.status === 'partial' && (
+                                                                                        <span className="flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+                                                                                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-600" />
+                                                                                            PARTIALLY PAID ({summary.percentage}%)
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {summary.status === 'unpaid' && (
+                                                                                        <span className="flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                                                                                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                                                                                            BELUM DIBAYAR
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
 
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const poLocs =
-                                                                        projects
-                                                                            .flatMap(
-                                                                                (
-                                                                                    p,
-                                                                                ) =>
-                                                                                    p.locations,
-                                                                            )
-                                                                            .filter(
-                                                                                (
-                                                                                    l,
-                                                                                ) =>
-                                                                                    l.poNumber ===
-                                                                                    po.poNumber,
-                                                                            );
-                                                                    const project =
-                                                                        projects.find(
-                                                                            (
-                                                                                p,
-                                                                            ) =>
-                                                                                p.locations.some(
-                                                                                    (
-                                                                                        l,
-                                                                                    ) =>
-                                                                                        l.poNumber ===
-                                                                                        po.poNumber,
-                                                                                ),
-                                                                        );
-                                                                    handleDownloadPO(
-                                                                        po.vendorName,
-                                                                        po.poNumber,
-                                                                        poLocs,
-                                                                        project?.name ??
-                                                                            '',
-                                                                        project?.period ??
-                                                                            '',
-                                                                        po.lighting,
-                                                                        po.topNotes,
-                                                                    );
-                                                                }}
-                                                                className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-blue-700"
-                                                            >
-                                                                <svg
-                                                                    className="h-3.5 w-3.5"
-                                                                    fill="none"
-                                                                    viewBox="0 0 24 24"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth={
-                                                                        2.5
-                                                                    }
-                                                                >
-                                                                    <path
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                    />
-                                                                </svg>
-                                                                <span>PDF</span>
-                                                            </button>
+                                                                                {/* Progress bar realisasi pembayaran */}
+                                                                                <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-100">
+                                                                                    <div
+                                                                                        className={`h-full transition-all duration-500 ${summary.status === 'paid' ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                                                                                        style={{
+                                                                                            width: `${summary.percentage}%`,
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+
+                                                                                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                                                                                    <span>
+                                                                                        Terbit: <strong className="text-slate-700">{formatDate(po.issuedAt)}</strong>
+                                                                                    </span>
+                                                                                    <span>&bull;</span>
+                                                                                    <span>
+                                                                                        Skema: <strong className="text-slate-700">{po.paymentTerms.notes || po.paymentTerms.type}</strong>
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex flex-shrink-0 items-center gap-4">
+                                                                                <div className="text-right">
+                                                                                    <div className="font-mono text-xs font-bold text-slate-900">
+                                                                                        {fmt(po.totalAmount)}
+                                                                                    </div>
+                                                                                    <div className="text-[9.5px] font-medium text-slate-500">
+                                                                                        Terbayar: <strong className="font-mono text-emerald-700">{fmt(summary.totalPaid)}</strong> &bull; Sisa: <strong className="font-mono text-amber-700">{fmt(summary.remaining)}</strong>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* Record Payment Button */}
+                                                                                {summary.remaining > 0 && (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleOpenRecordPayment(po)}
+                                                                                        className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-emerald-700"
+                                                                                    >
+                                                                                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                                                        </svg>
+                                                                                        <span>Catat Bayar</span>
+                                                                                    </button>
+                                                                                )}
+
+                                                                                {/* Toggle History Button */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setExpandedPoPayment(isExpanded ? null : po.poNumber)}
+                                                                                    className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-all ${
+                                                                                        isExpanded
+                                                                                            ? 'border-slate-300 bg-slate-200 text-slate-800'
+                                                                                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                                                                    }`}
+                                                                                >
+                                                                                    <span>Riwayat ({po.payments?.length || 0})</span>
+                                                                                    <svg className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                                                    </svg>
+                                                                                </button>
+
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        const poLocs = projects
+                                                                                            .flatMap((p) => p.locations)
+                                                                                            .filter((l) => l.poNumber === po.poNumber);
+                                                                                        const project = projects.find((p) =>
+                                                                                            p.locations.some((l) => l.poNumber === po.poNumber),
+                                                                                        );
+                                                                                        handleDownloadPO(
+                                                                                            po.vendorName,
+                                                                                            po.poNumber,
+                                                                                            poLocs,
+                                                                                            project?.name ?? '',
+                                                                                            project?.period ?? '',
+                                                                                            po.lighting,
+                                                                                            po.topNotes,
+                                                                                        );
+                                                                                    }}
+                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-blue-700"
+                                                                                >
+                                                                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                                    </svg>
+                                                                                    <span>PDF</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Expanded Payment History Drawer */}
+                                                                        {isExpanded && (
+                                                                            <div className="animate-in slide-in-from-top-1 space-y-3 border-t border-slate-100 bg-slate-50/80 p-4 duration-200">
+                                                                                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                                                                                    <span>
+                                                                                        Catatan / Riwayat Pembayaran Kas Keluar PO ({po.poNumber})
+                                                                                    </span>
+                                                                                    <span className="text-[10px] font-normal text-slate-500">
+                                                                                        Sistem Akuntansi YouSee Finance
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                {po.payments && po.payments.length > 0 ? (
+                                                                                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-xs">
+                                                                                        <table className="w-full border-collapse text-left">
+                                                                                            <thead>
+                                                                                                <tr className="border-b border-slate-200 bg-slate-100 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                                                                                    <th className="px-3 py-2">Tanggal</th>
+                                                                                                    <th className="px-3 py-2">Peruntukan / Label</th>
+                                                                                                    <th className="px-3 py-2">Metode Kas/Bank</th>
+                                                                                                    <th className="px-3 py-2">No. Referensi</th>
+                                                                                                    <th className="px-3 py-2 text-right">Nominal</th>
+                                                                                                </tr>
+                                                                                            </thead>
+                                                                                            <tbody className="divide-y divide-slate-100">
+                                                                                                {po.payments.map((pmt) => (
+                                                                                                    <tr key={pmt.id} className="hover:bg-slate-50/70">
+                                                                                                        <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
+                                                                                                            {formatDate(pmt.date)}
+                                                                                                        </td>
+                                                                                                        <td className="px-3 py-2 font-semibold text-slate-900">
+                                                                                                            {pmt.termLabel}
+                                                                                                        </td>
+                                                                                                        <td className="px-3 py-2 text-slate-600">
+                                                                                                            {pmt.method}
+                                                                                                        </td>
+                                                                                                        <td className="px-3 py-2 font-mono text-slate-600">
+                                                                                                            {pmt.referenceNo}
+                                                                                                        </td>
+                                                                                                        <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700">
+                                                                                                            {fmt(pmt.amount)}
+                                                                                                        </td>
+                                                                                                    </tr>
+                                                                                                ))}
+                                                                                            </tbody>
+                                                                                        </table>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs italic text-slate-500">
+                                                                                        Belum ada catatan transaksi pembayaran untuk PO ini.
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
+                                                );
+                                            })}
 
-                                                    {/* Expanded Payment History Drawer */}
-                                                    {isExpanded && (
-                                                        <div className="animate-in slide-in-from-top-1 space-y-3 border-t border-slate-100 bg-slate-50/80 p-4 duration-200">
-                                                            <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                                                <span>
-                                                                    Catatan /
-                                                                    Riwayat
-                                                                    Pembayaran
-                                                                    Kas Keluar
-                                                                    PO (
-                                                                    {
-                                                                        po.poNumber
-                                                                    }
-                                                                    )
-                                                                </span>
-                                                                <span className="text-[10px] font-normal text-slate-500">
-                                                                    Sistem
-                                                                    Akuntansi
-                                                                    YouSee
-                                                                    Finance
-                                                                </span>
-                                                            </div>
-
-                                                            {po.payments &&
-                                                            po.payments.length >
-                                                                0 ? (
-                                                                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-xs">
-                                                                    <table className="w-full border-collapse text-left">
-                                                                        <thead>
-                                                                            <tr className="border-b border-slate-200 bg-slate-100 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                                                                                <th className="px-3 py-2">
-                                                                                    Tanggal
-                                                                                </th>
-                                                                                <th className="px-3 py-2">
-                                                                                    Peruntukan
-                                                                                    /
-                                                                                    Label
-                                                                                </th>
-                                                                                <th className="px-3 py-2">
-                                                                                    Metode
-                                                                                    Kas/Bank
-                                                                                </th>
-                                                                                <th className="px-3 py-2">
-                                                                                    No.
-                                                                                    Referensi
-                                                                                </th>
-                                                                                <th className="px-3 py-2 text-right">
-                                                                                    Nominal
-                                                                                </th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody className="divide-y divide-slate-100">
-                                                                            {po.payments.map(
-                                                                                (
-                                                                                    pmt,
-                                                                                ) => (
-                                                                                    <tr
-                                                                                        key={
-                                                                                            pmt.id
-                                                                                        }
-                                                                                        className="hover:bg-slate-50/70"
-                                                                                    >
-                                                                                        <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
-                                                                                            {formatDate(
-                                                                                                pmt.date,
-                                                                                            )}
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 font-semibold text-slate-900">
-                                                                                            {
-                                                                                                pmt.termLabel
-                                                                                            }
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 text-slate-600">
-                                                                                            {
-                                                                                                pmt.method
-                                                                                            }
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 font-mono text-slate-600">
-                                                                                            {
-                                                                                                pmt.referenceNo
-                                                                                            }
-                                                                                        </td>
-                                                                                        <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700">
-                                                                                            {fmt(
-                                                                                                pmt.amount,
-                                                                                            )}
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                ),
-                                                                            )}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs italic text-slate-500">
-                                                                    Belum ada
-                                                                    catatan
-                                                                    transaksi
-                                                                    pembayaran
-                                                                    untuk PO
-                                                                    ini.
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        });
-                                    })()}
-                                </div>
-
-                                <Pagination
-                                    currentPage={issuedPosPage}
-                                    totalPages={Math.ceil(
-                                        Object.keys(vendorPOs).length /
-                                            itemsPerPage,
-                                    )}
-                                    totalItems={Object.keys(vendorPOs).length}
-                                    itemsPerPage={itemsPerPage}
-                                    onPageChange={(page) =>
-                                        setIssuedPosPage(page)
-                                    }
-                                />
+                                            <Pagination
+                                                currentPage={issuedPosPage}
+                                                totalPages={Math.ceil(projectGroups.length / itemsPerPage)}
+                                                totalItems={projectGroups.length}
+                                                itemsPerPage={itemsPerPage}
+                                                onPageChange={(page) => setIssuedPosPage(page)}
+                                            />
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         )}
 
@@ -2371,6 +2429,205 @@ export default function Purchases() {
                                 </div>
                             )}
                         </div>
+
+                        {/* Rekapitulasi Total Keseluruhan Biaya Vendor */}
+                        {activeLocations.length > 0 && (
+                            <div className="shadow-xs overflow-hidden rounded-3xl border border-slate-200/90 bg-white">
+                                {/* Header Banner */}
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                                                isPPN
+                                                    ? 'border border-blue-200 bg-blue-100 text-blue-600'
+                                                    : 'border border-slate-300 bg-slate-200 text-slate-700'
+                                            }`}
+                                        >
+                                            <svg
+                                                className="h-5 w-5"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-black text-slate-900">
+                                                Total Keseluruhan Biaya Vendor
+                                            </h3>
+                                            <p className="text-xs text-slate-500">
+                                                Akumulasi seluruh biaya vendor
+                                                pada project ini (
+                                                {activeLocations.length} titik
+                                                lokasi •{' '}
+                                                {
+                                                    Object.keys(
+                                                        locationsByVendor,
+                                                    ).length
+                                                }{' '}
+                                                vendor)
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={`rounded-full px-3 py-1 text-xs font-bold ${
+                                                pendingLocations.length === 0
+                                                    ? 'border border-emerald-200 bg-emerald-100 text-emerald-800'
+                                                    : 'border border-amber-200 bg-amber-100 text-amber-800'
+                                            }`}
+                                        >
+                                            {pendingLocations.length === 0
+                                                ? 'Semua PO Sudah Terbit'
+                                                : `${pendingLocations.length} PO Belum Diterbitkan`}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Metric Cards Grid */}
+                                <div className="grid grid-cols-2 gap-4 p-6 sm:grid-cols-4">
+                                    {/* Subtotal DPP */}
+                                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            Subtotal DPP Vendor
+                                        </span>
+                                        <div className="mt-1 font-mono text-base font-bold text-slate-900">
+                                            {fmt(
+                                                activeProjectVendorSummary.totalDpp,
+                                            )}
+                                        </div>
+                                        <span className="mt-1 block text-[10px] text-slate-400">
+                                            Total dasar pengenaan pajak
+                                        </span>
+                                    </div>
+
+                                    {/* PPN Masukan 11% */}
+                                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            PPN Masukan (11%)
+                                        </span>
+                                        <div className="mt-1 font-mono text-base font-bold text-slate-900">
+                                            {isPPN
+                                                ? fmt(
+                                                      activeProjectVendorSummary.totalPpn,
+                                                  )
+                                                : 'Rp 0'}
+                                        </div>
+                                        <span className="mt-1 block text-[10px] text-slate-400">
+                                            {isPPN
+                                                ? 'PPN 11% dari DPP'
+                                                : 'Mode Non-PPN Aktif'}
+                                        </span>
+                                    </div>
+
+                                    {/* PO Sudah Terbit */}
+                                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                                            Nilai PO Diterbitkan
+                                        </span>
+                                        <div className="mt-1 font-mono text-base font-bold text-emerald-700">
+                                            {fmt(
+                                                activeProjectVendorSummary.issuedGrandTotal,
+                                            )}
+                                        </div>
+                                        <span className="mt-1 block text-[10px] text-emerald-600/80">
+                                            {activeProjectVendorSummary.grandTotal >
+                                            0
+                                                ? `${Math.round(
+                                                      (activeProjectVendorSummary.issuedGrandTotal /
+                                                          activeProjectVendorSummary.grandTotal) *
+                                                          100,
+                                                  )}% dari total pengeluaran`
+                                                : '0%'}
+                                        </span>
+                                    </div>
+
+                                    {/* Nilai PO Tertunda */}
+                                    <div
+                                        className={`rounded-2xl border p-4 ${
+                                            pendingLocations.length > 0
+                                                ? 'border-amber-100 bg-amber-50/50'
+                                                : 'border-slate-100 bg-slate-50/50'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`text-[10px] font-bold uppercase tracking-wider ${
+                                                pendingLocations.length > 0
+                                                    ? 'text-amber-600'
+                                                    : 'text-slate-400'
+                                            }`}
+                                        >
+                                            Nilai PO Tertunda
+                                        </span>
+                                        <div
+                                            className={`mt-1 font-mono text-base font-bold ${
+                                                pendingLocations.length > 0
+                                                    ? 'text-amber-600'
+                                                    : 'text-slate-700'
+                                            }`}
+                                        >
+                                            {fmt(
+                                                activeProjectVendorSummary.pendingDpp,
+                                            )}
+                                        </div>
+                                        <span
+                                            className={`mt-1 block text-[10px] ${
+                                                pendingLocations.length > 0
+                                                    ? 'text-amber-600/80'
+                                                    : 'text-slate-400'
+                                            }`}
+                                        >
+                                            {pendingLocations.length > 0
+                                                ? `${pendingLocations.length} titik belum diterbitkan`
+                                                : 'Semua PO lokasi terbit'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Highlight Footer Total PO Keseluruhan */}
+                                <div
+                                    className={`flex flex-wrap items-center justify-between gap-3 border-t px-6 py-3.5 ${
+                                        isPPN
+                                            ? 'border-blue-100 bg-blue-50/60'
+                                            : 'border-slate-200 bg-slate-100/70'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={`h-2 w-2 rounded-full ${
+                                                isPPN
+                                                    ? 'bg-blue-600'
+                                                    : 'bg-slate-700'
+                                            }`}
+                                        />
+                                        <span className="text-xs font-bold text-slate-800">
+                                            Grand Total Nilai Seluruh Vendor (
+                                            {isPPN
+                                                ? 'DPP + PPN 11%'
+                                                : 'Non-PPN'}
+                                            ):
+                                        </span>
+                                    </div>
+                                    <div
+                                        className={`font-mono text-lg font-black ${
+                                            isPPN
+                                                ? 'text-blue-700'
+                                                : 'text-slate-900'
+                                        }`}
+                                    >
+                                        {fmt(
+                                            activeProjectVendorSummary.grandTotal,
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -2386,8 +2643,11 @@ export default function Purchases() {
                     vendorName={poFormVendor.name}
                     items={poFormVendor.locs.map((l) => ({
                         id: l.id,
+                        code: l.code,
                         description: l.description,
                         area: l.area,
+                        type: l.type,
+                        size: l.size,
                         vendorCost: l.vendorCost,
                         qty: l.qty,
                     }))}
@@ -2396,18 +2656,16 @@ export default function Purchases() {
                 />
             )}
 
-            {/* Record Payment Modal */}
-            <RecordPaymentModal
+            {/* Vendor Payment Modal */}
+            <VendorPaymentModal
                 isOpen={showRecordPaymentModal}
                 po={selectedPoForPayment}
-                remainingAmount={
-                    selectedPoForPayment
-                        ? getPOPaymentSummary(selectedPoForPayment).remaining
-                        : 0
-                }
+                isPPN={isPPN}
+                cashBankAccounts={cashBankAccounts}
                 onClose={() => {
                     setShowRecordPaymentModal(false);
                     setSelectedPoForPayment(null);
+                    setSelectedPaymentTermDB(null);
                 }}
                 onSubmit={handleSaveRecordPayment}
             />

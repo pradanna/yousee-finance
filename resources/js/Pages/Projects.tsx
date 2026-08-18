@@ -252,8 +252,8 @@ function calcPeriodProgress(
         return {
             percent: 100,
             label: 'Masa Tayang Selesai',
-            barClass: 'bg-rose-500',
-            textClass: 'text-rose-600 font-bold',
+            barClass: 'bg-emerald-500',
+            textClass: 'text-emerald-600 font-bold',
         };
     }
 
@@ -292,8 +292,8 @@ function calcPeriodProgress(
         return {
             percent: 100,
             label: 'Masa Tayang Selesai',
-            barClass: 'bg-rose-500',
-            textClass: 'text-rose-600 font-bold',
+            barClass: 'bg-emerald-500',
+            textClass: 'text-emerald-600 font-bold',
         };
     }
 
