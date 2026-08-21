@@ -280,9 +280,8 @@
             <div class="vendor-header">ORDER TO</div>
             <div class="vendor-body">
                 <div class="vendor-name">{{ $vendorName }}</div>
-                <div>Parinding Sallao</div>
-                <div>Jl Pandang Raya Ruko Saphire III-03 Makassar</div>
-                <div>0411-4663939/ 081338005004</div>
+                <div>{{ $vendorAddress ?? '-' }}</div>
+                <div>{{ $vendorPhone ?? '-' }}</div>
             </div>
         </div>
 
@@ -400,15 +399,15 @@
     <!-- 5. SIGNATURES SECTION -->
     <div class="signatures-section">
         <div class="signature-col">
-            <div class="signature-title">Vendor</div>
+            <div class="signature-title">Pihak Vendor</div>
             <div class="signature-company">{{ $vendorName }}</div>
-            <div class="signature-name">Parinding Sallao</div>
+            <div class="signature-name">( ........................................ )</div>
         </div>
 
         <div class="signature-col">
-            <div class="signature-title">Approved by</div>
+            <div class="signature-title">Disetujui Oleh (Authorized)</div>
             <div class="signature-company">Yousee Indonesia</div>
-            <div class="signature-name">Sukma</div>
+            <div class="signature-name">Manajemen Keuangan</div>
         </div>
         <div class="clear"></div>
     </div>
