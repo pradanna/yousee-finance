@@ -986,7 +986,7 @@ export default function Projects({
                         <button
                             type="button"
                             onClick={() => setIsAuditLogModalOpen(true)}
-                            className="shadow-xs inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-95"
+                            className="shadow-xs inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-95"
                         >
                             <svg
                                 className="h-4 w-4 text-slate-500"
