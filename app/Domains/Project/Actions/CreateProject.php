@@ -22,8 +22,9 @@ class CreateProject
     {
         return DB::transaction(function () use ($data) {
             $fiscalMode = $data['fiscal_mode'];
+            $contractValue = $this->resolveDpp($fiscalMode, (float) $data['contract_value'], (bool) ($data['is_ppn_inclusive'] ?? false));
 
-            return Project::create([
+            $project = Project::create([
                 'code' => $this->generateCode($fiscalMode),
                 'name' => $data['name'],
                 'client_id' => $data['client_id'],
@@ -31,11 +32,30 @@ class CreateProject
                 'fiscal_mode' => $fiscalMode,
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
-                'contract_value' => $this->resolveDpp($fiscalMode, (float) $data['contract_value'], (bool) ($data['is_ppn_inclusive'] ?? false)),
+                'contract_value' => $contractValue,
                 'target_qty' => $data['target_qty'] ?? 1,
                 'status' => ProjectStatus::DRAFT,
                 'notes' => $data['notes'] ?? null,
             ]);
+
+            // Catat ke Audit Log
+            \App\Domains\Shared\Models\AuditLog::create([
+                'auditable_type' => Project::class,
+                'auditable_id'   => $project->id,
+                'event'          => 'created',
+                'user_id'        => auth()->id(),
+                'description'    => "Membuat proyek baru [{$project->code}] \"{$project->name}\" dengan nilai kontrak Rp " . number_format($contractValue, 0, ',', '.') . " (Mode: {$fiscalMode})",
+                'properties'     => [
+                    'code'           => $project->code,
+                    'name'           => $project->name,
+                    'contract_value' => $contractValue,
+                    'fiscal_mode'    => $fiscalMode,
+                    'start_date'     => $data['start_date'],
+                    'end_date'       => $data['end_date'],
+                ],
+            ]);
+
+            return $project;
         });
     }
 

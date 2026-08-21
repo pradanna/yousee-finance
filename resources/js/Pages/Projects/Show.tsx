@@ -1,4 +1,7 @@
-import { RecordInvoicePaymentModal, RecordInvoicePaymentModalSubmitData } from '@/Components/Modal/RecordInvoicePaymentModal';
+import {
+    RecordInvoicePaymentModal,
+    RecordInvoicePaymentModalSubmitData,
+} from '@/Components/Modal/RecordInvoicePaymentModal';
 import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import { PageProps } from '@/types';
@@ -9,7 +12,6 @@ import {
     ActiveTab,
     BillboardLocation,
     calcFinancials,
-    ClientPaymentPlan,
     FiscalMode,
     fmt,
     formatIndoDate,
@@ -155,6 +157,7 @@ interface DbProject {
     }>;
     locations?: DbProjectLocation[];
     purchase_orders?: DbPurchaseOrder[];
+    audit_logs?: import('@/Components/UI/AuditLogModal').AuditLogItem[];
 }
 
 interface ShowProjectProps {
@@ -172,6 +175,7 @@ interface ShowProjectProps {
         name: string;
         display_name: string;
     }>;
+    auditLogs?: import('@/Components/UI/AuditLogModal').AuditLogItem[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,6 +185,7 @@ export default function Show({
     project: dbProject,
     vendors = [],
     cashBankAccounts = [],
+    auditLogs: initialAuditLogs = [],
 }: ShowProjectProps) {
     const fiscalMode: FiscalMode =
         dbProject?.fiscal_mode === 'non-ppn' ? 'non-ppn' : 'ppn';
@@ -275,8 +280,8 @@ export default function Show({
                                   dueDate: term.due_date || '',
                                   status: isPaid
                                       ? ('paid' as PaymentTermStatus)
-                                      : ((term.status as PaymentTermStatus) ||
-                                        'unpaid'),
+                                      : (term.status as PaymentTermStatus) ||
+                                        'unpaid',
                                   paidAmount:
                                       paidAmount > 0 ? paidAmount : undefined,
                                   paidAt: latestSettlement?.paid_at,
@@ -354,10 +359,7 @@ export default function Show({
                                               totalPaid >= termAmount - 1);
                                       const remaining = isPaid
                                           ? 0
-                                          : Math.max(
-                                                0,
-                                                termAmount - totalPaid,
-                                            );
+                                          : Math.max(0, termAmount - totalPaid);
                                       return {
                                           id: term.id,
                                           sort_order: term.sort_order ?? 0,
@@ -367,8 +369,8 @@ export default function Show({
                                           due_date: term.due_date ?? '',
                                           status: isPaid
                                               ? ('paid' as PaymentTermStatus)
-                                              : (term.status as PaymentTermStatus) ??
-                                                'unpaid',
+                                              : ((term.status as PaymentTermStatus) ??
+                                                'unpaid'),
                                           notes: term.notes ?? null,
                                           settlements,
                                           totalPaid,
@@ -387,6 +389,18 @@ export default function Show({
         };
     }, [dbProject]);
 
+    const auditLogsList = useMemo(() => {
+        return initialAuditLogs.length > 0
+            ? initialAuditLogs
+            : dbProject?.audit_logs ||
+                  (
+                      dbProject as unknown as {
+                          auditLogs?: import('@/Components/UI/AuditLogModal').AuditLogItem[];
+                      }
+                  )?.auditLogs ||
+                  [];
+    }, [initialAuditLogs, dbProject]);
+
     const locations = displayedProject.locations || [];
 
     const onUpdateProject = (_updated?: Project) => {
@@ -394,7 +408,13 @@ export default function Show({
         router.reload();
     };
 
-    const validTabs: ActiveTab[] = ['info', 'locations', 'vendors', 'invoice'];
+    const validTabs: ActiveTab[] = [
+        'info',
+        'locations',
+        'vendors',
+        'invoice',
+        'audit',
+    ];
 
     const getInitialTab = (): ActiveTab => {
         if (typeof window !== 'undefined') {
@@ -569,6 +589,26 @@ export default function Show({
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                </svg>
+            ),
+        },
+        {
+            id: 'audit' as ActiveTab,
+            label: 'Jejak Audit & Riwayat',
+            badge: auditLogsList.length > 0 ? auditLogsList.length : undefined,
+            icon: (
+                <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                     />
                 </svg>
             ),
@@ -1009,6 +1049,214 @@ export default function Show({
                                     }}
                                 />
                             )}
+
+                            {/* AUDIT LOG TAB */}
+                            {activeTab === 'audit' && (
+                                <div className="space-y-6">
+                                    <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                            <h3 className="text-base font-black text-slate-900">
+                                                Jejak Audit & Histori Aktivitas
+                                                Proyek
+                                            </h3>
+                                            <p className="text-xs text-slate-500">
+                                                Riwayat lengkap seluruh
+                                                perubahan kontrak, status
+                                                tayang, pembuatan invoice, dan
+                                                tindakan tim pada proyek [
+                                                {prj.code}].
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                                                <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+                                                {auditLogsList.length} Catatan
+                                                Log
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {auditLogsList.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                                            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                                                <svg
+                                                    className="h-7 w-7"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={1.5}
+                                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                    />
+                                                </svg>
+                                            </div>
+                                            <h4 className="text-sm font-bold text-slate-800">
+                                                Belum Ada Riwayat Log
+                                            </h4>
+                                            <p className="mt-1 max-w-sm text-xs text-slate-500">
+                                                Aktivitas baru seperti pembaruan
+                                                nilai kontrak, penerbitan
+                                                invoice, dan perubahan status
+                                                akan otomatis tercatat di sini.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="relative ml-4 space-y-6 border-l-2 border-slate-200 py-2">
+                                            {auditLogsList.map((log: import('@/Components/UI/AuditLogModal').AuditLogItem) => {
+                                                const event =
+                                                    log.event?.toLowerCase() ||
+                                                    'info';
+                                                const badgeBg =
+                                                    event === 'created'
+                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                        : event === 'updated'
+                                                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                          : event ===
+                                                              'status_changed'
+                                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                            : event ===
+                                                                    'cancelled' ||
+                                                                event ===
+                                                                    'deleted'
+                                                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                              : 'bg-slate-100 text-slate-700 border-slate-200';
+
+                                                const dotBg =
+                                                    event === 'created'
+                                                        ? 'bg-emerald-500 ring-emerald-100'
+                                                        : event === 'updated'
+                                                          ? 'bg-amber-500 ring-amber-100'
+                                                          : event ===
+                                                              'status_changed'
+                                                            ? 'bg-blue-500 ring-blue-100'
+                                                            : event ===
+                                                                    'cancelled' ||
+                                                                event ===
+                                                                    'deleted'
+                                                              ? 'bg-rose-500 ring-rose-100'
+                                                              : 'bg-slate-400 ring-slate-100';
+
+                                                return (
+                                                    <div
+                                                        key={log.id}
+                                                        className="group relative pl-6"
+                                                    >
+                                                        {/* Dot bullet on the timeline */}
+                                                        <div
+                                                            className={`absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 border-white ${dotBg} ring-4 transition-transform group-hover:scale-125`}
+                                                        />
+
+                                                        <div className="shadow-xs rounded-2xl border border-slate-200/80 bg-white p-4 transition-all hover:border-slate-300 hover:shadow-md">
+                                                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span
+                                                                        className={`inline-flex items-center rounded-lg border px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider ${badgeBg}`}
+                                                                    >
+                                                                        {
+                                                                            log.event
+                                                                        }
+                                                                    </span>
+                                                                    <span className="text-xs font-bold text-slate-800">
+                                                                        Oleh:{' '}
+                                                                        <span className="font-extrabold text-slate-900">
+                                                                            {log.user_name ||
+                                                                                'System'}
+                                                                        </span>
+                                                                    </span>
+                                                                </div>
+                                                                <span className="font-mono text-xs font-medium text-slate-400">
+                                                                    {log.created_at
+                                                                        ? new Date(
+                                                                              log.created_at,
+                                                                          ).toLocaleString(
+                                                                              'id-ID',
+                                                                              {
+                                                                                  dateStyle:
+                                                                                      'medium',
+                                                                                  timeStyle:
+                                                                                      'short',
+                                                                              },
+                                                                          )
+                                                                        : '-'}
+                                                                </span>
+                                                            </div>
+
+                                                            <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-700">
+                                                                {
+                                                                    log.description
+                                                                }
+                                                            </p>
+
+                                                            {/* Detailed properties / payload snapshot if available */}
+                                                            {log.properties &&
+                                                                Object.keys(
+                                                                    log.properties,
+                                                                ).length >
+                                                                    0 && (
+                                                                    <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-[11px]">
+                                                                        <span className="mb-1.5 block font-bold uppercase tracking-wider text-slate-500">
+                                                                            Rincian
+                                                                            Nilai
+                                                                            &
+                                                                            Snapshot:
+                                                                        </span>
+                                                                        <div className="grid grid-cols-1 gap-2 font-mono text-slate-600 sm:grid-cols-2">
+                                                                            {Object.entries(
+                                                                                log.properties,
+                                                                            ).map(
+                                                                                ([
+                                                                                    k,
+                                                                                    v,
+                                                                                ]) => (
+                                                                                    <div
+                                                                                        key={
+                                                                                            k
+                                                                                        }
+                                                                                        className="flex items-center justify-between rounded border border-slate-200/60 bg-white px-2.5 py-1"
+                                                                                    >
+                                                                                        <span className="text-slate-400">
+                                                                                            {
+                                                                                                k
+                                                                                            }
+                                                                                            :
+                                                                                        </span>
+                                                                                        <span className="font-bold text-slate-800">
+                                                                                            {typeof v ===
+                                                                                            'number'
+                                                                                                ? k.includes(
+                                                                                                      'value',
+                                                                                                  ) ||
+                                                                                                  k.includes(
+                                                                                                      'amount',
+                                                                                                  )
+                                                                                                    ? fmt(
+                                                                                                          v,
+                                                                                                      )
+                                                                                                    : String(
+                                                                                                          v,
+                                                                                                      )
+                                                                                                : String(
+                                                                                                      v ??
+                                                                                                          '-',
+                                                                                                  )}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ),
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1019,23 +1267,27 @@ export default function Show({
                         isOpen={!!selectedPayTerm}
                         invoice={{
                             id: prj.id,
-                            invoiceNumber: prj.invoiceNumber || `INV-${prj.code}`,
+                            invoiceNumber:
+                                prj.invoiceNumber || `INV-${prj.code}`,
                             clientName: prj.clientName,
                             projectName: prj.name,
                             totalAmount: prj.contractValue,
-                            terms: (prj.clientPaymentPlan?.terms || []).map((t: PaymentTerm) => ({
-                                id: t.id,
-                                label: t.label,
-                                amount: t.amount,
-                                percent: t.percent,
-                                due_date: t.dueDate,
-                                status: t.status === 'paid' ? 'paid' : 'unpaid',
-                                paid_amount: t.paidAmount || 0,
-                                remaining_amount: Math.max(
-                                    0,
-                                    t.amount - (t.paidAmount || 0),
-                                ),
-                            })),
+                            terms: (prj.clientPaymentPlan?.terms || []).map(
+                                (t: PaymentTerm) => ({
+                                    id: t.id,
+                                    label: t.label,
+                                    amount: t.amount,
+                                    percent: t.percent,
+                                    due_date: t.dueDate,
+                                    status:
+                                        t.status === 'paid' ? 'paid' : 'unpaid',
+                                    paid_amount: t.paidAmount || 0,
+                                    remaining_amount: Math.max(
+                                        0,
+                                        t.amount - (t.paidAmount || 0),
+                                    ),
+                                }),
+                            ),
                         }}
                         initialTerm={{
                             id: selectedPayTerm.id,
@@ -1043,22 +1295,27 @@ export default function Show({
                             amount: selectedPayTerm.amount,
                             percent: selectedPayTerm.percent,
                             due_date: selectedPayTerm.dueDate,
-                            status: selectedPayTerm.status === 'paid' ? 'paid' : 'unpaid',
+                            status:
+                                selectedPayTerm.status === 'paid'
+                                    ? 'paid'
+                                    : 'unpaid',
                             paid_amount: selectedPayTerm.paidAmount || 0,
                             remaining_amount: Math.max(
                                 0,
-                                selectedPayTerm.amount - (selectedPayTerm.paidAmount || 0),
+                                selectedPayTerm.amount -
+                                    (selectedPayTerm.paidAmount || 0),
                             ),
                         }}
                         cashBankAccounts={cashBankAccounts}
-                        remainingAmount={
-                            Math.max(
-                                0,
-                                selectedPayTerm.amount - (selectedPayTerm.paidAmount || 0),
-                            )
-                        }
+                        remainingAmount={Math.max(
+                            0,
+                            selectedPayTerm.amount -
+                                (selectedPayTerm.paidAmount || 0),
+                        )}
                         onClose={() => setSelectedPayTerm(null)}
-                        onSubmit={(data: RecordInvoicePaymentModalSubmitData) => {
+                        onSubmit={(
+                            data: RecordInvoicePaymentModalSubmitData,
+                        ) => {
                             const termId = data.term_id || selectedPayTerm.id;
                             const dppPaidAmt = data.amount;
 
@@ -1067,17 +1324,23 @@ export default function Show({
                             );
                             const derivedMethod = selectedAccount
                                 ? selectedAccount.name
-                                : (data.method || 'Transfer Bank BCA');
+                                : data.method || 'Transfer Bank BCA';
 
                             router.post(
                                 `/projects/${prj.id}/invoice/payment-terms/${termId}/settle`,
                                 {
                                     amount: dppPaidAmt,
-                                    paid_at: data.date || new Date().toISOString().split('T')[0],
+                                    paid_at:
+                                        data.date ||
+                                        new Date().toISOString().split('T')[0],
                                     payment_method: derivedMethod,
-                                    account_id: data.account_id ? String(data.account_id) : undefined,
+                                    account_id: data.account_id
+                                        ? String(data.account_id)
+                                        : undefined,
                                     payment_ref: data.referenceNo || undefined,
-                                    notes: data.notes || `Penerimaan Pembayaran ${data.termLabel} - ${prj.clientName}`,
+                                    notes:
+                                        data.notes ||
+                                        `Penerimaan Pembayaran ${data.termLabel} - ${prj.clientName}`,
                                 },
                                 {
                                     preserveScroll: true,
@@ -1615,37 +1878,67 @@ export default function Show({
                                             );
                                         // Persiapkan array due_dates sesuai urutan termin
                                         const now = new Date();
-                                        const addDays = (d: Date, days: number) => {
+                                        const addDays = (
+                                            d: Date,
+                                            days: number,
+                                        ) => {
                                             const res = new Date(d);
                                             res.setDate(res.getDate() + days);
-                                            return res.toISOString().split('T')[0];
+                                            return res
+                                                .toISOString()
+                                                .split('T')[0];
                                         };
-                                        const addMonths = (d: Date, months: number) => {
+                                        const addMonths = (
+                                            d: Date,
+                                            months: number,
+                                        ) => {
                                             const res = new Date(d);
-                                            res.setMonth(res.getMonth() + months);
-                                            return res.toISOString().split('T')[0];
+                                            res.setMonth(
+                                                res.getMonth() + months,
+                                            );
+                                            return res
+                                                .toISOString()
+                                                .split('T')[0];
                                         };
 
-                                        const percents = modalScheme === 'full'
-                                            ? [100]
-                                            : modalScheme === 'dp'
-                                              ? [modalTerminPercents[0] ?? 30, modalTerminPercents[1] ?? 70]
-                                              : modalTerminPercents;
+                                        const percents =
+                                            modalScheme === 'full'
+                                                ? [100]
+                                                : modalScheme === 'dp'
+                                                  ? [
+                                                        modalTerminPercents[0] ??
+                                                            30,
+                                                        modalTerminPercents[1] ??
+                                                            70,
+                                                    ]
+                                                  : modalTerminPercents;
 
-                                        const dueDates = percents.map((_, idx) => {
-                                            if (modalDueDates[idx]) {
-                                                return modalDueDates[idx];
-                                            }
-                                            return modalScheme === 'installment'
-                                                ? addMonths(now, idx + 1)
-                                                : addDays(now, (idx + 1) * 7);
-                                        });
+                                        const dueDates = percents.map(
+                                            (_, idx) => {
+                                                if (modalDueDates[idx]) {
+                                                    return modalDueDates[idx];
+                                                }
+                                                return modalScheme ===
+                                                    'installment'
+                                                    ? addMonths(now, idx + 1)
+                                                    : addDays(
+                                                          now,
+                                                          (idx + 1) * 7,
+                                                      );
+                                            },
+                                        );
 
                                         // Pastikan URL hash tetap di #invoice
                                         if (typeof window !== 'undefined') {
-                                            const currentUrl = new URL(window.location.href);
+                                            const currentUrl = new URL(
+                                                window.location.href,
+                                            );
                                             currentUrl.hash = 'invoice';
-                                            window.history.replaceState(null, '', currentUrl.toString());
+                                            window.history.replaceState(
+                                                null,
+                                                '',
+                                                currentUrl.toString(),
+                                            );
                                         }
 
                                         router.post(
@@ -1669,8 +1962,14 @@ export default function Show({
                                                     });
                                                 },
                                                 onError: (errs) => {
-                                                    const errorMsg = Object.values(errs).flat().join(' ') || 'Gagal menyimpan skema pembayaran.';
-                                                    setModalPercentError(errorMsg);
+                                                    const errorMsg =
+                                                        Object.values(errs)
+                                                            .flat()
+                                                            .join(' ') ||
+                                                        'Gagal menyimpan skema pembayaran.';
+                                                    setModalPercentError(
+                                                        errorMsg,
+                                                    );
                                                     setToast({
                                                         show: true,
                                                         type: 'error',

@@ -217,7 +217,7 @@ export interface Project {
     totalPaid?: number;
 }
 
-export type ActiveTab = 'info' | 'locations' | 'vendors' | 'invoice';
+export type ActiveTab = 'info' | 'locations' | 'vendors' | 'invoice' | 'audit';
 export type FiscalMode = 'ppn' | 'non-ppn';
 export type ViewMode = 'grid' | 'kanban' | 'table';
 
@@ -255,11 +255,16 @@ export function calcFinancials(
 
     // In PPN Mode, check if purchaseOrders exist or treat vendorCost as DPP
     let totalDppVendor = rawVendorSum;
-    let totalPO = isPPN ? Math.round(rawVendorSum * (1 + PPN_RATE)) : rawVendorSum;
+    let totalPO = isPPN
+        ? Math.round(rawVendorSum * (1 + PPN_RATE))
+        : rawVendorSum;
     let ppnMasukan = isPPN ? Math.round(rawVendorSum * PPN_RATE) : 0;
 
     if (project.purchaseOrders && project.purchaseOrders.length > 0) {
-        const poSum = project.purchaseOrders.reduce((s, po) => s + Math.round(Number(po.total) || 0), 0);
+        const poSum = project.purchaseOrders.reduce(
+            (s, po) => s + Math.round(Number(po.total) || 0),
+            0,
+        );
         if (poSum > 0) {
             totalPO = poSum;
             totalDppVendor = isPPN ? Math.round(poSum / (1 + PPN_RATE)) : poSum;

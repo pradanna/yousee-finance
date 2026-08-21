@@ -75,6 +75,20 @@ class DeleteProject
             $project->status = \App\Domains\Project\Enums\ProjectStatus::CANCELLED;
             $project->save();
 
+            // Catat ke Audit Log
+            \App\Domains\Shared\Models\AuditLog::create([
+                'auditable_type' => Project::class,
+                'auditable_id'   => $project->id,
+                'event'          => 'cancelled',
+                'user_id'        => auth()->id(),
+                'description'    => "Membatalkan (Cancel) proyek [{$project->code}] \"{$project->name}\" serta menghapus PO/Invoice draft terkait",
+                'properties'     => [
+                    'code'           => $project->code,
+                    'name'           => $project->name,
+                    'contract_value' => (float) $project->contract_value,
+                ],
+            ]);
+
             return true;
         });
     }

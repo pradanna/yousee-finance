@@ -66,11 +66,27 @@ class ProjectController extends Controller
         $sales = Sales::orderBy('name')->get(['id', 'name']);
         $vendors = Vendor::active()->orderBy('name')->get(['id', 'name']);
 
+        // Riwayat Audit Log seluruh project
+        $auditLogs = \App\Domains\Shared\Models\AuditLog::with('user:id,name')
+            ->where('auditable_type', Project::class)
+            ->latest()
+            ->take(100)
+            ->get()
+            ->map(fn ($log) => [
+                'id'          => $log->id,
+                'event'       => $log->event,
+                'description' => $log->description,
+                'properties'  => $log->properties,
+                'user_name'   => $log->user?->name ?? 'System',
+                'created_at'  => $log->created_at?->toIso8601String(),
+            ]);
+
         return Inertia::render('Projects', [
             'projects' => ProjectResource::collection($projects),
             'clients' => ClientOptionResource::collection($clients)->resolve(),
             'sales' => SalesOptionResource::collection($sales)->resolve(),
             'vendors' => VendorOptionResource::collection($vendors)->resolve(),
+            'auditLogs' => $auditLogs,
             'filters' => [
                 'client_id' => (string) ($clientId ?? ''),
                 'sales_id' => (string) ($salesId ?? ''),
@@ -93,6 +109,7 @@ class ProjectController extends Controller
             'purchaseOrders.items',
             'purchaseOrders.paymentPlan.terms.settlements',
             'invoices.paymentPlan.terms.settlements',
+            'auditLogs.user',
         ]);
 
         $clients = Client::active()->orderBy('name')->get(['id', 'name']);
@@ -112,12 +129,26 @@ class ProjectController extends Controller
                 'display_name' => "{$acc->code} - {$acc->name}",
             ]);
 
+        $projectAuditLogs = $project->auditLogs()
+            ->with('user:id,name')
+            ->latest()
+            ->get()
+            ->map(fn ($log) => [
+                'id'          => $log->id,
+                'event'       => $log->event,
+                'description' => $log->description,
+                'properties'  => $log->properties,
+                'user_name'   => $log->user?->name ?? 'System',
+                'created_at'  => $log->created_at?->toIso8601String(),
+            ]);
+
         return Inertia::render('Projects/Show', [
             'project'          => (new ProjectResource($project))->resolve(),
             'clients'          => ClientOptionResource::collection($clients)->resolve(),
             'sales'            => SalesOptionResource::collection($sales)->resolve(),
             'vendors'          => VendorOptionResource::collection($vendors)->resolve(),
             'cashBankAccounts' => $cashBankAccounts,
+            'auditLogs'        => $projectAuditLogs,
         ]);
     }
 

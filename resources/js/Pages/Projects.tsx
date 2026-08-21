@@ -6,6 +6,7 @@ import TextInput from '@/Components/Form/TextInput';
 import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown from '@/Components/UI/ActionDropdown';
+import AuditLogModal, { AuditLogItem } from '@/Components/UI/AuditLogModal';
 import Modal from '@/Components/UI/Modal';
 import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
@@ -20,6 +21,7 @@ import {
 } from './Projects/createProjectSchema';
 import { StatusBadge } from './Projects/Show';
 
+import { formatPeriod } from '@/Utils/formatters';
 import {
     PPN_RATE,
     Project,
@@ -27,7 +29,6 @@ import {
     calcFinancials,
     fmt,
 } from './Projects/projectTypes';
-import { formatPeriod } from '@/Utils/formatters';
 
 interface ClientOption {
     id: string;
@@ -130,6 +131,7 @@ interface ProjectsPageProps {
     clients: ClientOption[];
     sales: SalesOption[];
     vendors?: VendorOption[];
+    auditLogs?: AuditLogItem[];
     filters?: {
         client_id?: string;
         sales_id?: string;
@@ -300,6 +302,7 @@ export default function Projects({
     clients,
     sales,
     vendors,
+    auditLogs = [],
 }: ProjectsPageProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
@@ -366,7 +369,11 @@ export default function Projects({
                     clientName: p.client?.name ?? p.client_name ?? '-',
                     salesId: p.sales_id ?? p.sales?.id ?? undefined,
                     salesPIC: p.sales?.name ?? p.sales_pic ?? '-',
-                    salesCommissionRate: Number(p.sales_commission_rate ?? p.sales?.commission_rate ?? 0),
+                    salesCommissionRate: Number(
+                        p.sales_commission_rate ??
+                            p.sales?.commission_rate ??
+                            0,
+                    ),
                     period:
                         periodObj.label || `${p.start_date} - ${p.end_date}`,
                     startDate: p.start_date,
@@ -423,7 +430,7 @@ export default function Projects({
         return Array.from(yearsSet).sort((a, b) => Number(b) - Number(a));
     }, [projects]);
 
-    // Edit project state
+    const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState(false);
     const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
 
     // Toast state
@@ -637,12 +644,14 @@ export default function Projects({
                         );
                     },
                     onError: (serverErrors) => {
-                        Object.entries(serverErrors).forEach(([key, message]) => {
-                            const field = SERVER_ERROR_FIELD_MAP[key];
-                            if (field) {
-                                setError(field, { message });
-                            }
-                        });
+                        Object.entries(serverErrors).forEach(
+                            ([key, message]) => {
+                                const field = SERVER_ERROR_FIELD_MAP[key];
+                                if (field) {
+                                    setError(field, { message });
+                                }
+                            },
+                        );
                         const firstError = Object.values(serverErrors)[0];
                         if (firstError) {
                             triggerToast(
@@ -681,12 +690,14 @@ export default function Projects({
                         );
                     },
                     onError: (serverErrors) => {
-                        Object.entries(serverErrors).forEach(([key, message]) => {
-                            const field = SERVER_ERROR_FIELD_MAP[key];
-                            if (field) {
-                                setError(field, { message });
-                            }
-                        });
+                        Object.entries(serverErrors).forEach(
+                            ([key, message]) => {
+                                const field = SERVER_ERROR_FIELD_MAP[key];
+                                if (field) {
+                                    setError(field, { message });
+                                }
+                            },
+                        );
                         const firstError = Object.values(serverErrors)[0];
                         if (firstError) {
                             triggerToast(
@@ -809,7 +820,9 @@ export default function Projects({
                 clientFilter === 'all' || p.clientId === clientFilter;
 
             const matchesSales =
-                salesFilter === 'all' || p.salesId === salesFilter || p.salesPIC.toLowerCase() === salesFilter.toLowerCase();
+                salesFilter === 'all' ||
+                p.salesId === salesFilter ||
+                p.salesPIC.toLowerCase() === salesFilter.toLowerCase();
 
             const matchesStatus =
                 statusFilter === 'all' ||
@@ -821,7 +834,9 @@ export default function Projects({
                     p.locations.some((l) => !l.poIssued)) ||
                 (statusFilter === 'no_invoice' && !p.invoiceIssued);
 
-            return matchesSearch && matchesClient && matchesSales && matchesStatus;
+            return (
+                matchesSearch && matchesClient && matchesSales && matchesStatus
+            );
         });
 
         // Sort priority
@@ -859,7 +874,13 @@ export default function Projects({
             const tB = parsedB ? parsedB.start.getTime() : 0;
             return tB - tA;
         });
-    }, [periodFilteredProjects, searchQuery, clientFilter, salesFilter, statusFilter]);
+    }, [
+        periodFilteredProjects,
+        searchQuery,
+        clientFilter,
+        salesFilter,
+        statusFilter,
+    ]);
 
     // Subset filtered by client and sales (for status pill counts)
     const baseClientSalesFiltered = useMemo(() => {
@@ -877,7 +898,9 @@ export default function Projects({
                 clientFilter === 'all' || p.clientId === clientFilter;
 
             const matchesSales =
-                salesFilter === 'all' || p.salesId === salesFilter || p.salesPIC.toLowerCase() === salesFilter.toLowerCase();
+                salesFilter === 'all' ||
+                p.salesId === salesFilter ||
+                p.salesPIC.toLowerCase() === salesFilter.toLowerCase();
 
             return matchesSearch && matchesClient && matchesSales;
         });
@@ -959,22 +982,45 @@ export default function Projects({
                         </p>
                     </div>
 
-                    <PrimaryButton onClick={handleOpenCreateProject}>
-                        <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2.5}
+                    <div className="flex items-center gap-2.5">
+                        <button
+                            type="button"
+                            onClick={() => setIsAuditLogModalOpen(true)}
+                            className="shadow-xs inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 active:scale-95"
                         >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M12 4v16m8-8H4"
-                            />
-                        </svg>
-                        Buat Proyek Baru
-                    </PrimaryButton>
+                            <svg
+                                className="h-4 w-4 text-slate-500"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
+                            </svg>
+                            <span>Log Aktivitas Proyek</span>
+                        </button>
+
+                        <PrimaryButton onClick={handleOpenCreateProject}>
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.5}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 4v16m8-8H4"
+                                />
+                            </svg>
+                            Buat Proyek Baru
+                        </PrimaryButton>
+                    </div>
                 </div>
 
                 {/* Metric Summary Grid — Di Atas, Nilai Menyesuaikan Filter */}
@@ -1212,7 +1258,10 @@ export default function Projects({
                         <div className="flex flex-wrap items-center gap-1.5">
                             {[
                                 { key: 'all', label: `Semua (${countAll})` },
-                                { key: 'draft', label: `Draft (${countDraft})` },
+                                {
+                                    key: 'draft',
+                                    label: `Draft (${countDraft})`,
+                                },
                                 {
                                     key: 'pending_po',
                                     label: `Pending PO (${countPendingPO})`,
@@ -1221,7 +1270,10 @@ export default function Projects({
                                     key: 'no_invoice',
                                     label: `Invoicing (${countNoInvoice})`,
                                 },
-                                { key: 'active', label: `Aktif (${countActive})` },
+                                {
+                                    key: 'active',
+                                    label: `Aktif (${countActive})`,
+                                },
                                 {
                                     key: 'completed',
                                     label: `Selesai (${countCompleted})`,
@@ -3006,7 +3058,8 @@ export default function Projects({
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold text-slate-900">
-                                    {errorDialog.title || 'Pembatalan Proyek Ditolak'}
+                                    {errorDialog.title ||
+                                        'Pembatalan Proyek Ditolak'}
                                 </h3>
                                 <p className="mt-0.5 text-xs text-slate-500">
                                     Sistem memproteksi penghapusan data ini.
@@ -3034,6 +3087,34 @@ export default function Projects({
                         </div>
                     </div>
                 </Modal>
+
+                {/* Modal Besar: Riwayat Lengkap Jejak Audit Proyek */}
+                <AuditLogModal
+                    show={isAuditLogModalOpen}
+                    onClose={() => setIsAuditLogModalOpen(false)}
+                    title="Jejak Audit Keamanan & Riwayat Aktivitas Proyek"
+                    subtitle="Audit trail pembuatan proyek, perubahan nilai kontrak, perubahan masa tayang, dan pembatalan status"
+                    logs={auditLogs || []}
+                    eventOptions={[
+                        { value: 'all', label: 'Semua Jenis Aktivitas' },
+                        {
+                            value: 'created',
+                            label: '🟢 Proyek Dibuat (Created)',
+                        },
+                        {
+                            value: 'updated',
+                            label: '🟡 Pembaruan Data (Updated)',
+                        },
+                        {
+                            value: 'status_changed',
+                            label: '🔵 Perubahan Status (Status Changed)',
+                        },
+                        {
+                            value: 'cancelled',
+                            label: '🔴 Pembatalan Proyek (Cancelled)',
+                        },
+                    ]}
+                />
 
                 {/* Floating Toast Notification */}
                 <Toast

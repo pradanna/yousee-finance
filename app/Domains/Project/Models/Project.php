@@ -88,6 +88,11 @@ class Project extends Model
         return $this->hasMany(Invoice::class);
     }
 
+    public function auditLogs(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domains\Shared\Models\AuditLog::class, 'auditable');
+    }
+
     /**
      * Hitung laba-rugi proyek per Mode Fiskal.
      * Revenue = Total Invoice (Issued/Paid)
