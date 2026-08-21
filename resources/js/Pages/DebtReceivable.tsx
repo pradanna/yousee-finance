@@ -1,57 +1,101 @@
 import SelectInput from '@/Components/Form/SelectInput';
+import { RecordInvoicePaymentModal } from '@/Components/Modal/RecordInvoicePaymentModal';
+import { RecordPaymentModal } from '@/Components/Modal/RecordPaymentModal';
 import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown, { ActionMenuItem } from '@/Components/UI/ActionDropdown';
+import Toast from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
+import type { PageProps as BasePageProps } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
 import React, { useMemo, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Interfaces
 // ─────────────────────────────────────────────────────────────────────────────
-interface PaymentTerms {
-    type: 'full' | 'dp' | 'termin';
-    notes?: string;
-    dpPercent?: number;
-    dpAmount?: number;
-    dpDueDate?: string;
-    pelunasanDueDate?: string;
-    installments?: Array<{
-        percent: number;
-        amount: number;
-        note: string;
-        dueDays?: number;
-        dueDate?: string;
-    }>;
-}
-
-interface ReceivableItem {
+export interface MilestoneItem {
     id: string;
-    client: string;
-    project: string;
-    date: string;
-    due: string;
-    total: number;
-    paid: number;
-    status: 'paid' | 'partial' | 'unpaid';
-    terms: PaymentTerms;
-    salesPIC?: string;
+    sort_order: number;
+    label: string;
+    amount: number;
+    paid_amount: number;
+    remaining_amount: number;
+    due_date: string | null;
+    status: string;
+    notes?: string | null;
 }
 
-interface PayableItem {
+export interface ReceivableRecord {
     id: string;
-    vendor: string;
-    project: string;
-    date: string;
-    due: string;
-    total: number;
-    paid: number;
+    invoice_number: string;
+    client_id: string;
+    client_name: string;
+    project_id: string | null;
+    project_code: string;
+    project_name: string;
+    sales_name: string;
+    transaction_date: string | null;
+    due_date: string | null;
+    total_amount: number;
+    paid_amount: number;
+    remaining_amount: number;
     status: 'paid' | 'partial' | 'unpaid';
-    terms: PaymentTerms;
+    scheme: string;
+    milestones: MilestoneItem[];
+    nearest_milestone: MilestoneItem | null;
+    is_overdue: boolean;
+    overdue_days: number;
+    fiscal_mode: 'ppn' | 'non-ppn';
 }
 
-const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
+export interface PayableRecord {
+    id: string;
+    po_number: string;
+    vendor_id: string;
+    vendor_name: string;
+    project_id: string | null;
+    project_code: string;
+    project_name: string;
+    transaction_date: string | null;
+    due_date: string | null;
+    total_amount: number;
+    paid_amount: number;
+    remaining_amount: number;
+    status: 'paid' | 'partial' | 'unpaid';
+    scheme: string;
+    milestones: MilestoneItem[];
+    nearest_milestone: MilestoneItem | null;
+    is_overdue: boolean;
+    overdue_days: number;
+    fiscal_mode: 'ppn' | 'non-ppn';
+}
 
-const formatDateIndo = (dateStr: string) => {
+export interface CoaOption {
+    id: string;
+    code: string;
+    name: string;
+}
+
+export interface DebtReceivablePageProps extends BasePageProps {
+    receivables: ReceivableRecord[];
+    payables: PayableRecord[];
+    paymentAccounts: CoaOption[];
+    summary: {
+        totalReceivable: number;
+        totalPayable: number;
+        netBalance: number;
+        overdueCount: number;
+        overdueReceivablesCount: number;
+        overduePayablesCount: number;
+    };
+    clients: Array<{ id: string; name: string }>;
+    vendors: Array<{ id: string; name: string }>;
+}
+
+const fmt = (n: number | string) =>
+    `Rp ${Math.round(Number(n) || 0).toLocaleString('id-ID')}`;
+
+const formatDateIndo = (dateStr?: string | null) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
@@ -72,259 +116,22 @@ const formatDateIndo = (dateStr: string) => {
     return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 };
 
-interface ResolvedMilestone {
-    label: string;
-    amount: number;
-    dueDate: string;
-    cumulativeAmount: number;
-}
-
-interface MilestoneStatus {
-    nearestMilestone: ResolvedMilestone | null;
-    isOverdue: boolean;
-    overdueDays: number;
-    statusText: string;
-}
-
-const getMilestones = (
-    item: ReceivableItem | PayableItem,
-): ResolvedMilestone[] => {
-    const list: ResolvedMilestone[] = [];
-    const t = item.terms;
-    if (t.type === 'full') {
-        list.push({
-            label: 'Pelunasan 100%',
-            amount: item.total,
-            dueDate: item.due,
-            cumulativeAmount: item.total,
-        });
-    } else if (t.type === 'dp') {
-        const dpAmt = t.dpAmount || (item.total * (t.dpPercent || 0)) / 100;
-        list.push({
-            label: `Uang Muka (DP ${t.dpPercent || 0}%)`,
-            amount: dpAmt,
-            dueDate: t.dpDueDate || item.date,
-            cumulativeAmount: dpAmt,
-        });
-        list.push({
-            label: 'Pelunasan Akhir',
-            amount: item.total - dpAmt,
-            dueDate: t.pelunasanDueDate || item.due,
-            cumulativeAmount: item.total,
-        });
-    } else if (t.type === 'termin' && t.installments) {
-        let cum = 0;
-        t.installments.forEach((inst, idx) => {
-            cum += inst.amount;
-            list.push({
-                label: inst.note || `Termin ${idx + 1}`,
-                amount: inst.amount,
-                dueDate: inst.dueDate || item.due,
-                cumulativeAmount: cum,
-            });
-        });
-    }
-    return list;
-};
-
-const getNearestMilestoneInfo = (
-    item: ReceivableItem | PayableItem,
-    currentDateStr: string = new Date().toISOString().split('T')[0],
-): MilestoneStatus => {
-    const milestones = getMilestones(item);
-    const unpaidMilestone = milestones.find(
-        (m) => item.paid < m.cumulativeAmount - 1,
-    );
-
-    if (!unpaidMilestone) {
-        return {
-            nearestMilestone: null,
-            isOverdue: false,
-            overdueDays: 0,
-            statusText: 'Lunas',
-        };
-    }
-
-    const currentDate = new Date(currentDateStr);
-    currentDate.setHours(0, 0, 0, 0);
-    const dueDate = new Date(unpaidMilestone.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-
-    const timeDiff = currentDate.getTime() - dueDate.getTime();
-    const isOverdue = timeDiff > 0;
-    const overdueDays = isOverdue
-        ? Math.ceil(timeDiff / (1000 * 3600 * 24))
-        : 0;
-
-    return {
-        nearestMilestone: unpaidMilestone,
-        isOverdue,
-        overdueDays,
-        statusText: unpaidMilestone.label,
-    };
-};
-
 const ITEMS_PER_PAGE = 10;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Page Component
-// ─────────────────────────────────────────────────────────────────────────────
 export default function DebtReceivable() {
+    const {
+        receivables = [],
+        payables = [],
+        paymentAccounts = [],
+        summary,
+        clients = [],
+        vendors = [],
+    } = usePage<DebtReceivablePageProps>().props;
+
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
-    // State for Client Receivables (Piutang)
-    const [receivables, setReceivables] = useState<ReceivableItem[]>([
-        {
-            id: isPPN ? 'INV-PPN-001' : 'INV-NP-001',
-            client: 'PT. Gojek Tokopedia',
-            project: 'Kampanye Ramadhan Baliho Jawa Tengah',
-            date: '2026-06-25',
-            due: '2026-07-25',
-            total: isPPN ? 11100000 : 10000000,
-            paid: isPPN ? 11100000 : 10000000,
-            status: 'paid',
-            terms: {
-                type: 'full',
-                notes: 'Pembayaran 100% lunas 30 hari setelah invoice diterima.',
-            },
-            salesPIC: 'Eko Prasetyo',
-        },
-        {
-            id: isPPN ? 'INV-PPN-002' : 'INV-NP-002',
-            client: 'Traveloka Corp',
-            project: 'Sewa Videotron Simpang Lima Semarang',
-            date: '2026-06-22',
-            due: '2026-07-22',
-            total: isPPN ? 5550000 : 5000000,
-            paid: 2000000,
-            status: 'partial',
-            terms: {
-                type: 'dp',
-                dpPercent: 30,
-                dpAmount: isPPN ? 1665000 : 1500000,
-                dpDueDate: '2026-06-25',
-                pelunasanDueDate: '2026-07-22',
-                notes: 'Uang muka (DP) 30% dibayar di awal, pelunasan 70% setelah pasang.',
-            },
-            salesPIC: 'Rina Wijaya',
-        },
-        {
-            id: isPPN ? 'INV-PPN-003' : 'INV-NP-003',
-            client: 'Shopee Indonesia',
-            project: 'Sewa Billboard Ring Road Yogyakarta',
-            date: '2026-06-12',
-            due: '2026-07-12',
-            total: isPPN ? 8880000 : 8000000,
-            paid: 0,
-            status: 'unpaid',
-            terms: {
-                type: 'termin',
-                installments: [
-                    {
-                        percent: 50,
-                        amount: isPPN ? 4440000 : 4000000,
-                        note: 'Termin 1 (DP 50%)',
-                        dueDate: '2026-06-18',
-                    },
-                    {
-                        percent: 50,
-                        amount: isPPN ? 4440000 : 4000000,
-                        note: 'Termin 2 (Pelunasan 50%)',
-                        dueDate: '2026-07-12',
-                    },
-                ],
-                notes: 'Pembayaran dibagi 2 termin (Termin 1: 50%, Termin 2: 50%).',
-            },
-            salesPIC: 'Budi Santoso',
-        },
-        {
-            id: isPPN ? 'INV-PPN-004' : 'INV-NP-004',
-            client: 'CV. Soto Bangkong Lestari',
-            project: 'Baliho Kuliner Lokal Soto Bangkong - Solo',
-            date: '2026-08-01',
-            due: '2026-08-11',
-            total: isPPN ? 49950000 : 45000000,
-            paid: 0,
-            status: 'unpaid',
-            terms: {
-                type: 'termin',
-                installments: [
-                    {
-                        percent: 30,
-                        amount: isPPN ? 14985000 : 13500000,
-                        note: 'Termin 1',
-                        dueDate: '2026-08-11',
-                    },
-                    {
-                        percent: 40,
-                        amount: isPPN ? 19980000 : 18000000,
-                        note: 'Termin 2',
-                        dueDate: '2026-08-25',
-                    },
-                    {
-                        percent: 30,
-                        amount: isPPN ? 14985000 : 13500000,
-                        note: 'Termin 3',
-                        dueDate: '2026-09-10',
-                    },
-                ],
-                notes: 'Angsuran berkala 3 bulan (30-40-30)',
-            },
-            salesPIC: 'Eko Prasetyo',
-        },
-    ]);
-
-    // State for Vendor Payables (Hutang)
-    const [payables, setPayables] = useState<PayableItem[]>([
-        {
-            id: isPPN ? 'PO-PPN-001' : 'PO-NP-001',
-            vendor: 'PT. Megah Billboard Jaya',
-            project: 'Kampanye Ramadhan Baliho Jawa Tengah',
-            date: '2026-06-24',
-            due: '2026-07-24',
-            total: isPPN ? 3330000 : 3000000,
-            paid: isPPN ? 3330000 : 3000000,
-            status: 'paid',
-            terms: {
-                type: 'full',
-                notes: 'Pembayaran 100% setelah penyerahan dokumen penagihan lengkap.',
-            },
-        },
-        {
-            id: isPPN ? 'PO-PPN-002' : 'PO-NP-002',
-            vendor: 'PT. Promosi Outdoor Kreasindo',
-            project: 'Sewa Videotron Simpang Lima Semarang',
-            date: '2026-06-20',
-            due: '2026-07-20',
-            total: isPPN ? 8880000 : 8000000,
-            paid: 4000000,
-            status: 'partial',
-            terms: {
-                type: 'dp',
-                dpPercent: 50,
-                dpAmount: isPPN ? 4440000 : 4000000,
-                dpDueDate: '2026-06-23',
-                pelunasanDueDate: '2026-06-26',
-                notes: 'DP 50% di muka, Pelunasan 50% setelah pemasangan selesai.',
-            },
-        },
-        {
-            id: isPPN ? 'PO-PPN-003' : 'PO-NP-003',
-            vendor: 'CV. Media Ad Perkasa',
-            project: 'Samsung Galaxy S27 Launching',
-            date: '2026-06-15',
-            due: '2026-06-20',
-            total: isPPN ? 1200000 : 1200000,
-            paid: 0,
-            status: 'unpaid',
-            terms: {
-                type: 'full',
-                notes: 'Pembayaran 100% setelah serah terima pekerjaan.',
-            },
-        },
-    ]);
-
+    // Tabs & Filters
     const [activeTab, setActiveTab] = useState<'payable' | 'receivable'>(
         'payable',
     );
@@ -336,67 +143,237 @@ export default function DebtReceivable() {
     const [receivablesPage, setReceivablesPage] = useState(1);
     const [payablesPage, setPayablesPage] = useState(1);
 
-    // Modal states
-    const [paymentModal, setPaymentModal] = useState<{
-        isOpen: boolean;
-        type: 'receivable' | 'payable';
-        item: ReceivableItem | PayableItem;
-    } | null>(null);
+    // Modals
     const [termsModal, setTermsModal] = useState<{
         isOpen: boolean;
-        item: ReceivableItem | PayableItem;
+        type: 'receivable' | 'payable';
+        item: ReceivableRecord | PayableRecord;
     } | null>(null);
-    const [payAmountInput, setPayAmountInput] = useState('');
-    const [payMethodInput, setPayMethodInput] = useState('Transfer BCA');
-    const [payRefInput, setPayRefInput] = useState('');
-    const [payDateInput, setPayDateInput] = useState(
-        new Date().toISOString().split('T')[0],
-    );
-    const [payNotesInput, setPayNotesInput] = useState('');
-    const [successAlert, setSuccessAlert] = useState<string | null>(null);
 
-    // Dynamic computations
-    const totalReceivable = receivables.reduce(
-        (s, r) => s + (r.total - r.paid),
-        0,
-    );
-    const totalPayable = payables.reduce((s, p) => s + (p.total - p.paid), 0);
-    const netBalance = totalReceivable - totalPayable;
+    // Modal Catat Pembayaran Hutang Vendor (Payable)
+    const [payablePaymentModal, setPayablePaymentModal] = useState<{
+        isOpen: boolean;
+        item: PayableRecord | null;
+    }>({
+        isOpen: false,
+        item: null,
+    });
 
-    const overdueReceivables = receivables.filter(
-        (r) => getNearestMilestoneInfo(r).isOverdue,
-    );
-    const overduePayables = payables.filter(
-        (p) => getNearestMilestoneInfo(p).isOverdue,
-    );
-    const totalOverdueCount =
-        overdueReceivables.length + overduePayables.length;
+    // Modal Catat Penerimaan Piutang Client (Receivable)
+    const [receivablePaymentModal, setReceivablePaymentModal] = useState<{
+        isOpen: boolean;
+        item: ReceivableRecord | null;
+    }>({
+        isOpen: false,
+        item: null,
+    });
 
-    // Extract unique partner names
-    const clientList = useMemo(
-        () => Array.from(new Set(receivables.map((r) => r.client))),
-        [receivables],
-    );
-    const vendorList = useMemo(
-        () => Array.from(new Set(payables.map((p) => p.vendor))),
-        [payables],
-    );
+    const [isSubmittingPayable, setIsSubmittingPayable] = useState(false);
+    const [isSubmittingReceivable, setIsSubmittingReceivable] = useState(false);
+
+    const [toast, setToast] = useState<{
+        show: boolean;
+        type: 'success' | 'error' | 'warning';
+        title: string;
+        message: string;
+    }>({
+        show: false,
+        type: 'success',
+        title: '',
+        message: '',
+    });
+
+    const triggerToast = (
+        message: string,
+        type: 'success' | 'error' | 'warning' = 'success',
+        title = 'Notifikasi',
+    ) => {
+        setToast({ show: true, type, title, message });
+    };
+
+    // Handler Pelunasan Hutang Vendor
+    const handleSavePayablePayment = (data: {
+        poNumber: string;
+        termLabel: string;
+        amount: number;
+        date: string;
+        method: string;
+        account_id?: string | number;
+        referenceNo: string;
+        notes: string;
+    }) => {
+        const p = payablePaymentModal.item;
+        if (!p) return;
+
+        const targetProjectId = p.project_id;
+        const targetPoId = p.id;
+        const unpaidMilestone =
+            p.milestones.find(
+                (m) => m.status !== 'paid' && m.remaining_amount > 0,
+            ) || p.milestones[0];
+
+        if (!targetProjectId || !targetPoId || !unpaidMilestone) {
+            triggerToast(
+                'Data PO atau termin pembayaran tidak valid.',
+                'error',
+                'Pembayaran Gagal',
+            );
+            return;
+        }
+
+        setIsSubmittingPayable(true);
+        router.post(
+            `/projects/${targetProjectId}/purchase-orders/${targetPoId}/payment-terms/${unpaidMilestone.id}/settle`,
+            {
+                amount: data.amount,
+                paid_at: data.date,
+                payment_method: data.method,
+                account_id: data.account_id || null,
+                payment_ref: data.referenceNo || null,
+                notes: data.notes || null,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setPayablePaymentModal({ isOpen: false, item: null });
+                    triggerToast(
+                        `Berhasil mencatat pembayaran kas ${fmt(data.amount)} untuk ${data.poNumber}!`,
+                        'success',
+                        'Pembayaran Vendor Berhasil',
+                    );
+                },
+                onError: (errors) => {
+                    const firstError =
+                        Object.values(errors)[0] ||
+                        'Gagal mencatat pembayaran hutang vendor. Periksa kembali nominal pembayaran.';
+                    triggerToast(
+                        String(firstError),
+                        'error',
+                        'Pembayaran Gagal',
+                    );
+                },
+                onFinish: () => {
+                    setIsSubmittingPayable(false);
+                },
+            },
+        );
+    };
+
+    // Handler Penerimaan Piutang Klien
+    const handleSaveReceivablePayment = (data: {
+        invoiceNumber: string;
+        term_id?: string | number;
+        termLabel: string;
+        amount: number;
+        date: string;
+        method: string;
+        account_id?: string;
+        referenceNo: string;
+        notes: string;
+    }) => {
+        const r = receivablePaymentModal.item;
+        if (!r) return;
+
+        const targetProjectId = r.project_id;
+        let targetTermId = data.term_id;
+        if (!targetTermId) {
+            const unpaidMilestone =
+                r.milestones.find(
+                    (m) => m.status !== 'paid' && m.remaining_amount > 0,
+                ) || r.milestones[0];
+            targetTermId = unpaidMilestone?.id;
+        }
+
+        if (!targetProjectId || !targetTermId) {
+            triggerToast(
+                'Data Invoice atau termin penerimaan tidak valid.',
+                'error',
+                'Pencatatan Gagal',
+            );
+            return;
+        }
+
+        setIsSubmittingReceivable(true);
+        router.post(
+            `/projects/${targetProjectId}/invoice/payment-terms/${targetTermId}/settle`,
+            {
+                amount: data.amount,
+                paid_at: data.date,
+                payment_method: data.method,
+                account_id: data.account_id || null,
+                payment_ref: data.referenceNo || null,
+                notes: data.notes || null,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setReceivablePaymentModal({ isOpen: false, item: null });
+                    triggerToast(
+                        `Berhasil mencatat penerimaan kas ${fmt(data.amount)} untuk Invoice ${data.invoiceNumber}!`,
+                        'success',
+                        'Penerimaan Piutang Berhasil',
+                    );
+                },
+                onError: (errors) => {
+                    const firstError =
+                        Object.values(errors)[0] ||
+                        'Gagal mencatat pelunasan piutang klien. Periksa kembali nominal penerimaan.';
+                    triggerToast(
+                        String(firstError),
+                        'error',
+                        'Pencatatan Gagal',
+                    );
+                },
+                onFinish: () => {
+                    setIsSubmittingReceivable(false);
+                },
+            },
+        );
+    };
+
+    // Sinkronisasi data saat mode fiskal berubah
+    React.useEffect(() => {
+        router.get(
+            '/debt-receivable',
+            { fiscal_mode: fiscalMode },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['receivables', 'payables', 'summary'],
+            },
+        );
+    }, [fiscalMode]);
+
+    // Helper to get sorting timestamp (overdue first, earliest unpaid milestone due date)
+    const getItemDueTime = (item: ReceivableRecord | PayableRecord): number => {
+        if (item.status === 'paid' || item.remaining_amount <= 0) {
+            return 9999999999999; // Lunas diletakkan paling bawah
+        }
+        const targetDate = item.nearest_milestone?.due_date || item.due_date;
+        if (!targetDate) return 9999999999990;
+        return new Date(targetDate).getTime();
+    };
 
     // Filter & Sort Receivables
     const filteredReceivables = useMemo(() => {
         return receivables
             .filter((r) => {
                 const matchesSearch =
-                    r.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    r.client
+                    r.invoice_number
                         .toLowerCase()
                         .includes(searchQuery.toLowerCase()) ||
-                    r.project.toLowerCase().includes(searchQuery.toLowerCase());
+                    r.client_name
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                    r.project_name
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                    r.project_code
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase());
 
-                const milestoneInfo = getNearestMilestoneInfo(r);
                 let matchesStatus = true;
-                if (statusFilter === 'overdue')
-                    matchesStatus = milestoneInfo.isOverdue;
+                if (statusFilter === 'overdue') matchesStatus = r.is_overdue;
                 else if (statusFilter === 'partial')
                     matchesStatus = r.status === 'partial';
                 else if (statusFilter === 'unpaid')
@@ -405,18 +382,21 @@ export default function DebtReceivable() {
                     matchesStatus = r.status === 'paid';
 
                 const matchesPartner =
-                    partnerFilter === 'all' || r.client === partnerFilter;
+                    partnerFilter === 'all' || r.client_name === partnerFilter;
 
                 return matchesSearch && matchesStatus && matchesPartner;
             })
             .sort((a, b) => {
                 if (sortOrder === 'amount_desc')
-                    return b.total - b.paid - (a.total - a.paid);
-                if (sortOrder === 'newest')
+                    return b.remaining_amount - a.remaining_amount;
+                if (sortOrder === 'newest') {
                     return (
-                        new Date(b.date).getTime() - new Date(a.date).getTime()
+                        new Date(b.transaction_date || '').getTime() -
+                        new Date(a.transaction_date || '').getTime()
                     );
-                return new Date(a.due).getTime() - new Date(b.due).getTime();
+                }
+                // Default 'due': Prioritaskan yang overdue paling lama / jatuh tempo terdekat di atas
+                return getItemDueTime(a) - getItemDueTime(b);
             });
     }, [receivables, searchQuery, statusFilter, partnerFilter, sortOrder]);
 
@@ -425,16 +405,21 @@ export default function DebtReceivable() {
         return payables
             .filter((p) => {
                 const matchesSearch =
-                    p.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    p.vendor
+                    p.po_number
                         .toLowerCase()
                         .includes(searchQuery.toLowerCase()) ||
-                    p.project.toLowerCase().includes(searchQuery.toLowerCase());
+                    p.vendor_name
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                    p.project_name
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()) ||
+                    p.project_code
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase());
 
-                const milestoneInfo = getNearestMilestoneInfo(p);
                 let matchesStatus = true;
-                if (statusFilter === 'overdue')
-                    matchesStatus = milestoneInfo.isOverdue;
+                if (statusFilter === 'overdue') matchesStatus = p.is_overdue;
                 else if (statusFilter === 'partial')
                     matchesStatus = p.status === 'partial';
                 else if (statusFilter === 'unpaid')
@@ -443,22 +428,25 @@ export default function DebtReceivable() {
                     matchesStatus = p.status === 'paid';
 
                 const matchesPartner =
-                    partnerFilter === 'all' || p.vendor === partnerFilter;
+                    partnerFilter === 'all' || p.vendor_name === partnerFilter;
 
                 return matchesSearch && matchesStatus && matchesPartner;
             })
             .sort((a, b) => {
                 if (sortOrder === 'amount_desc')
-                    return b.total - b.paid - (a.total - a.paid);
-                if (sortOrder === 'newest')
+                    return b.remaining_amount - a.remaining_amount;
+                if (sortOrder === 'newest') {
                     return (
-                        new Date(b.date).getTime() - new Date(a.date).getTime()
+                        new Date(b.transaction_date || '').getTime() -
+                        new Date(a.transaction_date || '').getTime()
                     );
-                return new Date(a.due).getTime() - new Date(b.due).getTime();
+                }
+                // Default 'due': Prioritaskan yang overdue paling lama / jatuh tempo terdekat di atas
+                return getItemDueTime(a) - getItemDueTime(b);
             });
     }, [payables, searchQuery, statusFilter, partnerFilter, sortOrder]);
 
-    // Paginated items
+    // Pagination computations
     const paginatedReceivables = useMemo(() => {
         const start = (receivablesPage - 1) * ITEMS_PER_PAGE;
         return filteredReceivables.slice(start, start + ITEMS_PER_PAGE);
@@ -469,98 +457,30 @@ export default function DebtReceivable() {
         return filteredPayables.slice(start, start + ITEMS_PER_PAGE);
     }, [filteredPayables, payablesPage]);
 
-    // Open Catat Pembayaran Modal
-    const handleOpenPayment = (
-        type: 'receivable' | 'payable',
-        item: ReceivableItem | PayableItem,
-    ) => {
-        const remaining = item.total - item.paid;
-        const milestoneInfo = getNearestMilestoneInfo(item);
-        const milestoneAmt = milestoneInfo.nearestMilestone
-            ? milestoneInfo.nearestMilestone.amount
-            : remaining;
+    const totalReceivablesPages =
+        Math.ceil(filteredReceivables.length / ITEMS_PER_PAGE) || 1;
+    const totalPayablesPages =
+        Math.ceil(filteredPayables.length / ITEMS_PER_PAGE) || 1;
 
-        setPaymentModal({ isOpen: true, type, item });
-        setPayAmountInput(String(Math.min(remaining, milestoneAmt)));
-        setPayMethodInput('Transfer BCA');
-        setPayRefInput(`TRX-${Math.floor(100000 + Math.random() * 900000)}`);
-        setPayDateInput(new Date().toISOString().split('T')[0]);
-        setPayNotesInput(
-            `Pembayaran ${milestoneInfo.nearestMilestone?.label || 'Tagihan'} - ${item.project}`,
-        );
-    };
+    // Unique partner lists for dropdown
+    const clientList = useMemo(
+        () => Array.from(new Set(receivables.map((r) => r.client_name))),
+        [receivables],
+    );
+    const vendorList = useMemo(
+        () => Array.from(new Set(payables.map((p) => p.vendor_name))),
+        [payables],
+    );
 
-    // Confirm Catat Pembayaran
-    const handleConfirmPayment = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!paymentModal) return;
-
-        const amount = parseFloat(payAmountInput) || 0;
-        if (amount <= 0) {
-            alert('Jumlah pembayaran harus lebih dari Rp 0.');
-            return;
-        }
-
-        const remaining = paymentModal.item.total - paymentModal.item.paid;
-        if (amount > remaining) {
-            alert(
-                `Jumlah pembayaran melebihi sisa tagihan (${fmt(remaining)}).`,
-            );
-            return;
-        }
-
-        if (paymentModal.type === 'receivable') {
-            const partnerName =
-                'client' in paymentModal.item
-                    ? paymentModal.item.client
-                    : 'Klien';
-            setReceivables((prev) =>
-                prev.map((item) => {
-                    if (item.id === paymentModal.item.id) {
-                        const newPaid = item.paid + amount;
-                        const newStatus =
-                            newPaid >= item.total ? 'paid' : 'partial';
-                        return { ...item, paid: newPaid, status: newStatus };
-                    }
-                    return item;
-                }),
-            );
-            setSuccessAlert(
-                `Sukses! Pembayaran piutang dari ${partnerName} sebesar ${fmt(amount)} berhasil dicatat.`,
-            );
-        } else {
-            const partnerName =
-                'vendor' in paymentModal.item
-                    ? paymentModal.item.vendor
-                    : 'Vendor';
-            setPayables((prev) =>
-                prev.map((item) => {
-                    if (item.id === paymentModal.item.id) {
-                        const newPaid = item.paid + amount;
-                        const newStatus =
-                            newPaid >= item.total ? 'paid' : 'partial';
-                        return { ...item, paid: newPaid, status: newStatus };
-                    }
-                    return item;
-                }),
-            );
-            setSuccessAlert(
-                `Sukses! Pembayaran hutang ke ${partnerName} sebesar ${fmt(amount)} berhasil dicatat.`,
-            );
-        }
-
-        setPaymentModal(null);
-        setTimeout(() => setSuccessAlert(null), 5000);
-    };
-
-    // Build Action Menu Items for Table Rows
-    const getReceivableActionItems = (r: ReceivableItem): ActionMenuItem[] => {
-        const remaining = r.total - r.paid;
+    // Actions
+    const getReceivableActionItems = (
+        r: ReceivableRecord,
+    ): ActionMenuItem[] => {
         const items: ActionMenuItem[] = [];
 
-        if (remaining > 0) {
+        if (r.remaining_amount > 0) {
             items.push({
-                label: 'Catat Terima Bayar',
+                label: 'Catat Pelunasan Piutang',
                 icon: (
                     <svg
                         className="h-4 w-4 text-emerald-600"
@@ -576,57 +496,17 @@ export default function DebtReceivable() {
                         />
                     </svg>
                 ),
-                onClick: () => handleOpenPayment('receivable', r),
-            });
-        }
-
-        if (r.paid > 0) {
-            items.push({
-                label: 'Cetak Kwitansi PDF',
-                icon: (
-                    <svg
-                        className="h-4 w-4 text-indigo-600"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                    </svg>
-                ),
-                onClick: () =>
-                    alert(
-                        `Membuka dokumen Kwitansi PDF untuk Invoice ${r.id}...`,
-                    ),
+                onClick: () => {
+                    setReceivablePaymentModal({
+                        isOpen: true,
+                        item: r,
+                    });
+                },
             });
         }
 
         items.push({
-            label: 'Download Invoice PDF',
-            icon: (
-                <svg
-                    className="h-4 w-4 text-blue-600"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                    />
-                </svg>
-            ),
-            onClick: () => alert(`Mengunduh dokumen Invoice ${r.id}...`),
-        });
-
-        items.push({
-            label: 'Lihat Skema Termin',
+            label: 'Lihat Rincian Termin',
             icon: (
                 <svg
                     className="h-4 w-4 text-slate-600"
@@ -642,19 +522,19 @@ export default function DebtReceivable() {
                     />
                 </svg>
             ),
-            onClick: () => setTermsModal({ isOpen: true, item: r }),
+            onClick: () =>
+                setTermsModal({ isOpen: true, type: 'receivable', item: r }),
         });
 
         return items;
     };
 
-    const getPayableActionItems = (p: PayableItem): ActionMenuItem[] => {
-        const remaining = p.total - p.paid;
+    const getPayableActionItems = (p: PayableRecord): ActionMenuItem[] => {
         const items: ActionMenuItem[] = [];
 
-        if (remaining > 0) {
+        if (p.remaining_amount > 0) {
             items.push({
-                label: 'Catat Bayar Vendor',
+                label: 'Bayar Hutang Vendor',
                 icon: (
                     <svg
                         className="h-4 w-4 text-rose-600"
@@ -670,32 +550,17 @@ export default function DebtReceivable() {
                         />
                     </svg>
                 ),
-                onClick: () => handleOpenPayment('payable', p),
+                onClick: () => {
+                    setPayablePaymentModal({
+                        isOpen: true,
+                        item: p,
+                    });
+                },
             });
         }
 
         items.push({
-            label: 'Download PO PDF',
-            icon: (
-                <svg
-                    className="h-4 w-4 text-blue-600"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                    />
-                </svg>
-            ),
-            onClick: () => alert(`Mengunduh dokumen Purchase Order ${p.id}...`),
-        });
-
-        items.push({
-            label: 'Lihat Skema Termin Vendor',
+            label: 'Lihat Rincian Termin Vendor',
             icon: (
                 <svg
                     className="h-4 w-4 text-slate-600"
@@ -711,7 +576,8 @@ export default function DebtReceivable() {
                     />
                 </svg>
             ),
-            onClick: () => setTermsModal({ isOpen: true, item: p }),
+            onClick: () =>
+                setTermsModal({ isOpen: true, type: 'payable', item: p }),
         });
 
         return items;
@@ -727,18 +593,24 @@ export default function DebtReceivable() {
                 { label: 'Hutang Piutang' },
             ]}
         >
+            <Head title="Hutang & Piutang Usaha" />
+
             <div className="w-full space-y-6">
                 {/* Header Section */}
-                <div className="shadow-xs flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 md:flex-row md:items-center">
+                <div className="shadow-2xs flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 md:flex-row md:items-center">
                     <div>
                         <div className="mb-1 flex items-center gap-2">
                             <h2 className="text-base font-bold tracking-tight text-slate-900">
                                 Buku Pembantu Hutang & Piutang Usaha
                             </h2>
                             <span
-                                className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${isPPN ? 'border border-blue-200 bg-blue-100 text-blue-800' : 'border border-slate-200 bg-slate-100 text-slate-700'}`}
+                                className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                                    isPPN
+                                        ? 'border border-blue-200 bg-blue-100 text-blue-800'
+                                        : 'border border-slate-200 bg-slate-100 text-slate-700'
+                                }`}
                             >
-                                Mode {isPPN ? 'PPN 11%' : 'Non-PPN'}
+                                Mode {isPPN ? 'PPN' : 'Non-PPN'}
                             </span>
                         </div>
                         <p className="text-xs font-medium text-slate-500">
@@ -748,17 +620,13 @@ export default function DebtReceivable() {
                         </p>
                     </div>
 
-                    <div className="flex w-full items-center gap-2 md:w-auto">
+                    <div className="flex items-center gap-3">
                         <button
-                            onClick={() =>
-                                alert(
-                                    'Mengunduh Laporan Umur Piutang (Aging AR/AP Report)...',
-                                )
-                            }
-                            className="shadow-2xs flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50"
+                            onClick={() => router.visit('/sales-transactions')}
+                            className="flex cursor-pointer items-center gap-2 rounded-xl bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 transition-all hover:bg-blue-100"
                         >
                             <svg
-                                className="h-4 w-4 text-slate-500"
+                                className="h-4 w-4"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -767,21 +635,151 @@ export default function DebtReceivable() {
                                 <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                    d="M12 4v16m8-8H4"
                                 />
                             </svg>
-                            <span>Export Rekap AP/AR</span>
+                            Penagihan Invoice (AR)
+                        </button>
+                        <button
+                            onClick={() => router.visit('/purchases')}
+                            className="flex cursor-pointer items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700"
+                        >
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 4v16m8-8H4"
+                                />
+                            </svg>
+                            Pembayaran PO (AP)
                         </button>
                     </div>
                 </div>
 
-                {/* Overdue Alert Banner */}
-                {totalOverdueCount > 0 && (
-                    <div className="shadow-xs flex flex-col items-start justify-between gap-4 rounded-2xl border border-rose-200/80 bg-rose-50/80 p-5 md:flex-row md:items-center">
-                        <div className="flex items-start gap-3.5">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-sm">
+                {/* KPI Metrics Cards */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {/* Total Piutang (AR) */}
+                    <div className="shadow-2xs rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/50 to-white p-5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                                Sisa Piutang Klien (AR)
+                            </span>
+                            <span className="rounded-lg bg-blue-100 p-1.5 text-blue-600">
                                 <svg
-                                    className="h-5 w-5"
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2.5}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                </svg>
+                            </span>
+                        </div>
+                        <div className="mt-2 font-mono text-xl font-black text-blue-900">
+                            {fmt(summary?.totalReceivable || 0)}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-[10.5px] font-semibold text-slate-500">
+                            <span>
+                                {
+                                    receivables.filter(
+                                        (r) => r.status !== 'paid',
+                                    ).length
+                                }{' '}
+                                invoice belum lunas
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Total Hutang (AP) */}
+                    <div className="shadow-2xs rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50/50 to-white p-5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                                Sisa Hutang Vendor (AP)
+                            </span>
+                            <span className="rounded-lg bg-amber-100 p-1.5 text-amber-600">
+                                <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2.5}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                                    />
+                                </svg>
+                            </span>
+                        </div>
+                        <div className="mt-2 font-mono text-xl font-black text-amber-900">
+                            {fmt(summary?.totalPayable || 0)}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-[10.5px] font-semibold text-slate-500">
+                            <span>
+                                {
+                                    payables.filter((p) => p.status !== 'paid')
+                                        .length
+                                }{' '}
+                                PO kewajiban berjalan
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Net Position */}
+                    <div className="shadow-2xs rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-white p-5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                                Proyeksi Net Kas (AR - AP)
+                            </span>
+                            <span className="rounded-lg bg-emerald-100 p-1.5 text-emerald-600">
+                                <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2.5}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                                    />
+                                </svg>
+                            </span>
+                        </div>
+                        <div
+                            className={`mt-2 font-mono text-xl font-black ${(summary?.netBalance || 0) >= 0 ? 'text-emerald-900' : 'text-rose-600'}`}
+                        >
+                            {fmt(summary?.netBalance || 0)}
+                        </div>
+                        <div className="mt-1 text-[10.5px] font-semibold text-slate-500">
+                            {(summary?.netBalance || 0) >= 0
+                                ? 'Surplus Likuiditas Operasional'
+                                : 'Defisit - Perlu Akselerasi Penagihan'}
+                        </div>
+                    </div>
+
+                    {/* Overdue Warnings */}
+                    <div className="shadow-2xs rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/50 to-white p-5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600">
+                                Tagihan Terlewat (Overdue)
+                            </span>
+                            <span className="rounded-lg bg-rose-100 p-1.5 text-rose-600">
+                                <svg
+                                    className="h-4 w-4"
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     stroke="currentColor"
@@ -793,144 +791,23 @@ export default function DebtReceivable() {
                                         d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                                     />
                                 </svg>
-                            </div>
-                            <div>
-                                <h3 className="text-xs font-bold text-rose-950">
-                                    Perhatian: Terdapat Tagihan yang Melewati
-                                    Jatuh Tempo!
-                                </h3>
-                                <p className="mt-0.5 text-xs font-medium leading-relaxed text-rose-800/90">
-                                    Terdapat{' '}
-                                    <strong className="font-bold text-rose-950">
-                                        {overdueReceivables.length} Piutang
-                                        Client
-                                    </strong>{' '}
-                                    dan{' '}
-                                    <strong className="font-bold text-rose-950">
-                                        {overduePayables.length} Hutang Vendor
-                                    </strong>{' '}
-                                    yang memerlukan tindak lanjut
-                                    penagihan/pembayaran segera.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Success Alert Banner */}
-                {successAlert && (
-                    <div className="animate-fade-in shadow-2xs flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 transition-all">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
-                            <svg
-                                className="h-4 w-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2.5}
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M5 13l4 4L19 7"
-                                />
-                            </svg>
-                        </div>
-                        <div className="text-xs font-bold leading-tight text-emerald-900">
-                            {successAlert}
-                        </div>
-                    </div>
-                )}
-
-                {/* Executive Summary Metric Cards (4 Grid) */}
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <div className="shadow-xs space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 transition-all hover:shadow-md">
-                        <div className="flex items-center justify-between">
-                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                PIUTANG CLIENT (ACTIVE AR)
-                            </span>
-                            <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
-                                Client AR
                             </span>
                         </div>
-                        <span className="block font-mono text-2xl font-bold text-slate-900">
-                            {fmt(totalReceivable)}
-                        </span>
-                        <span className="block text-[11px] font-medium text-slate-500">
-                            Dari{' '}
-                            {
-                                receivables.filter((r) => r.status !== 'paid')
-                                    .length
-                            }{' '}
-                            proyek penagihan aktif
-                        </span>
-                    </div>
-
-                    <div className="shadow-xs space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 transition-all hover:shadow-md">
-                        <div className="flex items-center justify-between">
-                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                PIUTANG JATUH TEMPO
-                            </span>
-                            <span className="rounded-full border border-rose-100 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">
-                                {overdueReceivables.length} Invoice
-                            </span>
+                        <div className="mt-2 font-mono text-xl font-black text-rose-600">
+                            {summary?.overdueCount || 0} Tagihan
                         </div>
-                        <span className="block font-mono text-2xl font-bold text-rose-600">
-                            {fmt(
-                                overdueReceivables.reduce(
-                                    (s, r) => s + (r.total - r.paid),
-                                    0,
-                                ),
-                            )}
-                        </span>
-                        <span className="block text-[11px] font-medium text-slate-500">
-                            Memerlukan penagihan intensif
-                        </span>
-                    </div>
-
-                    <div className="shadow-xs space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 transition-all hover:shadow-md">
-                        <div className="flex items-center justify-between">
-                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                HUTANG VENDOR (ACTIVE AP)
-                            </span>
-                            <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                                Vendor AP
-                            </span>
+                        <div className="mt-1 text-[10.5px] font-semibold text-slate-500">
+                            {summary?.overdueReceivablesCount || 0} Piutang ·{' '}
+                            {summary?.overduePayablesCount || 0} Hutang
                         </div>
-                        <span className="block font-mono text-2xl font-bold text-slate-900">
-                            {fmt(totalPayable)}
-                        </span>
-                        <span className="block text-[11px] font-medium text-slate-500">
-                            Kewajiban bayar PO ke vendor billboard
-                        </span>
-                    </div>
-
-                    <div className="shadow-xs space-y-2 rounded-2xl border border-slate-200/80 bg-white p-5 transition-all hover:shadow-md">
-                        <div className="flex items-center justify-between">
-                            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                NET WORKING CAPITAL EXPOSURE
-                            </span>
-                            <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${netBalance >= 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-amber-100 bg-amber-50 text-amber-800'}`}
-                            >
-                                {netBalance >= 0 ? 'Surplus AR' : 'Defisit AP'}
-                            </span>
-                        </div>
-                        <span
-                            className={`block font-mono text-2xl font-bold ${netBalance >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}
-                        >
-                            {fmt(netBalance)}
-                        </span>
-                        <span className="block text-[11px] font-medium text-slate-500">
-                            Selisih piutang client dikurangi hutang vendor
-                        </span>
                     </div>
                 </div>
 
-                {/* Main Tab Navigation & Filter Panel */}
-                <div className="shadow-xs space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5">
-                    {/* Tab Buttons */}
-                    <div className="flex flex-col items-center justify-between gap-4 border-b border-slate-100 pb-4 sm:flex-row">
-                        <div className="flex w-full gap-1 rounded-xl border border-slate-200/80 bg-slate-100 p-1 sm:w-auto">
+                {/* Main Content Area: Tabs, Filter & Table */}
+                <div className="shadow-2xs overflow-hidden rounded-3xl border border-slate-200/90 bg-white">
+                    {/* Tab Navigation Header */}
+                    <div className="flex flex-col gap-4 border-b border-slate-200/80 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                        <div className="flex items-center gap-2 rounded-xl bg-slate-200/70 p-1">
                             <button
                                 onClick={() => {
                                     setActiveTab('payable');
@@ -1008,7 +885,7 @@ export default function DebtReceivable() {
                     </div>
 
                     {/* Filter Panel Bar */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-end lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 border-b border-slate-100 p-4 sm:grid-cols-2 sm:items-end sm:p-6 lg:grid-cols-4">
                         {/* Search Input */}
                         <div className="space-y-1">
                             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -1058,7 +935,7 @@ export default function DebtReceivable() {
                                     { value: 'all', label: 'Semua Status' },
                                     {
                                         value: 'overdue',
-                                        label: '⚠ Melewati Jatuh Tempo',
+                                        label: 'Melewati Jatuh Tempo',
                                     },
                                     {
                                         value: 'unpaid',
@@ -1123,45 +1000,41 @@ export default function DebtReceivable() {
                                     },
                                     {
                                         value: 'amount_desc',
-                                        label: 'Nominal Terbesar',
+                                        label: 'Sisa Nominal Tertinggi',
                                     },
                                     {
                                         value: 'newest',
-                                        label: 'Tanggal Terbaru',
+                                        label: 'Transaksi Terbaru',
                                     },
                                 ]}
                             />
                         </div>
                     </div>
-                </div>
 
-                {/* Data Table Container */}
-                <div className="shadow-xs overflow-hidden rounded-2xl border border-slate-100/80 bg-white">
+                    {/* Table View */}
                     <div className="overflow-x-auto">
                         {activeTab === 'receivable' ? (
                             <table className="w-full border-collapse text-left text-xs">
                                 <thead>
-                                    <tr className="border-b border-slate-100 bg-slate-50/40 px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                    <tr className="border-b border-slate-100 bg-slate-50/40 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                                         <th className="px-6 py-4">
-                                            No. Invoice & Tanggal
+                                            No. Invoice & Tgl
                                         </th>
-                                        <th className="px-6 py-4">
-                                            Client / Pelanggan
-                                        </th>
+                                        <th className="px-6 py-4">Client</th>
                                         <th className="px-6 py-4">
                                             Proyek Media
                                         </th>
                                         <th className="px-6 py-4 text-right">
-                                            Total Tagihan
+                                            Nilai Piutang
                                         </th>
                                         <th className="px-6 py-4 text-right">
-                                            Telah Terbayar
+                                            Telah Diterima
                                         </th>
                                         <th className="px-6 py-4 text-right">
                                             Sisa Piutang
                                         </th>
                                         <th className="px-6 py-4">
-                                            Tagihan Terdekat
+                                            Jatuh Tempo Terdekat
                                         </th>
                                         <th className="px-6 py-4 text-center">
                                             Status
@@ -1171,17 +1044,15 @@ export default function DebtReceivable() {
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className="divide-y divide-slate-100 font-medium">
                                     {paginatedReceivables.map((r) => {
-                                        const remaining = r.total - r.paid;
-                                        const milestoneInfo =
-                                            getNearestMilestoneInfo(r);
                                         const percentPaid =
-                                            r.total > 0
+                                            r.total_amount > 0
                                                 ? Math.min(
                                                       100,
                                                       Math.round(
-                                                          (r.paid / r.total) *
+                                                          (r.paid_amount /
+                                                              r.total_amount) *
                                                               100,
                                                       ),
                                                   )
@@ -1193,34 +1064,40 @@ export default function DebtReceivable() {
                                             >
                                                 <td className="px-6 py-4">
                                                     <div className="font-mono font-bold text-slate-900">
-                                                        {r.id}
+                                                        {r.invoice_number}
                                                     </div>
                                                     <div className="text-[10.5px] font-medium text-slate-400">
-                                                        {formatDateIndo(r.date)}
+                                                        {formatDateIndo(
+                                                            r.transaction_date,
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-800">
-                                                        {r.client}
+                                                        {r.client_name}
                                                     </div>
-                                                    {r.salesPIC && (
+                                                    {r.sales_name && (
                                                         <div className="text-[10px] font-medium text-slate-400">
-                                                            Sales: {r.salesPIC}
+                                                            Sales:{' '}
+                                                            {r.sales_name}
                                                         </div>
                                                     )}
                                                 </td>
                                                 <td
                                                     className="max-w-[220px] truncate px-6 py-4 font-semibold text-slate-600"
-                                                    title={r.project}
+                                                    title={r.project_name}
                                                 >
-                                                    {r.project}
+                                                    <span className="mr-1 font-mono text-[10px] text-primary">
+                                                        [{r.project_code}]
+                                                    </span>
+                                                    {r.project_name}
                                                 </td>
                                                 <td className="px-6 py-4 text-right font-mono font-bold text-slate-900">
-                                                    {fmt(r.total)}
+                                                    {fmt(r.total_amount)}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="font-mono font-bold text-emerald-700">
-                                                        {fmt(r.paid)}
+                                                        {fmt(r.paid_amount)}
                                                     </div>
                                                     <div className="ml-auto mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
                                                         <div
@@ -1232,31 +1109,31 @@ export default function DebtReceivable() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right font-mono font-bold text-rose-600">
-                                                    {fmt(remaining)}
+                                                    {fmt(r.remaining_amount)}
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-4">
-                                                    {milestoneInfo.nearestMilestone ? (
+                                                    {r.nearest_milestone ? (
                                                         <div className="space-y-1">
                                                             <div className="font-bold text-slate-800">
                                                                 {
-                                                                    milestoneInfo
-                                                                        .nearestMilestone
+                                                                    r
+                                                                        .nearest_milestone
                                                                         .label
                                                                 }
                                                             </div>
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="text-[10.5px] font-medium text-slate-500">
                                                                     {formatDateIndo(
-                                                                        milestoneInfo
-                                                                            .nearestMilestone
-                                                                            .dueDate,
+                                                                        r
+                                                                            .nearest_milestone
+                                                                            .due_date,
                                                                     )}
                                                                 </span>
-                                                                {milestoneInfo.isOverdue ? (
+                                                                {r.is_overdue ? (
                                                                     <span className="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9.5px] font-bold text-rose-700">
                                                                         Terlewat{' '}
                                                                         {
-                                                                            milestoneInfo.overdueDays
+                                                                            r.overdue_days
                                                                         }{' '}
                                                                         hari
                                                                     </span>
@@ -1268,7 +1145,7 @@ export default function DebtReceivable() {
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <span className="font-medium italic text-slate-400">
+                                                        <span className="font-medium font-semibold italic text-emerald-600">
                                                             Lunas
                                                         </span>
                                                     )}
@@ -1332,7 +1209,7 @@ export default function DebtReceivable() {
                         ) : (
                             <table className="w-full border-collapse text-left text-xs">
                                 <thead>
-                                    <tr className="border-b border-slate-100 bg-slate-50/40 px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                    <tr className="border-b border-slate-100 bg-slate-50/40 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                                         <th className="px-6 py-4">
                                             No. PO & Tanggal
                                         </th>
@@ -1362,17 +1239,15 @@ export default function DebtReceivable() {
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className="divide-y divide-slate-100 font-medium">
                                     {paginatedPayables.map((p) => {
-                                        const remaining = p.total - p.paid;
-                                        const milestoneInfo =
-                                            getNearestMilestoneInfo(p);
                                         const percentPaid =
-                                            p.total > 0
+                                            p.total_amount > 0
                                                 ? Math.min(
                                                       100,
                                                       Math.round(
-                                                          (p.paid / p.total) *
+                                                          (p.paid_amount /
+                                                              p.total_amount) *
                                                               100,
                                                       ),
                                                   )
@@ -1384,29 +1259,34 @@ export default function DebtReceivable() {
                                             >
                                                 <td className="px-6 py-4">
                                                     <div className="font-mono font-bold text-slate-900">
-                                                        {p.id}
+                                                        {p.po_number}
                                                     </div>
                                                     <div className="text-[10.5px] font-medium text-slate-400">
-                                                        {formatDateIndo(p.date)}
+                                                        {formatDateIndo(
+                                                            p.transaction_date,
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-800">
-                                                        {p.vendor}
+                                                        {p.vendor_name}
                                                     </div>
                                                 </td>
                                                 <td
                                                     className="max-w-[220px] truncate px-6 py-4 font-semibold text-slate-600"
-                                                    title={p.project}
+                                                    title={p.project_name}
                                                 >
-                                                    {p.project}
+                                                    <span className="mr-1 font-mono text-[10px] text-primary">
+                                                        [{p.project_code}]
+                                                    </span>
+                                                    {p.project_name}
                                                 </td>
                                                 <td className="px-6 py-4 text-right font-mono font-bold text-slate-900">
-                                                    {fmt(p.total)}
+                                                    {fmt(p.total_amount)}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="font-mono font-bold text-emerald-700">
-                                                        {fmt(p.paid)}
+                                                        {fmt(p.paid_amount)}
                                                     </div>
                                                     <div className="ml-auto mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
                                                         <div
@@ -1418,31 +1298,31 @@ export default function DebtReceivable() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right font-mono font-bold text-rose-600">
-                                                    {fmt(remaining)}
+                                                    {fmt(p.remaining_amount)}
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-4">
-                                                    {milestoneInfo.nearestMilestone ? (
+                                                    {p.nearest_milestone ? (
                                                         <div className="space-y-1">
                                                             <div className="font-bold text-slate-800">
                                                                 {
-                                                                    milestoneInfo
-                                                                        .nearestMilestone
+                                                                    p
+                                                                        .nearest_milestone
                                                                         .label
                                                                 }
                                                             </div>
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="text-[10.5px] font-medium text-slate-500">
                                                                     {formatDateIndo(
-                                                                        milestoneInfo
-                                                                            .nearestMilestone
-                                                                            .dueDate,
+                                                                        p
+                                                                            .nearest_milestone
+                                                                            .due_date,
                                                                     )}
                                                                 </span>
-                                                                {milestoneInfo.isOverdue ? (
+                                                                {p.is_overdue ? (
                                                                     <span className="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9.5px] font-bold text-rose-700">
                                                                         Terlewat{' '}
                                                                         {
-                                                                            milestoneInfo.overdueDays
+                                                                            p.overdue_days
                                                                         }{' '}
                                                                         hari
                                                                     </span>
@@ -1454,7 +1334,7 @@ export default function DebtReceivable() {
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <span className="font-medium italic text-slate-400">
+                                                        <span className="font-medium font-semibold italic text-emerald-600">
                                                             Lunas
                                                         </span>
                                                     )}
@@ -1508,7 +1388,7 @@ export default function DebtReceivable() {
                                             >
                                                 <EmptyState
                                                     title="Belum Ada Data Hutang"
-                                                    message="Tidak ditemukan kewajiban hutang vendor yang sesuai dengan pencarian / filter Anda."
+                                                    message="Tidak ditemukan kewajiban pembayaran vendor yang sesuai dengan pencarian / filter Anda."
                                                 />
                                             </td>
                                         </tr>
@@ -1521,245 +1401,27 @@ export default function DebtReceivable() {
                     {/* Pagination */}
                     {activeTab === 'receivable' &&
                         filteredReceivables.length > 0 && (
-                            <div className="border-t border-slate-100 p-4">
-                                <Pagination
-                                    currentPage={receivablesPage}
-                                    totalPages={Math.ceil(
-                                        filteredReceivables.length /
-                                            ITEMS_PER_PAGE,
-                                    )}
-                                    totalItems={filteredReceivables.length}
-                                    itemsPerPage={ITEMS_PER_PAGE}
-                                    onPageChange={setReceivablesPage}
-                                />
-                            </div>
-                        )}
-
-                    {activeTab === 'payable' && filteredPayables.length > 0 && (
-                        <div className="border-t border-slate-100 p-4">
                             <Pagination
-                                currentPage={payablesPage}
-                                totalPages={Math.ceil(
-                                    filteredPayables.length / ITEMS_PER_PAGE,
-                                )}
-                                totalItems={filteredPayables.length}
+                                currentPage={receivablesPage}
+                                totalPages={totalReceivablesPages}
+                                totalItems={filteredReceivables.length}
                                 itemsPerPage={ITEMS_PER_PAGE}
-                                onPageChange={setPayablesPage}
+                                onPageChange={(page) =>
+                                    setReceivablesPage(page)
+                                }
                             />
-                        </div>
+                        )}
+                    {activeTab === 'payable' && filteredPayables.length > 0 && (
+                        <Pagination
+                            currentPage={payablesPage}
+                            totalPages={totalPayablesPages}
+                            totalItems={filteredPayables.length}
+                            itemsPerPage={ITEMS_PER_PAGE}
+                            onPageChange={(page) => setPayablesPage(page)}
+                        />
                     )}
                 </div>
             </div>
-
-            {/* MODAL: CATAT PEMBAYARAN */}
-            {paymentModal && paymentModal.isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div
-                        className="backdrop-blur-xs absolute inset-0 bg-slate-950/60"
-                        onClick={() => setPaymentModal(null)}
-                    />
-                    <div className="animate-fade-in relative z-10 w-full max-w-xl overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
-                        <div className="flex items-center justify-between bg-slate-900 px-6 py-4 text-white">
-                            <div>
-                                <h3 className="text-sm font-bold">
-                                    Catat Transaksi Pembayaran
-                                </h3>
-                                <p className="mt-0.5 text-xs font-medium text-slate-400">
-                                    {paymentModal.type === 'receivable'
-                                        ? 'Penerimaan Kas Piutang Client'
-                                        : 'Pengeluaran Kas Hutang Vendor'}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setPaymentModal(null)}
-                                className="cursor-pointer text-xs font-bold text-slate-400 transition-all hover:text-white"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <form
-                            onSubmit={handleConfirmPayment}
-                            className="space-y-4 p-6"
-                        >
-                            <div className="space-y-1.5 rounded-2xl border border-slate-200/80 bg-slate-50 p-4 text-xs text-slate-700">
-                                <div className="flex justify-between">
-                                    <span className="font-medium text-slate-500">
-                                        Nomor Dokumen:
-                                    </span>
-                                    <span className="font-mono font-bold text-slate-900">
-                                        {paymentModal.item.id}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="font-medium text-slate-500">
-                                        Mitra Partner:
-                                    </span>
-                                    <span className="font-bold text-slate-900">
-                                        {paymentModal.type === 'receivable' &&
-                                        'client' in paymentModal.item
-                                            ? paymentModal.item.client
-                                            : 'vendor' in paymentModal.item
-                                              ? paymentModal.item.vendor
-                                              : '-'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="font-medium text-slate-500">
-                                        Nama Proyek:
-                                    </span>
-                                    <span className="max-w-[260px] truncate font-bold text-slate-900">
-                                        {paymentModal.item.project}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="rounded-xl border border-slate-200/60 bg-slate-50 p-3 text-center">
-                                    <span className="block text-[10px] font-bold uppercase text-slate-400">
-                                        TOTAL TAGIHAN
-                                    </span>
-                                    <span className="font-mono text-xs font-bold text-slate-900">
-                                        {fmt(paymentModal.item.total)}
-                                    </span>
-                                </div>
-                                <div className="rounded-xl border border-slate-200/60 bg-slate-50 p-3 text-center">
-                                    <span className="block text-[10px] font-bold uppercase text-slate-400">
-                                        TERBAYAR
-                                    </span>
-                                    <span className="font-mono text-xs font-bold text-emerald-700">
-                                        {fmt(paymentModal.item.paid)}
-                                    </span>
-                                </div>
-                                <div className="rounded-xl border border-slate-200/60 bg-slate-50 p-3 text-center">
-                                    <span className="block text-[10px] font-bold uppercase text-slate-400">
-                                        SISA SALDO
-                                    </span>
-                                    <span className="font-mono text-xs font-bold text-rose-600">
-                                        {fmt(
-                                            paymentModal.item.total -
-                                                paymentModal.item.paid,
-                                        )}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div className="space-y-1">
-                                    <label className="block text-xs font-bold tracking-tight text-slate-700">
-                                        Jumlah Pembayaran (IDR)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        required
-                                        min="1"
-                                        max={
-                                            paymentModal.item.total -
-                                            paymentModal.item.paid
-                                        }
-                                        value={payAmountInput}
-                                        onChange={(e) =>
-                                            setPayAmountInput(e.target.value)
-                                        }
-                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 font-mono text-xs font-bold text-slate-900 transition-all focus:border-primary focus:outline-none"
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="block text-xs font-bold tracking-tight text-slate-700">
-                                        Akun Kas / Bank Destinasi (COA)
-                                    </label>
-                                    <SelectInput
-                                        value={payMethodInput}
-                                        onChange={(e) =>
-                                            setPayMethodInput(e.target.value)
-                                        }
-                                        options={[
-                                            {
-                                                value: '1111 - Bank Mandiri Solo Baru (138-00-2010633-7)',
-                                                label: '1111 - Bank Mandiri Solo Baru',
-                                            },
-                                            {
-                                                value: '1112 - Bank BCA Operasional Utama',
-                                                label: '1112 - Bank BCA Operasional',
-                                            },
-                                            {
-                                                value: '1110 - Kas Tunai / Operasional',
-                                                label: '1110 - Kas Tunai Operasional',
-                                            },
-                                            {
-                                                value: '1113 - Bank BRI Giro Usaha',
-                                                label: '1113 - Bank BRI Giro Usaha',
-                                            },
-                                        ]}
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="block text-xs font-bold tracking-tight text-slate-700">
-                                        Tanggal Transaksi
-                                    </label>
-                                    <input
-                                        type="date"
-                                        required
-                                        value={payDateInput}
-                                        onChange={(e) =>
-                                            setPayDateInput(e.target.value)
-                                        }
-                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-900 transition-all focus:border-primary focus:outline-none"
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="block text-xs font-bold tracking-tight text-slate-700">
-                                        No. Referensi / Bukti Transfer
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={payRefInput}
-                                        onChange={(e) =>
-                                            setPayRefInput(e.target.value)
-                                        }
-                                        placeholder="No. Ref Bank..."
-                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 font-mono text-xs font-bold text-slate-900 transition-all focus:border-primary focus:outline-none"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-1">
-                                <label className="block text-xs font-bold tracking-tight text-slate-700">
-                                    Catatan / Keterangan Pembayaran
-                                </label>
-                                <input
-                                    type="text"
-                                    value={payNotesInput}
-                                    onChange={(e) =>
-                                        setPayNotesInput(e.target.value)
-                                    }
-                                    placeholder="Keterangan tambahan..."
-                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-900 transition-all focus:border-primary focus:outline-none"
-                                />
-                            </div>
-
-                            <div className="flex gap-3 border-t border-slate-100 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setPaymentModal(null)}
-                                    className="flex-1 cursor-pointer rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-700 transition-all hover:bg-slate-200"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 cursor-pointer rounded-xl bg-primary py-2.5 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700"
-                                >
-                                    Simpan Transaksi
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
 
             {/* MODAL: DETAIL TERMIN (MILESTONE) */}
             {termsModal && termsModal.isOpen && (
@@ -1775,12 +1437,9 @@ export default function DebtReceivable() {
                                     Detail Skema & Syarat Pembayaran
                                 </h3>
                                 <p className="mt-0.5 text-xs font-medium text-slate-400">
-                                    {termsModal.item.id} ·{' '}
-                                    {'client' in termsModal.item
-                                        ? termsModal.item.client
-                                        : 'vendor' in termsModal.item
-                                          ? termsModal.item.vendor
-                                          : '-'}
+                                    {'invoice_number' in termsModal.item
+                                        ? `${termsModal.item.invoice_number} · ${termsModal.item.client_name}`
+                                        : `${termsModal.item.po_number} · ${termsModal.item.vendor_name}`}
                                 </p>
                             </div>
                             <button
@@ -1796,34 +1455,26 @@ export default function DebtReceivable() {
                                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                     Skema Pembayaran
                                 </span>
-                                <div className="inline-block rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-800">
-                                    {termsModal.item.terms.type === 'full'
-                                        ? 'Full Payment 100%'
-                                        : termsModal.item.terms.type === 'dp'
-                                          ? 'DP & Pelunasan'
-                                          : 'Termin Bertahap'}
+                                <div className="inline-block rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold uppercase text-slate-800">
+                                    {termsModal.item.scheme}
                                 </div>
                             </div>
 
                             <div className="space-y-2">
                                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Rincian Milestone Pembayaran:
+                                    Rincian Termin Pembayaran:
                                 </span>
 
                                 <div className="space-y-2">
-                                    {getMilestones(termsModal.item).map(
+                                    {termsModal.item.milestones.map(
                                         (milestone, idx) => {
                                             const isMilestonePaid =
-                                                termsModal.item.paid >=
-                                                milestone.cumulativeAmount - 1;
-                                            const milestoneInfo =
-                                                getNearestMilestoneInfo(
-                                                    termsModal.item,
-                                                );
+                                                milestone.status === 'paid' ||
+                                                milestone.remaining_amount <= 0;
 
                                             return (
                                                 <div
-                                                    key={idx}
+                                                    key={milestone.id || idx}
                                                     className={`space-y-1.5 rounded-xl border p-3.5 text-xs font-semibold transition-all ${
                                                         isMilestonePaid
                                                             ? 'border-emerald-200 bg-emerald-50/60 text-emerald-950'
@@ -1844,7 +1495,7 @@ export default function DebtReceivable() {
                                                         <span className="text-slate-500">
                                                             Jatuh Tempo:{' '}
                                                             {formatDateIndo(
-                                                                milestone.dueDate,
+                                                                milestone.due_date,
                                                             )}
                                                         </span>
                                                         <span>
@@ -1854,7 +1505,10 @@ export default function DebtReceivable() {
                                                                 </span>
                                                             ) : (
                                                                 <span className="rounded-full border border-slate-300 bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                                                                    Menunggu
+                                                                    Sisa:{' '}
+                                                                    {fmt(
+                                                                        milestone.remaining_amount,
+                                                                    )}
                                                                 </span>
                                                             )}
                                                         </span>
@@ -1864,12 +1518,6 @@ export default function DebtReceivable() {
                                         },
                                     )}
                                 </div>
-
-                                {termsModal.item.terms.notes && (
-                                    <div className="mt-2 rounded-xl border border-slate-200/60 bg-slate-50 p-3 text-xs italic text-slate-500">
-                                        Catatan: {termsModal.item.terms.notes}
-                                    </div>
-                                )}
                             </div>
 
                             <div className="flex justify-end border-t border-slate-100 pt-4">
@@ -1884,6 +1532,94 @@ export default function DebtReceivable() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Pembayaran Hutang Vendor */}
+            {payablePaymentModal.isOpen && payablePaymentModal.item && (
+                <RecordPaymentModal
+                    isOpen={payablePaymentModal.isOpen}
+                    isLoading={isSubmittingPayable}
+                    po={{
+                        id: payablePaymentModal.item.id,
+                        poNumber: payablePaymentModal.item.po_number,
+                        vendorId:
+                            Number(payablePaymentModal.item.vendor_id) || 0,
+                        vendorName: payablePaymentModal.item.vendor_name,
+                        projectName: payablePaymentModal.item.project_name,
+                        totalAmount: payablePaymentModal.item.total_amount,
+                        issuedAt:
+                            payablePaymentModal.item.transaction_date || '',
+                        projectId: payablePaymentModal.item.project_id || '',
+                        milestones: payablePaymentModal.item.milestones,
+                    }}
+                    remainingAmount={payablePaymentModal.item.remaining_amount}
+                    cashBankAccounts={paymentAccounts.map((acc) => ({
+                        id: acc.id,
+                        code: acc.code,
+                        name: acc.name,
+                        display_name: `${acc.code} - ${acc.name}`,
+                    }))}
+                    onClose={() =>
+                        setPayablePaymentModal({ isOpen: false, item: null })
+                    }
+                    onSubmit={handleSavePayablePayment}
+                />
+            )}
+
+            {/* Modal Penerimaan Piutang Client */}
+            {receivablePaymentModal.isOpen && receivablePaymentModal.item && (
+                <RecordInvoicePaymentModal
+                    isOpen={receivablePaymentModal.isOpen}
+                    isLoading={isSubmittingReceivable}
+                    invoice={{
+                        id: receivablePaymentModal.item.id,
+                        invoiceNumber:
+                            receivablePaymentModal.item.invoice_number,
+                        clientName: receivablePaymentModal.item.client_name,
+                        projectName: receivablePaymentModal.item.project_name,
+                        totalAmount: receivablePaymentModal.item.total_amount,
+                        terms: receivablePaymentModal.item.milestones.map(
+                            (m) => ({
+                                id: m.id,
+                                sort_order: m.sort_order,
+                                label: m.label,
+                                amount: m.amount,
+                                percent: Math.round(
+                                    (m.amount /
+                                        (receivablePaymentModal.item
+                                            ?.total_amount || 1)) *
+                                        100,
+                                ),
+                                due_date: m.due_date || undefined,
+                                status: m.status === 'paid' ? 'paid' : 'unpaid',
+                                paid_amount: m.paid_amount,
+                                remaining_amount: m.remaining_amount,
+                            }),
+                        ),
+                    }}
+                    remainingAmount={
+                        receivablePaymentModal.item.remaining_amount
+                    }
+                    cashBankAccounts={paymentAccounts.map((acc) => ({
+                        id: acc.id,
+                        code: acc.code,
+                        name: acc.name,
+                        display_name: `${acc.code} - ${acc.name}`,
+                    }))}
+                    onClose={() =>
+                        setReceivablePaymentModal({ isOpen: false, item: null })
+                    }
+                    onSubmit={handleSaveReceivablePayment}
+                />
+            )}
+
+            {/* Global Toast */}
+            <Toast
+                show={toast.show}
+                type={toast.type}
+                title={toast.title}
+                message={toast.message}
+                onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+            />
         </AppLayout>
     );
 }

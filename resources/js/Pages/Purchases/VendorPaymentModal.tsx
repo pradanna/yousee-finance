@@ -185,6 +185,7 @@ interface VendorPaymentModalProps {
         name: string;
         display_name: string;
     }>;
+    isLoading?: boolean;
     onAddPayment?: (poNumber: string, record: VendorPaymentRecord) => void;
     onSubmit?: (data: VendorPaymentModalSubmitData) => void;
 }
@@ -195,6 +196,7 @@ export function VendorPaymentModal({
     po,
     initialTerm,
     isPPN = true,
+    isLoading = false,
     cashBankAccounts = [],
     onAddPayment,
     onSubmit,
@@ -643,23 +645,46 @@ export function VendorPaymentModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="cursor-pointer px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800"
+                        disabled={isLoading}
+                        className="cursor-pointer px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 disabled:opacity-50"
                     >
                         Batal
                     </button>
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        disabled={amountInput <= 0}
-                        className={`cursor-pointer rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-all ${
-                            amountInput > 0
+                        disabled={amountInput <= 0 || isLoading}
+                        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-all ${
+                            amountInput > 0 && !isLoading
                                 ? isPPN
-                                    ? 'bg-blue-600 shadow-sm hover:bg-blue-700'
-                                    : 'bg-slate-800 shadow-sm hover:bg-slate-900'
-                                : 'cursor-not-allowed bg-slate-200 text-slate-400'
+                                    ? 'cursor-pointer bg-blue-600 shadow-sm hover:bg-blue-700'
+                                    : 'cursor-pointer bg-slate-800 shadow-sm hover:bg-slate-900'
+                                : 'cursor-not-allowed bg-slate-400 text-white opacity-70'
                         }`}
                     >
-                        Simpan Pembayaran Vendor
+                        {isLoading && (
+                            <svg
+                                className="h-3.5 w-3.5 animate-spin text-white"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                            >
+                                <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                />
+                                <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                />
+                            </svg>
+                        )}
+                        <span>{isLoading ? 'Menyimpan Pembayaran...' : 'Simpan Pembayaran Vendor'}</span>
                     </button>
                 </div>
             </div>

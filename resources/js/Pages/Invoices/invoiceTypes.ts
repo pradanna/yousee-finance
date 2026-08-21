@@ -21,7 +21,7 @@ export const formatDate = (dateStr?: string): string => {
     }
 };
 
-export { formatPeriod, formatIndoPeriod } from '@/Utils/formatters';
+export { formatIndoPeriod, formatPeriod } from '@/Utils/formatters';
 
 export interface InvoicePaymentRecord {
     id: string;

@@ -503,6 +503,7 @@ export default function SalesTransactions({
     });
 
     const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+    const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
     const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] =
         useState<Project | null>(null);
     const [selectedPaymentTerm, setSelectedPaymentTerm] =
@@ -739,6 +740,7 @@ export default function SalesTransactions({
             return;
         }
 
+        setIsSubmittingPayment(true);
         router.post(
             `/projects/${selectedInvoiceForPayment.id}/invoice/payment-terms/${targetTerm.id}/settle`,
             {
@@ -769,6 +771,9 @@ export default function SalesTransactions({
                         Object.values(errs)[0] ||
                         'Gagal mencatat pembayaran.';
                     triggerToast(String(errMsg), 'error', 'Gagal Menyimpan');
+                },
+                onFinish: () => {
+                    setIsSubmittingPayment(false);
                 },
             },
         );
@@ -3174,6 +3179,7 @@ export default function SalesTransactions({
             {/* Record Invoice Payment Modal */}
             <RecordInvoicePaymentModal
                 isOpen={showRecordPaymentModal}
+                isLoading={isSubmittingPayment}
                 cashBankAccounts={cashBankAccounts}
                 initialTerm={
                     selectedPaymentTerm

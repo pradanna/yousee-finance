@@ -56,6 +56,7 @@ interface RecordInvoicePaymentModalProps {
         display_name: string;
     }>;
     remainingAmount: number;
+    isLoading?: boolean;
     onClose: () => void;
     onSubmit: (data: RecordInvoicePaymentModalSubmitData) => void;
 }
@@ -79,7 +80,16 @@ const formatIndoDate = (dateStr?: string) => {
 
 export const RecordInvoicePaymentModal: React.FC<
     RecordInvoicePaymentModalProps
-> = ({ isOpen, invoice, initialTerm, cashBankAccounts = [], remainingAmount, onClose, onSubmit }) => {
+> = ({
+    isOpen,
+    invoice,
+    initialTerm,
+    cashBankAccounts = [],
+    remainingAmount,
+    isLoading = false,
+    onClose,
+    onSubmit,
+}) => {
     const terms = invoice?.terms || [];
     const [selectedTermId, setSelectedTermId] = useState<string | number>('');
     const [optionType, setOptionType] = useState<'lunas' | 'cicil'>('lunas');
@@ -386,10 +396,16 @@ export const RecordInvoicePaymentModal: React.FC<
 
                 {/* Footer Action Buttons */}
                 <div className="flex flex-shrink-0 items-center justify-end gap-3 border-t border-slate-100 bg-white px-8 py-5">
-                    <SecondaryButton type="button" onClick={onClose}>
+                    <SecondaryButton type="button" onClick={onClose} disabled={isLoading}>
                         Batal
                     </SecondaryButton>
-                    <PrimaryButton type="button" onClick={handleSubmit}>
+                    <PrimaryButton
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={amount <= 0 || isLoading}
+                        isLoading={isLoading}
+                        loadingText="Menyimpan Pembayaran..."
+                    >
                         Simpan Pembayaran
                     </PrimaryButton>
                 </div>

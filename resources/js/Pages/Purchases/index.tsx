@@ -419,6 +419,7 @@ export default function Purchases({
     const [selectedPaymentTermDB, setSelectedPaymentTermDB] =
         useState<VendorPaymentTermDB | null>(null);
     const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+    const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
     const [expandedPoPayment, setExpandedPoPayment] = useState<string | null>(
         null,
     );
@@ -529,6 +530,7 @@ export default function Purchases({
             return;
         }
 
+        setIsSubmittingPayment(true);
         router.post(
             `/projects/${targetProjectId}/purchase-orders/${targetPoId}/payment-terms/${targetTerm.id}/settle`,
             {
@@ -561,6 +563,9 @@ export default function Purchases({
                         'error',
                         'Pembayaran Vendor Gagal',
                     );
+                },
+                onFinish: () => {
+                    setIsSubmittingPayment(false);
                 },
             },
         );
@@ -3107,6 +3112,7 @@ export default function Purchases({
             {/* Vendor Payment Modal */}
             <VendorPaymentModal
                 isOpen={showRecordPaymentModal}
+                isLoading={isSubmittingPayment}
                 po={selectedPoForPayment}
                 initialTerm={selectedPaymentTermDB}
                 isPPN={isPPN}

@@ -79,9 +79,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales-transactions', [\App\Http\Controllers\Billing\SalesTransactionController::class, 'index'])->name('sales-transactions');
 
-    Route::get('/debt-receivable', function () {
-        return Inertia::render('DebtReceivable');
-    })->name('debt-receivable');
+    Route::get('/debt-receivable', [\App\Http\Controllers\Accounting\DebtReceivableController::class, 'index'])->name('debt-receivable');
 
     Route::get('/invoice-po', function () {
         return Inertia::render('InvoicePoList');
