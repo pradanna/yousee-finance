@@ -1,4 +1,3 @@
-import PrimaryButton from '@/Components/Button/PrimaryButton';
 import MetricCard from '@/Components/Card/MetricCard';
 import MonthPicker from '@/Components/Form/MonthPicker';
 import SelectInput from '@/Components/Form/SelectInput';
@@ -1004,9 +1003,10 @@ export default function Projects({
                             </svg>
                         </button>
 
-                        <PrimaryButton
+                        <button
+                            type="button"
                             onClick={handleOpenCreateProject}
-                            className="flex-row items-center gap-2"
+                            className="inline-flex shrink-0 cursor-pointer flex-row items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-neon-primary transition-all hover:bg-primary-700 hover:shadow-neon-primary-lg active:scale-95"
                         >
                             <svg
                                 className="h-4 w-4 shrink-0"
@@ -1021,8 +1021,10 @@ export default function Projects({
                                     d="M12 4v16m8-8H4"
                                 />
                             </svg>
-                            <span>Buat Proyek Baru</span>
-                        </PrimaryButton>
+                            <span className="whitespace-nowrap">
+                                Buat Proyek Baru
+                            </span>
+                        </button>
                     </div>
                 </div>
 
