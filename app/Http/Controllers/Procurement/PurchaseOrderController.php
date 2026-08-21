@@ -68,10 +68,26 @@ class PurchaseOrderController extends Controller
 
         $vendors = Vendor::query()->orderBy('name')->get(['id', 'name']);
 
+        // Riwayat Audit Log seluruh Purchase Order & Pembayaran Vendor
+        $auditLogs = \App\Domains\Shared\Models\AuditLog::with('user:id,name')
+            ->where('auditable_type', \App\Domains\Procurement\Models\PurchaseOrder::class)
+            ->latest()
+            ->take(100)
+            ->get()
+            ->map(fn ($log) => [
+                'id'          => $log->id,
+                'event'       => $log->event,
+                'description' => $log->description,
+                'properties'  => $log->properties,
+                'user_name'   => $log->user?->name ?? 'System',
+                'created_at'  => $log->created_at?->toIso8601String(),
+            ]);
+
         return Inertia::render('Purchases/index', [
             'projects' => ProjectResource::collection($projects)->resolve(),
             'vendors' => $vendors,
             'cashBankAccounts' => $cashBankAccounts,
+            'auditLogs' => $auditLogs,
         ]);
     }
 }

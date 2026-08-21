@@ -58,7 +58,35 @@ class CancelPurchaseOrder
                 $po->paymentPlan->delete();
             }
 
-            // D. Hapus PO Items & PO
+            // D. Catat ke Audit Log PO & Proyek sebelum di-delete
+            \App\Domains\Shared\Models\AuditLog::create([
+                'auditable_type' => PurchaseOrder::class,
+                'auditable_id'   => $po->id,
+                'event'          => 'po_cancelled',
+                'user_id'        => auth()->id(),
+                'description'    => "Membatalkan Purchase Order [{$po->po_number}] senilai Rp " . number_format((float) $po->total, 0, ',', '.') . " dan memulihkan titik lokasi",
+                'properties'     => [
+                    'po_number'   => $po->po_number,
+                    'vendor_id'   => $po->vendor_id,
+                    'total'       => (float) $po->total,
+                ],
+            ]);
+
+            if ($po->project_id) {
+                \App\Domains\Shared\Models\AuditLog::create([
+                    'auditable_type' => \App\Domains\Project\Models\Project::class,
+                    'auditable_id'   => $po->project_id,
+                    'event'          => 'po_cancelled',
+                    'user_id'        => auth()->id(),
+                    'description'    => "Pembatalan PO Vendor [{$po->po_number}] senilai Rp " . number_format((float) $po->total, 0, ',', '.'),
+                    'properties'     => [
+                        'po_number'  => $po->po_number,
+                        'total'      => (float) $po->total,
+                    ],
+                ]);
+            }
+
+            // E. Hapus PO Items & PO
             $po->items()->delete();
             $po->delete();
 

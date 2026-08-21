@@ -98,6 +98,41 @@ class SettleVendorPaymentTerm
                         source: $settlement,
                     );
                 }
+
+                // Catat ke Audit Log Purchase Order
+                $vendorName = $po->vendor?->name ?? 'Vendor';
+                \App\Domains\Shared\Models\AuditLog::create([
+                    'auditable_type' => PurchaseOrder::class,
+                    'auditable_id'   => $po->id,
+                    'event'          => 'payment_settled',
+                    'user_id'        => auth()->id(),
+                    'description'    => "Pembayaran {$term->label} sebesar Rp " . number_format((float) $data['amount'], 0, ',', '.') . " ke Vendor \"{$vendorName}\" melalui {$data['payment_method']}",
+                    'properties'     => [
+                        'po_number'       => $po->po_number,
+                        'vendor_name'     => $vendorName,
+                        'term_label'      => $term->label,
+                        'amount'          => (float) $data['amount'],
+                        'paid_at'         => $data['paid_at'],
+                        'payment_method'  => $data['payment_method'],
+                        'payment_ref'     => $data['payment_ref'] ?? null,
+                    ],
+                ]);
+
+                // Catat juga ke Audit Log Proyek
+                if ($po->project_id) {
+                    \App\Domains\Shared\Models\AuditLog::create([
+                        'auditable_type' => \App\Domains\Project\Models\Project::class,
+                        'auditable_id'   => $po->project_id,
+                        'event'          => 'vendor_payment_settled',
+                        'user_id'        => auth()->id(),
+                        'description'    => "Pembayaran PO [{$po->po_number}] ({$vendorName}) - {$term->label} sebesar Rp " . number_format((float) $data['amount'], 0, ',', '.'),
+                        'properties'     => [
+                            'po_number'  => $po->po_number,
+                            'amount'     => (float) $data['amount'],
+                            'paid_at'    => $data['paid_at'],
+                        ],
+                    ]);
+                }
             }
 
             return $settlement;

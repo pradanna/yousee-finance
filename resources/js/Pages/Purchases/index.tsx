@@ -4,9 +4,8 @@ import SelectInput from '@/Components/Form/SelectInput';
 import TextInput from '@/Components/Form/TextInput';
 import type { IssuePOModalSubmitData } from '@/Components/Modal/IssuePOModal';
 import { IssuePOModal } from '@/Components/Modal/IssuePOModal';
-import type { VendorPaymentModalSubmitData } from './VendorPaymentModal';
-import { VendorPaymentModal } from './VendorPaymentModal';
 import Pagination from '@/Components/Table/Pagination';
+import AuditLogModal from '@/Components/UI/AuditLogModal';
 import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import type { PageProps } from '@/types';
@@ -22,13 +21,6 @@ import type {
     VendorPaymentTerm,
     VendorPaymentTermDB,
 } from './purchasesTypes';
-
-type PagePropsWithFlash = PageProps<{
-    flash?: {
-        success?: string;
-        error?: string;
-    };
-}>;
 import {
     PPN_RATE,
     fmt,
@@ -36,6 +28,15 @@ import {
     formatPeriod,
     getPOPaymentSummary,
 } from './purchasesTypes';
+import type { VendorPaymentModalSubmitData } from './VendorPaymentModal';
+import { VendorPaymentModal } from './VendorPaymentModal';
+
+type PagePropsWithFlash = PageProps<{
+    flash?: {
+        success?: string;
+        error?: string;
+    };
+}>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Purchases Page — Main Component
@@ -45,9 +46,11 @@ export default function Purchases({
     projects: rawProjects = [],
     vendors = [],
     cashBankAccounts = [],
+    auditLogs = [],
 }: PurchasesPageProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
+    const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState(false);
 
     // Normalize rawProjects from DB
     const formattedProjects: PurchaseProject[] = useMemo(() => {
@@ -75,8 +78,7 @@ export default function Purchases({
                         loc.vendorName ??
                         'Vendor',
                     qty: Number(loc.qty) || 1,
-                    vendorCost:
-                        Number(loc.vendor_cost ?? loc.vendorCost) || 0,
+                    vendorCost: Number(loc.vendor_cost ?? loc.vendorCost) || 0,
                     poIssued: Boolean(loc.po_issued ?? loc.poIssued),
                     poNumber: loc.po_number || loc.poNumber || '',
                     purchaseOrderId:
@@ -90,20 +92,12 @@ export default function Purchases({
                 name: p.name,
                 clientId: p.client_id ?? p.clientId,
                 clientName:
-                    p.client?.name ??
-                    p.client_name ??
-                    p.clientName ??
-                    'Client',
-                salesPIC:
-                    p.sales?.name ??
-                    p.sales_pic ??
-                    p.salesPIC ??
-                    '-',
+                    p.client?.name ?? p.client_name ?? p.clientName ?? 'Client',
+                salesPIC: p.sales?.name ?? p.sales_pic ?? p.salesPIC ?? '-',
                 period: periodStr,
                 start_date: p.start_date,
                 end_date: p.end_date,
-                contractValue:
-                    Number(p.contract_value ?? p.contractValue) || 0,
+                contractValue: Number(p.contract_value ?? p.contractValue) || 0,
                 status: p.status || 'Draft',
                 locations: locs,
                 invoiceIssued: Boolean(p.invoice_issued ?? p.invoiceIssued),
@@ -352,11 +346,12 @@ export default function Purchases({
             // Basis: created_at / po issued date
             if (filterBasis === 'created_at') {
                 // Check if any PO in this project matches the period, or fallback to startStr
-                const poDates = (p.purchase_orders || []).map(
-                    (po) => po.issued_at || po.transaction_date || '',
-                ).filter(Boolean);
+                const poDates = (p.purchase_orders || [])
+                    .map((po) => po.issued_at || po.transaction_date || '')
+                    .filter(Boolean);
 
-                const refDates = poDates.length > 0 ? poDates : [startStr].filter(Boolean);
+                const refDates =
+                    poDates.length > 0 ? poDates : [startStr].filter(Boolean);
                 if (refDates.length === 0) return false;
 
                 return refDates.some((dateRef) => {
@@ -433,9 +428,13 @@ export default function Purchases({
             p.locations.length > 0 &&
             (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.clientName
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase()) ||
                 (p.purchase_orders || []).some((po) =>
-                    po.po_number.toLowerCase().includes(searchQuery.toLowerCase()),
+                    po.po_number
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()),
                 ) ||
                 p.locations.some(
                     (loc) =>
@@ -636,8 +635,7 @@ export default function Purchases({
     >((acc, l) => {
         if (l.vendorId === null) return acc;
         const key = String(l.vendorId);
-        if (!acc[key])
-            acc[key] = { vendorName: l.vendorName, locs: [] };
+        if (!acc[key]) acc[key] = { vendorName: l.vendorName, locs: [] };
         acc[key].locs.push(l);
         return acc;
     }, {});
@@ -744,6 +742,30 @@ export default function Purchases({
                                     : `Pusat Pemesanan Pembelian Vendor - ${isPPN ? 'Mode PPN Aktif' : 'Mode Non-PPN'}`}
                             </p>
                         </div>
+                    </div>
+
+                    {/* Header Actions */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsAuditLogModalOpen(true)}
+                            title="Riwayat Jejak Audit & Log Pembelian PO Vendor"
+                            className="shadow-xs inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-95"
+                        >
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -942,7 +964,10 @@ export default function Purchases({
                                             setTopSchedulePage(1);
                                         }}
                                         options={[
-                                            { value: 'all', label: 'Semua Vendor' },
+                                            {
+                                                value: 'all',
+                                                label: 'Semua Vendor',
+                                            },
                                             ...vendors.map((v) => ({
                                                 value: String(v.id),
                                                 label: v.name,
@@ -1199,8 +1224,9 @@ export default function Purchases({
                                                         <div className="h-1.5 w-full flex-1 overflow-hidden rounded-full bg-slate-100">
                                                             <div
                                                                 className={`h-full transition-all duration-300 ${
-                                                                    percent === 100
-                                                                        ? 'bg-emerald-500 shadow-xs'
+                                                                    percent ===
+                                                                    100
+                                                                        ? 'shadow-xs bg-emerald-500'
                                                                         : 'bg-primary'
                                                                 }`}
                                                                 style={{
@@ -1621,21 +1647,26 @@ export default function Purchases({
                         )}
 
                         {/* TAB 3: ISSUED POs */}
-{/* TAB 3: ISSUED POs */}
+                        {/* TAB 3: ISSUED POs */}
                         {activePoTab === 'issued_pos' && (
                             <div className="shadow-2xs space-y-4 rounded-3xl border border-slate-200/90 bg-white p-6">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-800">
                                             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                                            Daftar Dokumen PO Vendor Resmi Terbit
+                                            Daftar Dokumen PO Vendor Resmi
+                                            Terbit
                                         </h3>
                                         <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-                                            Dokumen PO resmi yang telah diterbitkan dikelompokkan berdasarkan Proyek beserta status dan riwayat pembayaran
+                                            Dokumen PO resmi yang telah
+                                            diterbitkan dikelompokkan
+                                            berdasarkan Proyek beserta status
+                                            dan riwayat pembayaran
                                         </p>
                                     </div>
                                     <span className="rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800">
-                                        {Object.keys(vendorPOs).length} Dokumen PO
+                                        {Object.keys(vendorPOs).length} Dokumen
+                                        PO
                                     </span>
                                 </div>
 
@@ -1653,30 +1684,50 @@ export default function Purchases({
                                         totalRemaining: number;
                                     };
 
-                                    const allPOs = Object.values(vendorPOs).filter((po) => {
+                                    const allPOs = Object.values(
+                                        vendorPOs,
+                                    ).filter((po) => {
                                         const proj = projects.find(
                                             (p) =>
                                                 p.id === po.projectId ||
-                                                p.locations.some((l) => l.poNumber === po.poNumber),
+                                                p.locations.some(
+                                                    (l) =>
+                                                        l.poNumber ===
+                                                        po.poNumber,
+                                                ),
                                         );
                                         return Boolean(proj);
                                     });
-                                    const groupedMap: Record<string, ProjectPOGroup> = {};
+                                    const groupedMap: Record<
+                                        string,
+                                        ProjectPOGroup
+                                    > = {};
 
                                     allPOs.forEach((po) => {
-                                        const proj = projects.find(
-                                            (p) =>
-                                                p.id === po.projectId ||
-                                                p.locations.some((l) => l.poNumber === po.poNumber),
-                                        ) || null;
+                                        const proj =
+                                            projects.find(
+                                                (p) =>
+                                                    p.id === po.projectId ||
+                                                    p.locations.some(
+                                                        (l) =>
+                                                            l.poNumber ===
+                                                            po.poNumber,
+                                                    ),
+                                            ) || null;
 
-                                        const key = proj ? String(proj.id) : 'other';
+                                        const key = proj
+                                            ? String(proj.id)
+                                            : 'other';
                                         if (!groupedMap[key]) {
                                             groupedMap[key] = {
                                                 project: proj,
-                                                projectCode: proj?.code || 'NO-PROJECT',
-                                                projectName: proj?.name || 'Proyek Tanpa Nama',
-                                                clientName: proj?.clientName || '-',
+                                                projectCode:
+                                                    proj?.code || 'NO-PROJECT',
+                                                projectName:
+                                                    proj?.name ||
+                                                    'Proyek Tanpa Nama',
+                                                clientName:
+                                                    proj?.clientName || '-',
                                                 salesPIC: proj?.salesPIC || '-',
                                                 pos: [],
                                                 totalAmount: 0,
@@ -1687,17 +1738,22 @@ export default function Purchases({
 
                                         const summary = getPOPaymentSummary(po);
                                         groupedMap[key].pos.push(po);
-                                        groupedMap[key].totalAmount += po.totalAmount;
-                                        groupedMap[key].totalPaid += summary.totalPaid;
-                                        groupedMap[key].totalRemaining += summary.remaining;
+                                        groupedMap[key].totalAmount +=
+                                            po.totalAmount;
+                                        groupedMap[key].totalPaid +=
+                                            summary.totalPaid;
+                                        groupedMap[key].totalRemaining +=
+                                            summary.remaining;
                                     });
 
-                                    const projectGroups = Object.values(groupedMap);
+                                    const projectGroups =
+                                        Object.values(groupedMap);
 
                                     if (projectGroups.length === 0) {
                                         return (
                                             <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-xs font-semibold text-slate-400">
-                                                Belum ada dokumen PO vendor resmi yang sesuai dengan filter.
+                                                Belum ada dokumen PO vendor
+                                                resmi yang sesuai dengan filter.
                                             </div>
                                         );
                                     }
@@ -1711,29 +1767,60 @@ export default function Purchases({
                                     return (
                                         <div className="space-y-6">
                                             {paginatedGroups.map((grp) => {
-                                                const allPaid = grp.totalRemaining <= 0 && grp.pos.length > 0;
-                                                const groupProgress = grp.totalAmount > 0
-                                                    ? Math.round((grp.totalPaid / grp.totalAmount) * 100)
-                                                    : 0;
+                                                const allPaid =
+                                                    grp.totalRemaining <= 0 &&
+                                                    grp.pos.length > 0;
+                                                const groupProgress =
+                                                    grp.totalAmount > 0
+                                                        ? Math.round(
+                                                              (grp.totalPaid /
+                                                                  grp.totalAmount) *
+                                                                  100,
+                                                          )
+                                                        : 0;
 
                                                 return (
                                                     <div
                                                         key={grp.projectCode}
-                                                        className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs transition-all"
+                                                        className="shadow-xs overflow-hidden rounded-2xl border border-slate-200/90 bg-white transition-all"
                                                     >
                                                         {/* Project Group Header */}
                                                         <div className="border-b border-slate-200/80 bg-slate-50/80 px-5 py-3.5">
                                                             <div className="flex flex-wrap items-center justify-between gap-3">
                                                                 <div className="flex items-center gap-3">
-                                                                    <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-black text-slate-700 shadow-2xs">
-                                                                        {grp.projectCode}
+                                                                    <span className="shadow-2xs rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-black text-slate-700">
+                                                                        {
+                                                                            grp.projectCode
+                                                                        }
                                                                     </span>
                                                                     <div>
                                                                         <h4 className="text-xs font-bold text-slate-900">
-                                                                            {grp.projectName}
+                                                                            {
+                                                                                grp.projectName
+                                                                            }
                                                                         </h4>
                                                                         <p className="text-[10px] font-medium text-slate-500">
-                                                                            Client: <strong className="text-slate-700">{grp.clientName}</strong> &bull; PIC: <strong className="text-slate-700">{grp.salesPIC}</strong> &bull; {grp.pos.length} Dokumen PO
+                                                                            Client:{' '}
+                                                                            <strong className="text-slate-700">
+                                                                                {
+                                                                                    grp.clientName
+                                                                                }
+                                                                            </strong>{' '}
+                                                                            &bull;
+                                                                            PIC:{' '}
+                                                                            <strong className="text-slate-700">
+                                                                                {
+                                                                                    grp.salesPIC
+                                                                                }
+                                                                            </strong>{' '}
+                                                                            &bull;{' '}
+                                                                            {
+                                                                                grp
+                                                                                    .pos
+                                                                                    .length
+                                                                            }{' '}
+                                                                            Dokumen
+                                                                            PO
                                                                         </p>
                                                                     </div>
                                                                 </div>
@@ -1741,27 +1828,44 @@ export default function Purchases({
                                                                 <div className="flex flex-wrap items-center gap-4">
                                                                     <div className="text-right">
                                                                         <div className="text-[10px] font-medium text-slate-400">
-                                                                            Total Beban PO Proyek
+                                                                            Total
+                                                                            Beban
+                                                                            PO
+                                                                            Proyek
                                                                         </div>
                                                                         <div className="font-mono text-xs font-bold text-slate-900">
-                                                                            {fmt(grp.totalAmount)}
+                                                                            {fmt(
+                                                                                grp.totalAmount,
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                     <div className="text-right">
                                                                         <div className="text-[10px] font-medium text-slate-400">
-                                                                            Sisa Belum Dibayar
+                                                                            Sisa
+                                                                            Belum
+                                                                            Dibayar
                                                                         </div>
-                                                                        <div className={`font-mono text-xs font-bold ${grp.totalRemaining > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                                                            {fmt(grp.totalRemaining)}
+                                                                        <div
+                                                                            className={`font-mono text-xs font-bold ${grp.totalRemaining > 0 ? 'text-amber-600' : 'text-emerald-600'}`}
+                                                                        >
+                                                                            {fmt(
+                                                                                grp.totalRemaining,
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                     {allPaid ? (
                                                                         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                                                                            Semua PO Lunas
+                                                                            Semua
+                                                                            PO
+                                                                            Lunas
                                                                         </span>
                                                                     ) : (
                                                                         <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700">
-                                                                            {groupProgress}% Terbayar
+                                                                            {
+                                                                                groupProgress
+                                                                            }
+                                                                            %
+                                                                            Terbayar
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -1770,173 +1874,383 @@ export default function Purchases({
 
                                                         {/* PO Items in this Project */}
                                                         <div className="divide-y divide-slate-100">
-                                                            {grp.pos.map((po) => {
-                                                                const summary = getPOPaymentSummary(po);
-                                                                const isExpanded = expandedPoPayment === po.poNumber;
+                                                            {grp.pos.map(
+                                                                (po) => {
+                                                                    const summary =
+                                                                        getPOPaymentSummary(
+                                                                            po,
+                                                                        );
+                                                                    const isExpanded =
+                                                                        expandedPoPayment ===
+                                                                        po.poNumber;
 
-                                                                return (
-                                                                    <div key={po.poNumber} className="transition-colors hover:bg-slate-50/50">
-                                                                        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-                                                                            <div className="flex items-center gap-3">
-                                                                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-                                                                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                                                    </svg>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <span className="font-mono text-xs font-bold text-slate-800">
-                                                                                            {po.poNumber}
-                                                                                        </span>
-                                                                                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                                                                                            {po.vendorName}
-                                                                                        </span>
-                                                                                        {summary.status === 'paid' ? (
-                                                                                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9.5px] font-bold text-emerald-800">
-                                                                                                Lunas (100%)
-                                                                                            </span>
-                                                                                        ) : summary.status === 'partial' ? (
-                                                                                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9.5px] font-bold text-amber-800">
-                                                                                                {summary.percentage}% Terbayar
-                                                                                            </span>
-                                                                                        ) : (
-                                                                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9.5px] font-bold text-slate-600">
-                                                                                                Belum Dibayar
-                                                                                            </span>
-                                                                                        )}
+                                                                    return (
+                                                                        <div
+                                                                            key={
+                                                                                po.poNumber
+                                                                            }
+                                                                            className="transition-colors hover:bg-slate-50/50"
+                                                                        >
+                                                                            <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                                                                                        <svg
+                                                                                            className="h-4 w-4"
+                                                                                            fill="none"
+                                                                                            viewBox="0 0 24 24"
+                                                                                            stroke="currentColor"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                            />
+                                                                                        </svg>
                                                                                     </div>
-                                                                                    <div className="mt-0.5 text-[10px] text-slate-400">
-                                                                                        Terbit: {formatDate(po.issuedAt)} &bull; Skema: {po.paymentTerms.type === 'dp' ? `DP ${po.paymentTerms.dpPercent || 50}% + Pelunasan` : po.paymentTerms.type === 'termin' ? `Termin (${po.paymentTerms.installments?.length || 0}x)` : 'Pembayaran Penuh (Full)'}
+                                                                                    <div>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span className="font-mono text-xs font-bold text-slate-800">
+                                                                                                {
+                                                                                                    po.poNumber
+                                                                                                }
+                                                                                            </span>
+                                                                                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                                                                                {
+                                                                                                    po.vendorName
+                                                                                                }
+                                                                                            </span>
+                                                                                            {summary.status ===
+                                                                                            'paid' ? (
+                                                                                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9.5px] font-bold text-emerald-800">
+                                                                                                    Lunas
+                                                                                                    (100%)
+                                                                                                </span>
+                                                                                            ) : summary.status ===
+                                                                                              'partial' ? (
+                                                                                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9.5px] font-bold text-amber-800">
+                                                                                                    {
+                                                                                                        summary.percentage
+                                                                                                    }
+                                                                                                    %
+                                                                                                    Terbayar
+                                                                                                </span>
+                                                                                            ) : (
+                                                                                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9.5px] font-bold text-slate-600">
+                                                                                                    Belum
+                                                                                                    Dibayar
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <div className="mt-0.5 text-[10px] text-slate-400">
+                                                                                            Terbit:{' '}
+                                                                                            {formatDate(
+                                                                                                po.issuedAt,
+                                                                                            )}{' '}
+                                                                                            &bull;
+                                                                                            Skema:{' '}
+                                                                                            {po
+                                                                                                .paymentTerms
+                                                                                                .type ===
+                                                                                            'dp'
+                                                                                                ? `DP ${po.paymentTerms.dpPercent || 50}% + Pelunasan`
+                                                                                                : po
+                                                                                                        .paymentTerms
+                                                                                                        .type ===
+                                                                                                    'termin'
+                                                                                                  ? `Termin (${po.paymentTerms.installments?.length || 0}x)`
+                                                                                                  : 'Pembayaran Penuh (Full)'}
+                                                                                        </div>
                                                                                     </div>
                                                                                 </div>
-                                                                            </div>
 
-                                                                            <div className="flex items-center gap-4">
-                                                                                <div className="text-right">
-                                                                                    <div className="font-mono text-xs font-bold text-slate-900">
-                                                                                        {fmt(po.totalAmount)}
+                                                                                <div className="flex items-center gap-4">
+                                                                                    <div className="text-right">
+                                                                                        <div className="font-mono text-xs font-bold text-slate-900">
+                                                                                            {fmt(
+                                                                                                po.totalAmount,
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <div className="text-[9.5px] font-medium text-slate-500">
+                                                                                            Terbayar:{' '}
+                                                                                            <strong className="font-mono text-emerald-700">
+                                                                                                {fmt(
+                                                                                                    summary.totalPaid,
+                                                                                                )}
+                                                                                            </strong>{' '}
+                                                                                            &bull;
+                                                                                            Sisa:{' '}
+                                                                                            <strong className="font-mono text-amber-700">
+                                                                                                {fmt(
+                                                                                                    summary.remaining,
+                                                                                                )}
+                                                                                            </strong>
+                                                                                        </div>
                                                                                     </div>
-                                                                                    <div className="text-[9.5px] font-medium text-slate-500">
-                                                                                        Terbayar: <strong className="font-mono text-emerald-700">{fmt(summary.totalPaid)}</strong> &bull; Sisa: <strong className="font-mono text-amber-700">{fmt(summary.remaining)}</strong>
-                                                                                    </div>
-                                                                                </div>
 
-                                                                                {/* Record Payment Button */}
-                                                                                {summary.remaining > 0 && (
+                                                                                    {/* Record Payment Button */}
+                                                                                    {summary.remaining >
+                                                                                        0 && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() =>
+                                                                                                handleOpenRecordPayment(
+                                                                                                    po,
+                                                                                                )
+                                                                                            }
+                                                                                            className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-emerald-700"
+                                                                                        >
+                                                                                            <svg
+                                                                                                className="h-3.5 w-3.5"
+                                                                                                fill="none"
+                                                                                                viewBox="0 0 24 24"
+                                                                                                stroke="currentColor"
+                                                                                                strokeWidth={
+                                                                                                    2.5
+                                                                                                }
+                                                                                            >
+                                                                                                <path
+                                                                                                    strokeLinecap="round"
+                                                                                                    strokeLinejoin="round"
+                                                                                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                                                                                />
+                                                                                            </svg>
+                                                                                            <span>
+                                                                                                Catat
+                                                                                                Bayar
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    )}
+
+                                                                                    {/* Toggle History Button */}
                                                                                     <button
                                                                                         type="button"
-                                                                                        onClick={() => handleOpenRecordPayment(po)}
-                                                                                        className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-emerald-700"
+                                                                                        onClick={() =>
+                                                                                            setExpandedPoPayment(
+                                                                                                isExpanded
+                                                                                                    ? null
+                                                                                                    : po.poNumber,
+                                                                                            )
+                                                                                        }
+                                                                                        className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-all ${
+                                                                                            isExpanded
+                                                                                                ? 'border-slate-300 bg-slate-200 text-slate-800'
+                                                                                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                                                                        }`}
                                                                                     >
-                                                                                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                                                        <span>
+                                                                                            Riwayat
+                                                                                            (
+                                                                                            {po
+                                                                                                .payments
+                                                                                                ?.length ||
+                                                                                                0}
+                                                                                            )
+                                                                                        </span>
+                                                                                        <svg
+                                                                                            className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                                                            fill="none"
+                                                                                            viewBox="0 0 24 24"
+                                                                                            stroke="currentColor"
+                                                                                            strokeWidth={
+                                                                                                2.5
+                                                                                            }
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                d="M19 9l-7 7-7-7"
+                                                                                            />
                                                                                         </svg>
-                                                                                        <span>Catat Bayar</span>
                                                                                     </button>
-                                                                                )}
 
-                                                                                {/* Toggle History Button */}
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => setExpandedPoPayment(isExpanded ? null : po.poNumber)}
-                                                                                    className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-all ${
-                                                                                        isExpanded
-                                                                                            ? 'border-slate-300 bg-slate-200 text-slate-800'
-                                                                                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                                                                                    }`}
-                                                                                >
-                                                                                    <span>Riwayat ({po.payments?.length || 0})</span>
-                                                                                    <svg className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                                                                    </svg>
-                                                                                </button>
-
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => {
-                                                                                        const poLocs = projects
-                                                                                            .flatMap((p) => p.locations)
-                                                                                            .filter((l) => l.poNumber === po.poNumber);
-                                                                                        const project = projects.find((p) =>
-                                                                                            p.locations.some((l) => l.poNumber === po.poNumber),
-                                                                                        );
-                                                                                        handleDownloadPO(
-                                                                                            po.vendorName,
-                                                                                            po.poNumber,
-                                                                                            poLocs,
-                                                                                            project?.name || grp.projectName,
-                                                                                            project?.period || '-',
-                                                                                            po.lighting || 'Berlampu',
-                                                                                            po.topNotes || 'Lunas setelah visual terpasang',
-                                                                                        );
-                                                                                    }}
-                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700 transition-all hover:bg-slate-100"
-                                                                                >
-                                                                                    <svg className="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                                                    </svg>
-                                                                                    <span>PDF</span>
-                                                                                </button>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {/* Expanded Payment History Drawer */}
-                                                                        {isExpanded && (
-                                                                            <div className="animate-in slide-in-from-top-1 space-y-3 border-t border-slate-100 bg-slate-50/80 p-4 duration-200">
-                                                                                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                                                                    <span>
-                                                                                        Catatan / Riwayat Pembayaran Kas Keluar PO ({po.poNumber})
-                                                                                    </span>
-                                                                                    <span className="text-[10px] font-normal text-slate-500">
-                                                                                        Sistem Akuntansi YouSee Finance
-                                                                                    </span>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            const poLocs =
+                                                                                                projects
+                                                                                                    .flatMap(
+                                                                                                        (
+                                                                                                            p,
+                                                                                                        ) =>
+                                                                                                            p.locations,
+                                                                                                    )
+                                                                                                    .filter(
+                                                                                                        (
+                                                                                                            l,
+                                                                                                        ) =>
+                                                                                                            l.poNumber ===
+                                                                                                            po.poNumber,
+                                                                                                    );
+                                                                                            const project =
+                                                                                                projects.find(
+                                                                                                    (
+                                                                                                        p,
+                                                                                                    ) =>
+                                                                                                        p.locations.some(
+                                                                                                            (
+                                                                                                                l,
+                                                                                                            ) =>
+                                                                                                                l.poNumber ===
+                                                                                                                po.poNumber,
+                                                                                                        ),
+                                                                                                );
+                                                                                            handleDownloadPO(
+                                                                                                po.vendorName,
+                                                                                                po.poNumber,
+                                                                                                poLocs,
+                                                                                                project?.name ||
+                                                                                                    grp.projectName,
+                                                                                                project?.period ||
+                                                                                                    '-',
+                                                                                                po.lighting ||
+                                                                                                    'Berlampu',
+                                                                                                po.topNotes ||
+                                                                                                    'Lunas setelah visual terpasang',
+                                                                                            );
+                                                                                        }}
+                                                                                        className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-700 transition-all hover:bg-slate-100"
+                                                                                    >
+                                                                                        <svg
+                                                                                            className="h-3.5 w-3.5 text-slate-500"
+                                                                                            fill="none"
+                                                                                            viewBox="0 0 24 24"
+                                                                                            stroke="currentColor"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span>
+                                                                                            PDF
+                                                                                        </span>
+                                                                                    </button>
                                                                                 </div>
-
-                                                                                {po.payments && po.payments.length > 0 ? (
-                                                                                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-xs">
-                                                                                        <table className="w-full border-collapse text-left">
-                                                                                            <thead>
-                                                                                                <tr className="border-b border-slate-200 bg-slate-100 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                                                                                                    <th className="px-3 py-2">Tanggal</th>
-                                                                                                    <th className="px-3 py-2">Peruntukan / Label</th>
-                                                                                                    <th className="px-3 py-2">Metode Kas/Bank</th>
-                                                                                                    <th className="px-3 py-2">No. Referensi</th>
-                                                                                                    <th className="px-3 py-2 text-right">Nominal</th>
-                                                                                                </tr>
-                                                                                            </thead>
-                                                                                            <tbody className="divide-y divide-slate-100">
-                                                                                                {po.payments.map((pmt) => (
-                                                                                                    <tr key={pmt.id} className="hover:bg-slate-50/70">
-                                                                                                        <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
-                                                                                                            {formatDate(pmt.date)}
-                                                                                                        </td>
-                                                                                                        <td className="px-3 py-2 font-semibold text-slate-900">
-                                                                                                            {pmt.termLabel}
-                                                                                                        </td>
-                                                                                                        <td className="px-3 py-2 text-slate-600">
-                                                                                                            {pmt.method}
-                                                                                                        </td>
-                                                                                                        <td className="px-3 py-2 font-mono text-slate-600">
-                                                                                                            {pmt.referenceNo}
-                                                                                                        </td>
-                                                                                                        <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700">
-                                                                                                            {fmt(pmt.amount)}
-                                                                                                        </td>
-                                                                                                    </tr>
-                                                                                                ))}
-                                                                                            </tbody>
-                                                                                        </table>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs italic text-slate-500">
-                                                                                        Belum ada catatan transaksi pembayaran untuk PO ini.
-                                                                                    </div>
-                                                                                )}
                                                                             </div>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            })}
+
+                                                                            {/* Expanded Payment History Drawer */}
+                                                                            {isExpanded && (
+                                                                                <div className="animate-in slide-in-from-top-1 space-y-3 border-t border-slate-100 bg-slate-50/80 p-4 duration-200">
+                                                                                    <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                                                                                        <span>
+                                                                                            Catatan
+                                                                                            /
+                                                                                            Riwayat
+                                                                                            Pembayaran
+                                                                                            Kas
+                                                                                            Keluar
+                                                                                            PO
+                                                                                            (
+                                                                                            {
+                                                                                                po.poNumber
+                                                                                            }
+                                                                                            )
+                                                                                        </span>
+                                                                                        <span className="text-[10px] font-normal text-slate-500">
+                                                                                            Sistem
+                                                                                            Akuntansi
+                                                                                            YouSee
+                                                                                            Finance
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    {po.payments &&
+                                                                                    po
+                                                                                        .payments
+                                                                                        .length >
+                                                                                        0 ? (
+                                                                                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-xs">
+                                                                                            <table className="w-full border-collapse text-left">
+                                                                                                <thead>
+                                                                                                    <tr className="border-b border-slate-200 bg-slate-100 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                                                                                        <th className="px-3 py-2">
+                                                                                                            Tanggal
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2">
+                                                                                                            Peruntukan
+                                                                                                            /
+                                                                                                            Label
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2">
+                                                                                                            Metode
+                                                                                                            Kas/Bank
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2">
+                                                                                                            No.
+                                                                                                            Referensi
+                                                                                                        </th>
+                                                                                                        <th className="px-3 py-2 text-right">
+                                                                                                            Nominal
+                                                                                                        </th>
+                                                                                                    </tr>
+                                                                                                </thead>
+                                                                                                <tbody className="divide-y divide-slate-100">
+                                                                                                    {po.payments.map(
+                                                                                                        (
+                                                                                                            pmt,
+                                                                                                        ) => (
+                                                                                                            <tr
+                                                                                                                key={
+                                                                                                                    pmt.id
+                                                                                                                }
+                                                                                                                className="hover:bg-slate-50/70"
+                                                                                                            >
+                                                                                                                <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
+                                                                                                                    {formatDate(
+                                                                                                                        pmt.date,
+                                                                                                                    )}
+                                                                                                                </td>
+                                                                                                                <td className="px-3 py-2 font-semibold text-slate-900">
+                                                                                                                    {
+                                                                                                                        pmt.termLabel
+                                                                                                                    }
+                                                                                                                </td>
+                                                                                                                <td className="px-3 py-2 text-slate-600">
+                                                                                                                    {
+                                                                                                                        pmt.method
+                                                                                                                    }
+                                                                                                                </td>
+                                                                                                                <td className="px-3 py-2 font-mono text-slate-600">
+                                                                                                                    {
+                                                                                                                        pmt.referenceNo
+                                                                                                                    }
+                                                                                                                </td>
+                                                                                                                <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700">
+                                                                                                                    {fmt(
+                                                                                                                        pmt.amount,
+                                                                                                                    )}
+                                                                                                                </td>
+                                                                                                            </tr>
+                                                                                                        ),
+                                                                                                    )}
+                                                                                                </tbody>
+                                                                                            </table>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs italic text-slate-500">
+                                                                                            Belum
+                                                                                            ada
+                                                                                            catatan
+                                                                                            transaksi
+                                                                                            pembayaran
+                                                                                            untuk
+                                                                                            PO
+                                                                                            ini.
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                },
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -1944,10 +2258,17 @@ export default function Purchases({
 
                                             <Pagination
                                                 currentPage={issuedPosPage}
-                                                totalPages={Math.ceil(projectGroups.length / itemsPerPage)}
-                                                totalItems={projectGroups.length}
+                                                totalPages={Math.ceil(
+                                                    projectGroups.length /
+                                                        itemsPerPage,
+                                                )}
+                                                totalItems={
+                                                    projectGroups.length
+                                                }
                                                 itemsPerPage={itemsPerPage}
-                                                onPageChange={(page) => setIssuedPosPage(page)}
+                                                onPageChange={(page) =>
+                                                    setIssuedPosPage(page)
+                                                }
                                             />
                                         </div>
                                     );
@@ -1972,13 +2293,22 @@ export default function Purchases({
                                         </p>
                                     </div>
                                     <span className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-800">
-                                        {Object.values(vendorPOs).filter((po) =>
-                                            projects.some(
-                                                (p) =>
-                                                    p.id === po.projectId ||
-                                                    p.locations.some((l) => l.poNumber === po.poNumber),
-                                            ),
-                                        ).length} Dokumen PO Terjadwal
+                                        {
+                                            Object.values(vendorPOs).filter(
+                                                (po) =>
+                                                    projects.some(
+                                                        (p) =>
+                                                            p.id ===
+                                                                po.projectId ||
+                                                            p.locations.some(
+                                                                (l) =>
+                                                                    l.poNumber ===
+                                                                    po.poNumber,
+                                                            ),
+                                                    ),
+                                            ).length
+                                        }{' '}
+                                        Dokumen PO Terjadwal
                                     </span>
                                 </div>
 
@@ -1990,7 +2320,11 @@ export default function Purchases({
                                             projects.some(
                                                 (p) =>
                                                     p.id === po.projectId ||
-                                                    p.locations.some((l) => l.poNumber === po.poNumber),
+                                                    p.locations.some(
+                                                        (l) =>
+                                                            l.poNumber ===
+                                                            po.poNumber,
+                                                    ),
                                             ),
                                         );
 
@@ -2006,42 +2340,80 @@ export default function Purchases({
                                             termDB?: VendorPaymentTermDB;
                                         };
 
-                                        const round2 = (n: number) => Math.round(n * 100) / 100;
+                                        const round2 = (n: number) =>
+                                            Math.round(n * 100) / 100;
 
                                         const sortedPOs = filteredPOs
                                             .map((po) => {
                                                 const summary =
                                                     getPOPaymentSummary(po);
-                                                const scheduleItems: TOPTermScheduleItem[] = [];
+                                                const scheduleItems: TOPTermScheduleItem[] =
+                                                    [];
 
                                                 // 1. If database payment_plan exists, prioritize real terms
-                                                if (po.payment_plan && po.payment_plan.terms && po.payment_plan.terms.length > 0) {
-                                                    const rawTerms = [...po.payment_plan.terms].sort(
-                                                        (a, b) => (a.sort_order || 0) - (b.sort_order || 0),
+                                                if (
+                                                    po.payment_plan &&
+                                                    po.payment_plan.terms &&
+                                                    po.payment_plan.terms
+                                                        .length > 0
+                                                ) {
+                                                    const rawTerms = [
+                                                        ...po.payment_plan
+                                                            .terms,
+                                                    ].sort(
+                                                        (a, b) =>
+                                                            (a.sort_order ||
+                                                                0) -
+                                                            (b.sort_order || 0),
                                                     );
                                                     let isPreviousAllPaid = true;
 
                                                     rawTerms.forEach((term) => {
-                                                        const termSettled = round2(
-                                                            (term.settlements || []).reduce(
-                                                                (s, cur) => s + Number(cur.amount),
-                                                                0,
+                                                        const termSettled =
+                                                            round2(
+                                                                (
+                                                                    term.settlements ||
+                                                                    []
+                                                                ).reduce(
+                                                                    (s, cur) =>
+                                                                        s +
+                                                                        Number(
+                                                                            cur.amount,
+                                                                        ),
+                                                                    0,
+                                                                ),
+                                                            );
+                                                        const termAmt = round2(
+                                                            Number(term.amount),
+                                                        );
+                                                        const isTermPaid =
+                                                            term.status ===
+                                                                'paid' ||
+                                                            termSettled >=
+                                                                termAmt - 1.0;
+                                                        const rem = Math.max(
+                                                            0,
+                                                            round2(
+                                                                termAmt -
+                                                                    termSettled,
                                                             ),
                                                         );
-                                                        const termAmt = round2(Number(term.amount));
-                                                        const isTermPaid =
-                                                            term.status === 'paid' ||
-                                                            termSettled >= termAmt - 1.0;
-                                                        const rem = Math.max(0, round2(termAmt - termSettled));
-                                                        const isLocked = !isTermPaid && !isPreviousAllPaid;
+                                                        const isLocked =
+                                                            !isTermPaid &&
+                                                            !isPreviousAllPaid;
 
                                                         scheduleItems.push({
                                                             id: term.id,
                                                             label: term.label,
-                                                            dueDate: term.due_date,
+                                                            dueDate:
+                                                                term.due_date,
                                                             amount: termAmt,
-                                                            paidAmount: termSettled,
-                                                            remainingAmount: isTermPaid ? 0 : rem,
+                                                            paidAmount:
+                                                                termSettled,
+                                                            remainingAmount:
+                                                                isTermPaid
+                                                                    ? 0
+                                                                    : rem,
                                                             isPaid: isTermPaid,
                                                             isLocked,
                                                             termDB: term,
@@ -2051,102 +2423,244 @@ export default function Purchases({
                                                             isPreviousAllPaid = false;
                                                         }
                                                     });
-                                                } else if (po.paymentTerms.type === 'full') {
-                                                    const isFullPaid = summary.status === 'paid' || summary.totalPaid >= po.totalAmount - 1.0;
+                                                } else if (
+                                                    po.paymentTerms.type ===
+                                                    'full'
+                                                ) {
+                                                    const isFullPaid =
+                                                        summary.status ===
+                                                            'paid' ||
+                                                        summary.totalPaid >=
+                                                            po.totalAmount -
+                                                                1.0;
                                                     scheduleItems.push({
                                                         id: 'full-1',
                                                         label: 'Pembayaran Penuh (Full Payment)',
-                                                        dueDate: po.paymentTerms.fullDueDate || po.issuedAt,
+                                                        dueDate:
+                                                            po.paymentTerms
+                                                                .fullDueDate ||
+                                                            po.issuedAt,
                                                         amount: po.totalAmount,
-                                                        paidAmount: summary.totalPaid,
-                                                        remainingAmount: isFullPaid ? 0 : summary.remaining,
+                                                        paidAmount:
+                                                            summary.totalPaid,
+                                                        remainingAmount:
+                                                            isFullPaid
+                                                                ? 0
+                                                                : summary.remaining,
                                                         isPaid: isFullPaid,
                                                         isLocked: false,
                                                     });
-                                                } else if (po.paymentTerms.type === 'dp') {
-                                                    const dpAmt = round2(po.paymentTerms.dpAmount || Math.round(po.totalAmount * 0.5));
-                                                    const pelunasanAmt = round2(po.totalAmount - dpAmt);
-                                                    const dpPaid = round2(Math.min(dpAmt, summary.totalPaid));
-                                                    const pelunasanPaid = round2(Math.max(0, summary.totalPaid - dpAmt));
-                                                    const isDpPaid = dpPaid >= dpAmt - 1.0;
-                                                    const isPelunasanPaid = pelunasanPaid >= pelunasanAmt - 1.0;
+                                                } else if (
+                                                    po.paymentTerms.type ===
+                                                    'dp'
+                                                ) {
+                                                    const dpAmt = round2(
+                                                        po.paymentTerms
+                                                            .dpAmount ||
+                                                            Math.round(
+                                                                po.totalAmount *
+                                                                    0.5,
+                                                            ),
+                                                    );
+                                                    const pelunasanAmt = round2(
+                                                        po.totalAmount - dpAmt,
+                                                    );
+                                                    const dpPaid = round2(
+                                                        Math.min(
+                                                            dpAmt,
+                                                            summary.totalPaid,
+                                                        ),
+                                                    );
+                                                    const pelunasanPaid =
+                                                        round2(
+                                                            Math.max(
+                                                                0,
+                                                                summary.totalPaid -
+                                                                    dpAmt,
+                                                            ),
+                                                        );
+                                                    const isDpPaid =
+                                                        dpPaid >= dpAmt - 1.0;
+                                                    const isPelunasanPaid =
+                                                        pelunasanPaid >=
+                                                        pelunasanAmt - 1.0;
 
                                                     scheduleItems.push({
                                                         id: 'dp-1',
                                                         label: `DP ${po.paymentTerms.dpPercent || 50}%`,
-                                                        dueDate: po.paymentTerms.dpDueDate || po.issuedAt,
+                                                        dueDate:
+                                                            po.paymentTerms
+                                                                .dpDueDate ||
+                                                            po.issuedAt,
                                                         amount: dpAmt,
                                                         paidAmount: dpPaid,
-                                                        remainingAmount: isDpPaid ? 0 : Math.max(0, round2(dpAmt - dpPaid)),
+                                                        remainingAmount:
+                                                            isDpPaid
+                                                                ? 0
+                                                                : Math.max(
+                                                                      0,
+                                                                      round2(
+                                                                          dpAmt -
+                                                                              dpPaid,
+                                                                      ),
+                                                                  ),
                                                         isPaid: isDpPaid,
                                                         isLocked: false,
                                                     });
                                                     scheduleItems.push({
                                                         id: 'pelunasan-2',
                                                         label: 'Pelunasan',
-                                                        dueDate: po.paymentTerms.pelunasanDueDate,
+                                                        dueDate:
+                                                            po.paymentTerms
+                                                                .pelunasanDueDate,
                                                         amount: pelunasanAmt,
-                                                        paidAmount: pelunasanPaid,
-                                                        remainingAmount: isPelunasanPaid ? 0 : Math.max(0, round2(pelunasanAmt - pelunasanPaid)),
+                                                        paidAmount:
+                                                            pelunasanPaid,
+                                                        remainingAmount:
+                                                            isPelunasanPaid
+                                                                ? 0
+                                                                : Math.max(
+                                                                      0,
+                                                                      round2(
+                                                                          pelunasanAmt -
+                                                                              pelunasanPaid,
+                                                                      ),
+                                                                  ),
                                                         isPaid: isPelunasanPaid,
                                                         isLocked: !isDpPaid,
                                                     });
-                                                } else if (po.paymentTerms.type === 'termin' && po.paymentTerms.installments) {
-                                                    let runningPaid = round2(summary.totalPaid);
+                                                } else if (
+                                                    po.paymentTerms.type ===
+                                                        'termin' &&
+                                                    po.paymentTerms.installments
+                                                ) {
+                                                    let runningPaid = round2(
+                                                        summary.totalPaid,
+                                                    );
                                                     let isPreviousAllPaid = true;
 
-                                                    po.paymentTerms.installments.forEach((inst, idx) => {
-                                                        const termAmt = round2(inst.amount);
-                                                        const termPaid = round2(Math.min(termAmt, Math.max(0, runningPaid)));
-                                                        runningPaid = round2(runningPaid - termPaid);
-                                                        const isTermPaid = termPaid >= termAmt - 1.0;
-                                                        const rem = Math.max(0, round2(termAmt - termPaid));
-                                                        const isLocked = !isTermPaid && !isPreviousAllPaid;
+                                                    po.paymentTerms.installments.forEach(
+                                                        (inst, idx) => {
+                                                            const termAmt =
+                                                                round2(
+                                                                    inst.amount,
+                                                                );
+                                                            const termPaid =
+                                                                round2(
+                                                                    Math.min(
+                                                                        termAmt,
+                                                                        Math.max(
+                                                                            0,
+                                                                            runningPaid,
+                                                                        ),
+                                                                    ),
+                                                                );
+                                                            runningPaid =
+                                                                round2(
+                                                                    runningPaid -
+                                                                        termPaid,
+                                                                );
+                                                            const isTermPaid =
+                                                                termPaid >=
+                                                                termAmt - 1.0;
+                                                            const rem =
+                                                                Math.max(
+                                                                    0,
+                                                                    round2(
+                                                                        termAmt -
+                                                                            termPaid,
+                                                                    ),
+                                                                );
+                                                            const isLocked =
+                                                                !isTermPaid &&
+                                                                !isPreviousAllPaid;
 
-                                                        scheduleItems.push({
-                                                            id: `termin-${idx + 1}`,
-                                                            label: inst.note || `Termin ${idx + 1} (${inst.percent}%)`,
-                                                            dueDate: inst.dueDate,
-                                                            amount: termAmt,
-                                                            paidAmount: termPaid,
-                                                            remainingAmount: isTermPaid ? 0 : rem,
-                                                            isPaid: isTermPaid,
-                                                            isLocked,
-                                                        });
+                                                            scheduleItems.push({
+                                                                id: `termin-${idx + 1}`,
+                                                                label:
+                                                                    inst.note ||
+                                                                    `Termin ${idx + 1} (${inst.percent}%)`,
+                                                                dueDate:
+                                                                    inst.dueDate,
+                                                                amount: termAmt,
+                                                                paidAmount:
+                                                                    termPaid,
+                                                                remainingAmount:
+                                                                    isTermPaid
+                                                                        ? 0
+                                                                        : rem,
+                                                                isPaid: isTermPaid,
+                                                                isLocked,
+                                                            });
 
-                                                        if (!isTermPaid) {
-                                                            isPreviousAllPaid = false;
-                                                        }
-                                                    });
+                                                            if (!isTermPaid) {
+                                                                isPreviousAllPaid = false;
+                                                            }
+                                                        },
+                                                    );
                                                 } else {
-                                                    const isFullPaid = summary.status === 'paid' || summary.totalPaid >= po.totalAmount - 1.0;
+                                                    const isFullPaid =
+                                                        summary.status ===
+                                                            'paid' ||
+                                                        summary.totalPaid >=
+                                                            po.totalAmount -
+                                                                1.0;
                                                     scheduleItems.push({
                                                         id: 'default-1',
                                                         label: 'Jadwal Pembayaran Vendor',
                                                         dueDate: po.issuedAt,
                                                         amount: po.totalAmount,
-                                                        paidAmount: summary.totalPaid,
-                                                        remainingAmount: isFullPaid ? 0 : summary.remaining,
+                                                        paidAmount:
+                                                            summary.totalPaid,
+                                                        remainingAmount:
+                                                            isFullPaid
+                                                                ? 0
+                                                                : summary.remaining,
                                                         isPaid: isFullPaid,
                                                         isLocked: false,
                                                     });
                                                 }
 
                                                 // Find earliest due date of UNPAID terms for sorting (if all paid, use last date)
-                                                const unpaidDates = scheduleItems
-                                                    .filter((item) => !item.isPaid && item.dueDate)
-                                                    .map((item) => new Date(item.dueDate!).getTime());
+                                                const unpaidDates =
+                                                    scheduleItems
+                                                        .filter(
+                                                            (item) =>
+                                                                !item.isPaid &&
+                                                                item.dueDate,
+                                                        )
+                                                        .map((item) =>
+                                                            new Date(
+                                                                item.dueDate!,
+                                                            ).getTime(),
+                                                        );
 
-                                                const allValidDates = scheduleItems
-                                                    .map((item) => item.dueDate)
-                                                    .filter((d): d is string => Boolean(d))
-                                                    .map((d) => new Date(d).getTime());
+                                                const allValidDates =
+                                                    scheduleItems
+                                                        .map(
+                                                            (item) =>
+                                                                item.dueDate,
+                                                        )
+                                                        .filter(
+                                                            (d): d is string =>
+                                                                Boolean(d),
+                                                        )
+                                                        .map((d) =>
+                                                            new Date(
+                                                                d,
+                                                            ).getTime(),
+                                                        );
 
                                                 const nearestDueDateMs =
                                                     unpaidDates.length > 0
-                                                        ? Math.min(...unpaidDates)
-                                                        : allValidDates.length > 0
-                                                          ? Math.min(...allValidDates)
+                                                        ? Math.min(
+                                                              ...unpaidDates,
+                                                          )
+                                                        : allValidDates.length >
+                                                            0
+                                                          ? Math.min(
+                                                                ...allValidDates,
+                                                            )
                                                           : 9999999999999;
 
                                                 return {
@@ -2165,7 +2679,8 @@ export default function Purchases({
                                         if (sortedPOs.length === 0) {
                                             return (
                                                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-xs font-semibold text-slate-400">
-                                                    Belum ada jadwal TOP vendor untuk periode ini.
+                                                    Belum ada jadwal TOP vendor
+                                                    untuk periode ini.
                                                 </div>
                                             );
                                         }
@@ -2295,18 +2810,24 @@ export default function Purchases({
                                                                                 dot: 'bg-slate-400',
                                                                             };
 
-                                                                        if (item.isPaid) {
-                                                                            statusTag = {
-                                                                                label: 'Lunas',
-                                                                                style: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold',
-                                                                                dot: 'bg-emerald-500',
-                                                                            };
-                                                                        } else if (item.isLocked) {
-                                                                            statusTag = {
-                                                                                label: 'Terkunci (Urutan)',
-                                                                                style: 'bg-slate-100 text-slate-500 border-slate-200',
-                                                                                dot: 'bg-slate-400',
-                                                                            };
+                                                                        if (
+                                                                            item.isPaid
+                                                                        ) {
+                                                                            statusTag =
+                                                                                {
+                                                                                    label: 'Lunas',
+                                                                                    style: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold',
+                                                                                    dot: 'bg-emerald-500',
+                                                                                };
+                                                                        } else if (
+                                                                            item.isLocked
+                                                                        ) {
+                                                                            statusTag =
+                                                                                {
+                                                                                    label: 'Terkunci (Urutan)',
+                                                                                    style: 'bg-slate-100 text-slate-500 border-slate-200',
+                                                                                    dot: 'bg-slate-400',
+                                                                                };
                                                                         } else if (
                                                                             diffDays !==
                                                                             null
@@ -2404,18 +2925,35 @@ export default function Purchases({
                                                                                                 item.amount,
                                                                                             )}
                                                                                         </span>
-                                                                                        {!item.isPaid && item.paidAmount > 0 && (
-                                                                                            <div className="text-[9.5px] font-medium text-amber-600">
-                                                                                                Sisa {fmt(item.remainingAmount)}
-                                                                                            </div>
-                                                                                        )}
+                                                                                        {!item.isPaid &&
+                                                                                            item.paidAmount >
+                                                                                                0 && (
+                                                                                                <div className="text-[9.5px] font-medium text-amber-600">
+                                                                                                    Sisa{' '}
+                                                                                                    {fmt(
+                                                                                                        item.remainingAmount,
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            )}
                                                                                     </div>
 
                                                                                     {/* Tombol Bayar per Termin */}
                                                                                     {item.isPaid ? (
                                                                                         <span className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-                                                                                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                                            <svg
+                                                                                                className="h-3 w-3"
+                                                                                                fill="none"
+                                                                                                viewBox="0 0 24 24"
+                                                                                                stroke="currentColor"
+                                                                                                strokeWidth={
+                                                                                                    3
+                                                                                                }
+                                                                                            >
+                                                                                                <path
+                                                                                                    strokeLinecap="round"
+                                                                                                    strokeLinejoin="round"
+                                                                                                    d="M5 13l4 4L19 7"
+                                                                                                />
                                                                                             </svg>
                                                                                             Lunas
                                                                                         </span>
@@ -2426,22 +2964,56 @@ export default function Purchases({
                                                                                             className="flex cursor-not-allowed items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-400 opacity-60"
                                                                                             title="Selesaikan termin sebelumnya terlebih dahulu"
                                                                                         >
-                                                                                            <svg className="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                                                            <svg
+                                                                                                className="h-3 w-3 text-slate-400"
+                                                                                                fill="none"
+                                                                                                viewBox="0 0 24 24"
+                                                                                                stroke="currentColor"
+                                                                                                strokeWidth={
+                                                                                                    2.5
+                                                                                                }
+                                                                                            >
+                                                                                                <path
+                                                                                                    strokeLinecap="round"
+                                                                                                    strokeLinejoin="round"
+                                                                                                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                                                                                />
                                                                                             </svg>
-                                                                                            <span>Terkunci</span>
+                                                                                            <span>
+                                                                                                Terkunci
+                                                                                            </span>
                                                                                         </button>
                                                                                     ) : (
                                                                                         <button
                                                                                             type="button"
-                                                                                            onClick={() => handleOpenRecordPayment(po, item.termDB)}
+                                                                                            onClick={() =>
+                                                                                                handleOpenRecordPayment(
+                                                                                                    po,
+                                                                                                    item.termDB,
+                                                                                                )
+                                                                                            }
                                                                                             className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-emerald-700 active:scale-95"
                                                                                             title={`Bayar ${item.label}`}
                                                                                         >
-                                                                                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                                                            <svg
+                                                                                                className="h-3 w-3"
+                                                                                                fill="none"
+                                                                                                viewBox="0 0 24 24"
+                                                                                                stroke="currentColor"
+                                                                                                strokeWidth={
+                                                                                                    2.5
+                                                                                                }
+                                                                                            >
+                                                                                                <path
+                                                                                                    strokeLinecap="round"
+                                                                                                    strokeLinejoin="round"
+                                                                                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                                                                                />
                                                                                             </svg>
-                                                                                            <span>Bayar Termin</span>
+                                                                                            <span>
+                                                                                                Bayar
+                                                                                                Termin
+                                                                                            </span>
                                                                                         </button>
                                                                                     )}
                                                                                 </div>
@@ -2466,10 +3038,13 @@ export default function Purchases({
                                             projects.some(
                                                 (p) =>
                                                     p.id === po.projectId ||
-                                                    p.locations.some((l) => l.poNumber === po.poNumber),
+                                                    p.locations.some(
+                                                        (l) =>
+                                                            l.poNumber ===
+                                                            po.poNumber,
+                                                    ),
                                             ),
-                                        ).length /
-                                            itemsPerPage,
+                                        ).length / itemsPerPage,
                                     )}
                                     onPageChange={(page) =>
                                         setTopSchedulePage(page)
@@ -2518,7 +3093,9 @@ export default function Purchases({
                                     (s, l) => s + l.vendorCost * (l.qty || 1),
                                     0,
                                 );
-                                const pendingPpn = isPPN ? pendingDpp * PPN_RATE : 0;
+                                const pendingPpn = isPPN
+                                    ? pendingDpp * PPN_RATE
+                                    : 0;
                                 const pendingTotal = pendingDpp + pendingPpn;
 
                                 return (
@@ -2530,12 +3107,14 @@ export default function Purchases({
                                             {fmt(pendingTotal)}
                                         </div>
                                         <div className="mt-0.5 text-[10px] font-medium text-slate-500">
-                                            {pendingLocations.length} titik belum dipesan
-                                            {isPPN && pendingLocations.length > 0 && (
-                                                <span className="ml-1 text-slate-400">
-                                                    (DPP: {fmt(pendingDpp)})
-                                                </span>
-                                            )}
+                                            {pendingLocations.length} titik
+                                            belum dipesan
+                                            {isPPN &&
+                                                pendingLocations.length > 0 && (
+                                                    <span className="ml-1 text-slate-400">
+                                                        (DPP: {fmt(pendingDpp)})
+                                                    </span>
+                                                )}
                                         </div>
                                     </div>
                                 );
@@ -3123,6 +3702,27 @@ export default function Purchases({
                     setSelectedPaymentTermDB(null);
                 }}
                 onSubmit={handleSaveRecordPayment}
+            />
+
+            {/* Modal Jejak Audit & Log Pembelian PO Vendor */}
+            <AuditLogModal
+                show={isAuditLogModalOpen}
+                onClose={() => setIsAuditLogModalOpen(false)}
+                title="Jejak Audit & Riwayat Pembelian (PO) Vendor"
+                subtitle="Audit trail penerbitan purchase order, pembayaran termin ke vendor, dan pembatalan transaksi"
+                logs={auditLogs}
+                eventOptions={[
+                    { value: 'all', label: 'Semua Jenis Aktivitas' },
+                    { value: 'created', label: '🟢 PO Diterbitkan (Issued)' },
+                    {
+                        value: 'payment_settled',
+                        label: '🔵 Pembayaran Vendor (Paid/Settled)',
+                    },
+                    {
+                        value: 'po_cancelled',
+                        label: '🔴 Pembatalan PO (Cancelled)',
+                    },
+                ]}
             />
 
             {/* Floating Toast Notification */}

@@ -21,7 +21,7 @@ export const formatDate = (dateStr?: string): string => {
     }
 };
 
-export { formatPeriod, formatIndoPeriod } from '@/Utils/formatters';
+export { formatIndoPeriod, formatPeriod } from '@/Utils/formatters';
 
 export interface VendorPaymentTerm {
     type: 'full' | 'dp' | 'termin';
@@ -214,4 +214,5 @@ export interface PurchasesPageProps {
         name: string;
         display_name: string;
     }>;
+    auditLogs?: import('@/Components/UI/AuditLogModal').AuditLogItem[];
 }

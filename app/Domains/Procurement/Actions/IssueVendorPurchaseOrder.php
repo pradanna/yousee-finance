@@ -157,6 +157,38 @@ class IssueVendorPurchaseOrder
                 );
             }
 
+            // Catat ke Audit Log PO
+            \App\Domains\Shared\Models\AuditLog::create([
+                'auditable_type' => PurchaseOrder::class,
+                'auditable_id'   => $po->id,
+                'event'          => 'created',
+                'user_id'        => auth()->id(),
+                'description'    => "Menerbitkan Purchase Order [{$po->po_number}] kepada Vendor \"{$vendor->name}\" sebesar Rp " . number_format((float) $po->total, 0, ',', '.') . " untuk proyek [{$project->code}]",
+                'properties'     => [
+                    'po_number'    => $po->po_number,
+                    'vendor_name'  => $vendor->name,
+                    'project_code' => $project->code,
+                    'total'        => (float) $po->total,
+                    'subtotal'     => (float) $po->subtotal,
+                    'ppn'          => (float) $po->ppn,
+                    'location_count' => count($locationIds),
+                ],
+            ]);
+
+            // Catat juga ke Audit Log Proyek
+            \App\Domains\Shared\Models\AuditLog::create([
+                'auditable_type' => Project::class,
+                'auditable_id'   => $project->id,
+                'event'          => 'po_issued',
+                'user_id'        => auth()->id(),
+                'description'    => "Penerbitan PO Vendor [{$po->po_number}] ({$vendor->name}) senilai Rp " . number_format((float) $po->total, 0, ',', '.') . " untuk " . count($locationIds) . " titik lokasi",
+                'properties'     => [
+                    'po_number'    => $po->po_number,
+                    'vendor_name'  => $vendor->name,
+                    'total'        => (float) $po->total,
+                ],
+            ]);
+
             Log::info('Vendor PO issued', [
                 'purchase_order_id' => $po->id,
                 'project_id' => $project->id,

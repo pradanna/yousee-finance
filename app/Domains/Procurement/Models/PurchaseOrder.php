@@ -75,6 +75,11 @@ class PurchaseOrder extends Model
         return $this->morphOne(PaymentPlan::class, 'payable');
     }
 
+    public function auditLogs(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domains\Shared\Models\AuditLog::class, 'auditable');
+    }
+
     /**
      * Hitung ulang subtotal/ppn/total dari items. ppn = 0 di luar mode PPN,
      * expense_account_id/COA resolution & journal posting belum aktif —
