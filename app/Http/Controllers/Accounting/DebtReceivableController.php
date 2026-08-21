@@ -246,6 +246,24 @@ class DebtReceivableController extends Controller
         $overdueReceivablesCount = $receivables->where('is_overdue', true)->count();
         $overduePayablesCount = $payables->where('is_overdue', true)->count();
 
+        // Riwayat Audit Log seluruh Piutang & Hutang Usaha (Invoices & Purchase Orders)
+        $auditLogs = \App\Domains\Shared\Models\AuditLog::with('user:id,name')
+            ->whereIn('auditable_type', [
+                \App\Domains\Billing\Models\Invoice::class,
+                \App\Domains\Procurement\Models\PurchaseOrder::class,
+            ])
+            ->latest()
+            ->take(100)
+            ->get()
+            ->map(fn ($log) => [
+                'id'          => $log->id,
+                'event'       => $log->event,
+                'description' => $log->description,
+                'properties'  => $log->properties,
+                'user_name'   => $log->user?->name ?? 'System',
+                'created_at'  => $log->created_at?->toIso8601String(),
+            ]);
+
         return Inertia::render('DebtReceivable', [
             'receivables' => $receivables->values(),
             'payables'    => $payables->values(),
@@ -260,6 +278,7 @@ class DebtReceivableController extends Controller
             ],
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'vendors' => Vendor::orderBy('name')->get(['id', 'name']),
+            'auditLogs' => $auditLogs,
         ]);
     }
 }

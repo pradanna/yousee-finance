@@ -4,6 +4,7 @@ import { RecordPaymentModal } from '@/Components/Modal/RecordPaymentModal';
 import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown, { ActionMenuItem } from '@/Components/UI/ActionDropdown';
+import AuditLogModal, { AuditLogItem } from '@/Components/UI/AuditLogModal';
 import Toast from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import type { PageProps as BasePageProps } from '@/types';
@@ -90,6 +91,7 @@ export interface DebtReceivablePageProps extends BasePageProps {
     };
     clients: Array<{ id: string; name: string }>;
     vendors: Array<{ id: string; name: string }>;
+    auditLogs?: AuditLogItem[];
 }
 
 const fmt = (n: number | string) =>
@@ -126,10 +128,12 @@ export default function DebtReceivable() {
         summary,
         clients = [],
         vendors = [],
+        auditLogs = [],
     } = usePage<DebtReceivablePageProps>().props;
 
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
+    const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState(false);
 
     // Tabs & Filters
     const [activeTab, setActiveTab] = useState<'payable' | 'receivable'>(
@@ -620,7 +624,27 @@ export default function DebtReceivable() {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsAuditLogModalOpen(true)}
+                            title="Riwayat Jejak Audit & Log Mutasi Hutang Piutang"
+                            className="shadow-xs inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-95"
+                        >
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                            </svg>
+                        </button>
                         <button
                             onClick={() => router.visit('/sales-transactions')}
                             className="flex cursor-pointer items-center gap-2 rounded-xl bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 transition-all hover:bg-blue-100"
@@ -1611,6 +1635,30 @@ export default function DebtReceivable() {
                     onSubmit={handleSaveReceivablePayment}
                 />
             )}
+
+            {/* Modal Jejak Audit & Riwayat Mutasi Hutang Piutang */}
+            <AuditLogModal
+                show={isAuditLogModalOpen}
+                onClose={() => setIsAuditLogModalOpen(false)}
+                title="Jejak Audit & Riwayat Mutasi Hutang Piutang"
+                subtitle="Audit trail terintegrasi penerbitan invoice & PO, serta realisasi mutasi kas/bank pelunasan hutang vendor & piutang client"
+                logs={auditLogs}
+                eventOptions={[
+                    { value: 'all', label: 'Semua Jenis Aktivitas' },
+                    {
+                        value: 'created',
+                        label: '🟢 Penerbitan Dokumen (Invoice / PO)',
+                    },
+                    {
+                        value: 'payment_settled',
+                        label: '🔵 Mutasi Pelunasan (AR / AP Settled)',
+                    },
+                    {
+                        value: 'po_cancelled',
+                        label: '🔴 Pembatalan PO (Cancelled)',
+                    },
+                ]}
+            />
 
             {/* Global Toast */}
             <Toast
