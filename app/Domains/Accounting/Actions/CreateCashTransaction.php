@@ -23,6 +23,8 @@ class CreateCashTransaction
      *     transaction_date: string,
      *     recipient?: string|null,
      *     description: string,
+     *     attachment_path?: string|null,
+     *     attachment_name?: string|null,
      *     created_by: string,
      * } $data
      */
@@ -82,6 +84,8 @@ class CreateCashTransaction
                 'transaction_date'   => $txDate,
                 'recipient'          => $data['recipient'] ?? null,
                 'description'        => $data['description'],
+                'attachment_path'    => $data['attachment_path'] ?? null,
+                'attachment_name'    => $data['attachment_name'] ?? null,
                 'created_by'         => $data['created_by'],
             ]);
 
@@ -113,6 +117,22 @@ class CreateCashTransaction
                 ],
                 source: $cashTransaction,
             );
+
+            // Catat ke Audit Log
+            \App\Domains\Shared\Models\AuditLog::create([
+                'auditable_type' => CashTransaction::class,
+                'auditable_id'   => $cashTransaction->id,
+                'event'          => 'created',
+                'user_id'        => $data['created_by'],
+                'description'    => "Mencatat pengeluaran kas baru [{$txNumber}] sebesar Rp " . number_format($amount, 0, ',', '.') . " ({$expenseAccount->name} via {$paymentAccount->name})",
+                'properties'     => [
+                    'transaction_number' => $txNumber,
+                    'amount'             => $amount,
+                    'payment_account'    => $paymentAccount->name,
+                    'expense_account'    => $expenseAccount->name,
+                    'recipient'          => $data['recipient'] ?? null,
+                ],
+            ]);
 
             return $cashTransaction->load(['paymentAccount', 'expenseAccount', 'project', 'creator', 'journalEntry.items']);
         });

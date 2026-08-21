@@ -74,8 +74,12 @@ Route::middleware('auth')->group(function () {
     // Transaksi
     Route::get('/purchases', [\App\Http\Controllers\Procurement\PurchaseOrderController::class, 'index'])->name('purchases');
     Route::get('/cash-out', [\App\Http\Controllers\Accounting\CashOutController::class, 'index'])->name('cash-out');
+    Route::get('/cash-out-export', [\App\Http\Controllers\Accounting\CashOutController::class, 'exportCsv'])->name('cash-out.export');
     Route::post('/cash-out', [\App\Http\Controllers\Accounting\CashOutController::class, 'store'])->name('cash-out.store');
     Route::post('/cash-out/categories', [\App\Http\Controllers\Accounting\CashOutController::class, 'storeCategory'])->name('cash-out.categories.store');
+    Route::post('/cash-out/{cashTransaction}/void', [\App\Http\Controllers\Accounting\CashOutController::class, 'void'])->name('cash-out.void');
+    Route::post('/cash-out/{cashTransaction}', [\App\Http\Controllers\Accounting\CashOutController::class, 'update'])->name('cash-out.update');
+    Route::delete('/cash-out/{cashTransaction}', [\App\Http\Controllers\Accounting\CashOutController::class, 'destroy'])->name('cash-out.destroy');
 
     Route::get('/sales-transactions', [\App\Http\Controllers\Billing\SalesTransactionController::class, 'index'])->name('sales-transactions');
 
@@ -114,6 +118,7 @@ Route::middleware('auth')->group(function () {
     Route::match(['get', 'post'], '/client-invoice-pdf', [\App\Http\Controllers\ClientInvoicePdfController::class, 'generatePdf'])->name('client-invoice.pdf');
     Route::match(['get', 'post'], '/kwitansi-pdf', [\App\Http\Controllers\KwitansiPdfController::class, 'generatePdf'])->name('kwitansi.pdf');
     Route::match(['get', 'post'], '/ppn-pdf', [\App\Http\Controllers\PpnReportPdfController::class, 'generatePdf'])->name('ppn.pdf');
+    Route::match(['get', 'post'], '/cash-out-pdf', [\App\Http\Controllers\CashOutPdfController::class, 'generatePdf'])->name('cash-out.pdf');
 });
 
 require __DIR__.'/auth.php';

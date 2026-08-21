@@ -48,14 +48,20 @@ class JournalEntry extends Model
     {
         parent::boot();
 
-        static::updating(function () {
-            throw new DomainException('Jurnal tidak boleh diedit secara langsung. Gunakan jurnal pembalik (reversal) untuk koreksi.');
+        static::updating(function (JournalEntry $journal) {
+            if (! static::$allowSystemMutation && $journal->isDirty()) {
+                throw new DomainException('Jurnal tidak boleh diedit secara langsung. Gunakan jurnal pembalik (reversal) untuk koreksi.');
+            }
         });
 
         static::deleting(function () {
-            throw new DomainException('Jurnal tidak boleh dihapus secara langsung. Koreksi harus menggunakan reversing entry (jurnal pembalik).');
+            if (! static::$allowSystemMutation) {
+                throw new DomainException('Jurnal tidak boleh dihapus secara langsung. Koreksi harus menggunakan reversing entry (jurnal pembalik).');
+            }
         });
     }
+
+    public static bool $allowSystemMutation = false;
 
     /**
      * Polymorphic relation ke sumber jurnal (misal Invoice, PurchaseOrder, PaymentSettlement, CashExpense).

@@ -32,6 +32,7 @@ class StoreCashTransactionRequest extends FormRequest
             'transaction_date'    => ['required', 'date'],
             'recipient'           => ['nullable', 'string', 'max:255'],
             'description'         => ['required', 'string', 'max:1000'],
+            'attachment'          => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:20480'],
         ];
     }
 
