@@ -20,7 +20,7 @@ export default function PrimaryButton({
         <button
             {...props}
             type={type}
-            className={`flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-neon-primary transition-all duration-300 hover:bg-primary-700 hover:shadow-neon-primary-lg active:bg-primary-800 ${
+            className={`inline-flex shrink-0 cursor-pointer flex-row items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-neon-primary transition-all duration-300 hover:bg-primary-700 hover:shadow-neon-primary-lg active:bg-primary-800 ${
                 isButtonDisabled
                     ? 'cursor-not-allowed opacity-60 shadow-none'
                     : ''

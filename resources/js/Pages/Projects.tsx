@@ -1004,9 +1004,12 @@ export default function Projects({
                             </svg>
                         </button>
 
-                        <PrimaryButton onClick={handleOpenCreateProject}>
+                        <PrimaryButton
+                            onClick={handleOpenCreateProject}
+                            className="flex-row items-center gap-2"
+                        >
                             <svg
-                                className="h-4 w-4"
+                                className="h-4 w-4 shrink-0"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -1018,7 +1021,7 @@ export default function Projects({
                                     d="M12 4v16m8-8H4"
                                 />
                             </svg>
-                            Buat Proyek Baru
+                            <span>Buat Proyek Baru</span>
                         </PrimaryButton>
                     </div>
                 </div>
