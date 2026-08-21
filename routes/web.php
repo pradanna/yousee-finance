@@ -101,9 +101,7 @@ Route::middleware('auth')->group(function () {
     });
 
     // Laporan
-    Route::get('/journal', function () {
-        return Inertia::render('JournalReport');
-    })->name('journal');
+    Route::get('/journal', [\App\Http\Controllers\Accounting\JournalReportController::class, 'index'])->name('journal');
 
     Route::get('/ppn', function () {
         return Inertia::render('PpnReport');

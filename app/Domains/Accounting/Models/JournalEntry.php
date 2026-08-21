@@ -91,6 +91,11 @@ class JournalEntry extends Model
         return $this->belongsTo(User::class, 'posted_by');
     }
 
+    public function auditLogs(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domains\Shared\Models\AuditLog::class, 'auditable');
+    }
+
     /**
      * Memeriksa apakah total Debet sama dengan Kredit.
      */

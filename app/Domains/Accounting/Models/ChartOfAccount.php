@@ -76,6 +76,11 @@ class ChartOfAccount extends Model
         return $this->hasMany(JournalEntryItem::class, 'account_id');
     }
 
+    public function auditLogs(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domains\Shared\Models\AuditLog::class, 'auditable');
+    }
+
     /**
      * Strict Leaf Node Rule:
      * is_leaf is DERIVED (children_count === 0).

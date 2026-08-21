@@ -9,6 +9,7 @@ use App\Domains\Accounting\Models\ClosingPeriod;
 use App\Domains\Accounting\Models\JournalEntry;
 use App\Domains\Accounting\Models\JournalEntryItem;
 use App\Domains\Shared\Enums\FiscalMode;
+use App\Domains\Shared\Models\AuditLog;
 use DomainException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -86,7 +87,7 @@ class PostJournalEntry
             throw new DomainException("Journal entry is not balanced. Total Debit ({$totalDebit}) != Total Credit ({$totalCredit}).");
         }
 
-        return DB::transaction(function () use ($headerData, $items, $source, $fiscalMode, $txDate, $year, $month): JournalEntry {
+        return DB::transaction(function () use ($headerData, $items, $source, $fiscalMode, $txDate, $year, $month, $totalDebit, $totalCredit): JournalEntry {
             // Generate Journal Number: JE-YYYYMM-XXXX
             $prefix = sprintf('JE-%04d%02d-', $year, $month);
             $lastEntry = JournalEntry::where('number', 'like', $prefix.'%')
@@ -123,6 +124,27 @@ class PostJournalEntry
                     'memo'             => $line['memo'] ?? null,
                 ]);
             }
+
+            // Catat ke Audit Log Jurnal
+            $event = ($headerData['is_reversal'] ?? false) ? 'reversal' : 'created';
+            AuditLog::create([
+                'auditable_type' => JournalEntry::class,
+                'auditable_id'   => $journal->id,
+                'event'          => $event,
+                'user_id'        => auth()->id(),
+                'description'    => ($headerData['is_reversal'] ?? false)
+                    ? "Membuat Jurnal Pembalik [{$journal->number}] senilai Rp " . number_format($totalDebit, 0, ',', '.') . " ({$journal->description})"
+                    : "Posting Jurnal Umum [{$journal->number}] senilai Rp " . number_format($totalDebit, 0, ',', '.') . " ({$journal->description})",
+                'properties'     => [
+                    'journal_number'   => $journal->number,
+                    'fiscal_mode'      => $fiscalMode->value,
+                    'transaction_date' => $txDate,
+                    'total_debit'      => $totalDebit,
+                    'total_credit'     => $totalCredit,
+                    'line_count'       => count($items),
+                    'is_reversal'      => (bool) ($headerData['is_reversal'] ?? false),
+                ],
+            ]);
 
             return $journal->load(['items.account', 'project']);
         });

@@ -2,6 +2,7 @@ import SelectInput from '@/Components/Form/SelectInput';
 import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown, { ActionMenuItem } from '@/Components/UI/ActionDropdown';
+import AuditLogModal, { AuditLogItem } from '@/Components/UI/AuditLogModal';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import html2pdf from 'html2pdf.js';
 import React, { useMemo, useState } from 'react';
@@ -23,12 +24,14 @@ type AccountCategory =
     | 'expense';
 
 interface AccountCOA {
+    id?: string;
     code: string;
     name: string;
     category: AccountCategory;
     normalBalance: 'debit' | 'credit';
     isSystemDefault?: boolean;
     isActive: boolean;
+    description?: string | null;
 }
 
 interface JournalLine {
@@ -36,11 +39,12 @@ interface JournalLine {
     accountName: string;
     debit: number;
     credit: number;
-    memo?: string;
+    memo?: string | null;
 }
 
 interface JournalEntryData {
     id: string;
+    uuid?: string;
     date: string;
     docNo: string;
     refNo?: string;
@@ -49,6 +53,13 @@ interface JournalEntryData {
     postedBy: string;
     lines: JournalLine[];
     isReversed?: boolean;
+    fiscal_mode?: string;
+}
+
+export interface JournalReportProps {
+    initialJournals?: JournalEntryData[];
+    initialCoaList?: AccountCOA[];
+    auditLogs?: AuditLogItem[];
 }
 
 const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
@@ -219,217 +230,25 @@ const DEFAULT_COA_LIST: AccountCOA[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function JournalReport() {
+export default function JournalReport({
+    initialJournals = [],
+    initialCoaList = [],
+    auditLogs = [],
+}: JournalReportProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
-    const [coaList, setCoaList] = useState<AccountCOA[]>(DEFAULT_COA_LIST);
+    const [coaList, setCoaList] = useState<AccountCOA[]>(() =>
+        initialCoaList && initialCoaList.length > 0
+            ? initialCoaList
+            : DEFAULT_COA_LIST,
+    );
 
-    // Mock initial journal dataset
-    const [journals, setJournals] = useState<JournalEntryData[]>([
-        {
-            id: 'JRN-2026-001',
-            date: '2026-06-25',
-            docNo: isPPN ? 'INV-PPN-001' : 'INV-NP-001',
-            category: 'sales',
-            description: `Jurnal Pengakuan Piutang Invoice #${isPPN ? 'INV-PPN-001' : 'INV-NP-001'} - PT. Gojek Tokopedia`,
-            postedBy: 'Sistem Otomatis (Sales Module)',
-            lines: isPPN
-                ? [
-                      {
-                          accountCode: '1120',
-                          accountName: 'Piutang Dagang Client',
-                          debit: 11100000,
-                          credit: 0,
-                      },
-                      {
-                          accountCode: '4110',
-                          accountName:
-                              'Pendapatan Sewa Media Iklan (Billboard/Videotron)',
-                          debit: 0,
-                          credit: 10000000,
-                      },
-                      {
-                          accountCode: '2130',
-                          accountName: 'Hutang PPN Keluaran (11%)',
-                          debit: 0,
-                          credit: 1100000,
-                      },
-                  ]
-                : [
-                      {
-                          accountCode: '1120',
-                          accountName: 'Piutang Dagang Client',
-                          debit: 10000000,
-                          credit: 0,
-                      },
-                      {
-                          accountCode: '4110',
-                          accountName:
-                              'Pendapatan Sewa Media Iklan (Billboard/Videotron)',
-                          debit: 0,
-                          credit: 10000000,
-                      },
-                  ],
-        },
-        {
-            id: 'JRN-2026-002',
-            date: '2026-06-25',
-            docNo: 'KW-2026-0812',
-            refNo: 'BCA-TRX-99120',
-            category: 'cash_in',
-            description: `Jurnal Penerimaan Kas Pelunasan Invoice #${isPPN ? 'INV-PPN-001' : 'INV-NP-001'} - PT. Gojek Tokopedia`,
-            postedBy: 'Finance / Kasir (Sukma Setiawan)',
-            lines: [
-                {
-                    accountCode: '1112',
-                    accountName: 'Bank BCA Operasional Utama',
-                    debit: isPPN ? 11100000 : 10000000,
-                    credit: 0,
-                },
-                {
-                    accountCode: '1120',
-                    accountName: 'Piutang Dagang Client',
-                    debit: 0,
-                    credit: isPPN ? 11100000 : 10000000,
-                },
-            ],
-        },
-        {
-            id: 'JRN-2026-003',
-            date: '2026-06-24',
-            docNo: isPPN ? 'PO-PPN-001' : 'PO-NP-001',
-            category: 'purchase',
-            description: `Jurnal Kewajiban PO Vendor #${isPPN ? 'PO-PPN-001' : 'PO-NP-001'} - PT. Megah Billboard Jaya`,
-            postedBy: 'Sistem Otomatis (Procurement Module)',
-            lines: isPPN
-                ? [
-                      {
-                          accountCode: '5110',
-                          accountName: 'Beban HPP Sewa Billboard Vendor',
-                          debit: 3000000,
-                          credit: 0,
-                      },
-                      {
-                          accountCode: '1140',
-                          accountName: 'PPN Masukan (11%)',
-                          debit: 330000,
-                          credit: 0,
-                      },
-                      {
-                          accountCode: '2110',
-                          accountName: 'Hutang Dagang Vendor Billboard',
-                          debit: 0,
-                          credit: 3330000,
-                      },
-                  ]
-                : [
-                      {
-                          accountCode: '5110',
-                          accountName: 'Beban HPP Sewa Billboard Vendor',
-                          debit: 3000000,
-                          credit: 0,
-                      },
-                      {
-                          accountCode: '2110',
-                          accountName: 'Hutang Dagang Vendor Billboard',
-                          debit: 0,
-                          credit: 3000000,
-                      },
-                  ],
-        },
-        {
-            id: 'JRN-2026-004',
-            date: '2026-06-24',
-            docNo: 'OUT-PAY-0041',
-            refNo: 'MANDIRI-OUT-8812',
-            category: 'cash_out',
-            description: `Jurnal Pengeluaran Kas Pembayaran PO #${isPPN ? 'PO-PPN-001' : 'PO-NP-001'} - PT. Megah Billboard Jaya`,
-            postedBy: 'Finance / Kasir (Sukma Setiawan)',
-            lines: [
-                {
-                    accountCode: '2110',
-                    accountName: 'Hutang Dagang Vendor Billboard',
-                    debit: isPPN ? 3330000 : 3000000,
-                    credit: 0,
-                },
-                {
-                    accountCode: '1111',
-                    accountName: 'Bank Mandiri Solo Baru (138-00-2010633-7)',
-                    debit: 0,
-                    credit: isPPN ? 3330000 : 3000000,
-                },
-            ],
-        },
-        {
-            id: 'JRN-2026-005',
-            date: '2026-06-22',
-            docNo: isPPN ? 'INV-PPN-002' : 'INV-NP-002',
-            category: 'sales',
-            description: `Jurnal Piutang DP Invoice #${isPPN ? 'INV-PPN-002' : 'INV-NP-002'} - Traveloka Corp`,
-            postedBy: 'Sistem Otomatis (Sales Module)',
-            lines: isPPN
-                ? [
-                      {
-                          accountCode: '1120',
-                          accountName: 'Piutang Dagang Client',
-                          debit: 5550000,
-                          credit: 0,
-                      },
-                      {
-                          accountCode: '4110',
-                          accountName:
-                              'Pendapatan Sewa Media Iklan (Billboard/Videotron)',
-                          debit: 0,
-                          credit: 5000000,
-                      },
-                      {
-                          accountCode: '2130',
-                          accountName: 'Hutang PPN Keluaran (11%)',
-                          debit: 0,
-                          credit: 550000,
-                      },
-                  ]
-                : [
-                      {
-                          accountCode: '1120',
-                          accountName: 'Piutang Dagang Client',
-                          debit: 5000000,
-                          credit: 0,
-                      },
-                      {
-                          accountCode: '4110',
-                          accountName:
-                              'Pendapatan Sewa Media Iklan (Billboard/Videotron)',
-                          debit: 0,
-                          credit: 5000000,
-                      },
-                  ],
-        },
-        {
-            id: 'JRN-2026-006',
-            date: '2026-06-20',
-            docNo: 'ADJ-2026-001',
-            category: 'adjustment',
-            description:
-                'Jurnal Penyesuaian Beban Listrik Videotron Simpang Lima Bulan Juni',
-            postedBy: 'Accounting (Indung Sukma)',
-            lines: [
-                {
-                    accountCode: '5210',
-                    accountName: 'Beban Operasional Listrik & Utilitas',
-                    debit: 1500000,
-                    credit: 0,
-                },
-                {
-                    accountCode: '1110',
-                    accountName: 'Kas Tunai / Operasional',
-                    debit: 0,
-                    credit: 1500000,
-                },
-            ],
-        },
-    ]);
+    // Initial journal dataset from DB
+    const [journals, setJournals] = useState<JournalEntryData[]>(
+        () => initialJournals || [],
+    );
+    const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState(false);
 
     // Filter states
     const [searchQuery, setSearchQuery] = useState('');
@@ -1267,6 +1086,27 @@ export default function JournalReport() {
                     </div>
 
                     <div className="flex w-full items-center gap-3 md:w-auto">
+                        <button
+                            type="button"
+                            onClick={() => setIsAuditLogModalOpen(true)}
+                            title="Riwayat Jejak Audit & Log Aktivitas Jurnal Akuntansi"
+                            className="shadow-xs inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-95"
+                        >
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                            </svg>
+                        </button>
+
                         <button
                             onClick={() => setExportModalOpen(true)}
                             className="shadow-2xs flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50"
@@ -2346,6 +2186,30 @@ export default function JournalReport() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Jejak Audit & Riwayat Jurnal Akuntansi */}
+            <AuditLogModal
+                show={isAuditLogModalOpen}
+                onClose={() => setIsAuditLogModalOpen(false)}
+                title="Jejak Audit & Log Aktivitas Jurnal Akuntansi"
+                subtitle="Riwayat audit posting otomatis jurnal piutang, hutang, pengeluaran kas, pembalikan (reversal), dan penyesuaian akun COA"
+                logs={auditLogs}
+                eventOptions={[
+                    { value: 'all', label: 'Semua Jenis Aktivitas' },
+                    {
+                        value: 'created',
+                        label: '🟢 Posting Jurnal Baru (Created)',
+                    },
+                    {
+                        value: 'reversal',
+                        label: '🔄 Jurnal Pembalik (Reversed)',
+                    },
+                    {
+                        value: 'updated',
+                        label: '🟡 Perubahan Akun COA (Updated)',
+                    },
+                ]}
+            />
         </AppLayout>
     );
 }
