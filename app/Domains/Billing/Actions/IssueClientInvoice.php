@@ -99,6 +99,38 @@ class IssueClientInvoice
                 );
             }
 
+            // Catat ke Audit Log Invoice
+            $clientName = $project->client?->name ?? 'Client';
+            \App\Domains\Shared\Models\AuditLog::create([
+                'auditable_type' => Invoice::class,
+                'auditable_id'   => $invoice->id,
+                'event'          => 'created',
+                'user_id'        => auth()->id(),
+                'description'    => "Menerbitkan Invoice Tagihan [{$invoice->invoice_number}] kepada \"{$clientName}\" sebesar Rp " . number_format((float) $invoice->total, 0, ',', '.') . " untuk proyek [{$project->code}]",
+                'properties'     => [
+                    'invoice_number' => $invoice->invoice_number,
+                    'client_name'    => $clientName,
+                    'project_code'   => $project->code,
+                    'subtotal'       => (float) $invoice->subtotal,
+                    'ppn'            => (float) $invoice->ppn,
+                    'total'          => (float) $invoice->total,
+                ],
+            ]);
+
+            // Catat ke Audit Log Proyek
+            \App\Domains\Shared\Models\AuditLog::create([
+                'auditable_type' => Project::class,
+                'auditable_id'   => $project->id,
+                'event'          => 'invoice_issued',
+                'user_id'        => auth()->id(),
+                'description'    => "Penerbitan Invoice Client [{$invoice->invoice_number}] senilai Rp " . number_format((float) $invoice->total, 0, ',', '.'),
+                'properties'     => [
+                    'invoice_number' => $invoice->invoice_number,
+                    'client_name'    => $clientName,
+                    'total'          => (float) $invoice->total,
+                ],
+            ]);
+
             Log::info('Client invoice issued', [
                 'invoice_id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,

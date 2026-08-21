@@ -75,11 +75,27 @@ class SalesTransactionController extends Controller
         $clients = Client::query()->orderBy('name')->get(['id', 'name']);
         $salesList = Sales::query()->orderBy('name')->get(['id', 'name']);
 
+        // Riwayat Audit Log seluruh Invoice & Penerimaan Piutang Penjualan
+        $auditLogs = \App\Domains\Shared\Models\AuditLog::with('user:id,name')
+            ->where('auditable_type', \App\Domains\Billing\Models\Invoice::class)
+            ->latest()
+            ->take(100)
+            ->get()
+            ->map(fn ($log) => [
+                'id'          => $log->id,
+                'event'       => $log->event,
+                'description' => $log->description,
+                'properties'  => $log->properties,
+                'user_name'   => $log->user?->name ?? 'System',
+                'created_at'  => $log->created_at?->toIso8601String(),
+            ]);
+
         return Inertia::render('SalesTransactions', [
             'projects' => ProjectResource::collection($projects)->resolve(),
             'clients' => $clients,
-            'sales' => $salesList,
+            'salesList' => $salesList,
             'cashBankAccounts' => $cashBankAccounts,
+            'auditLogs' => $auditLogs,
         ]);
     }
 }

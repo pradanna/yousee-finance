@@ -111,6 +111,42 @@ class SettleClientPaymentTerm
                         source: $settlement,
                     );
                 }
+
+                // Catat ke Audit Log Invoice
+                $clientName = $invoice->client?->name ?? 'Client';
+                $invNumber = $invoice->invoice_number ?? 'Invoice';
+                \App\Domains\Shared\Models\AuditLog::create([
+                    'auditable_type' => Invoice::class,
+                    'auditable_id'   => $invoice->id,
+                    'event'          => 'payment_settled',
+                    'user_id'        => auth()->id(),
+                    'description'    => "Penerimaan pembayaran {$term->label} sebesar Rp " . number_format((float) $data['amount'], 0, ',', '.') . " dari \"{$clientName}\" via {$data['payment_method']}",
+                    'properties'     => [
+                        'invoice_number' => $invNumber,
+                        'client_name'    => $clientName,
+                        'term_label'     => $term->label,
+                        'amount'         => (float) $data['amount'],
+                        'paid_at'        => $data['paid_at'],
+                        'payment_method' => $data['payment_method'],
+                        'payment_ref'    => $data['payment_ref'] ?? null,
+                    ],
+                ]);
+
+                // Catat ke Audit Log Proyek
+                if ($invoice->project_id) {
+                    \App\Domains\Shared\Models\AuditLog::create([
+                        'auditable_type' => \App\Domains\Project\Models\Project::class,
+                        'auditable_id'   => $invoice->project_id,
+                        'event'          => 'client_payment_settled',
+                        'user_id'        => auth()->id(),
+                        'description'    => "Penerimaan pembayaran [{$invNumber}] ({$clientName}) - {$term->label} sebesar Rp " . number_format((float) $data['amount'], 0, ',', '.'),
+                        'properties'     => [
+                            'invoice_number' => $invNumber,
+                            'amount'         => (float) $data['amount'],
+                            'paid_at'        => $data['paid_at'],
+                        ],
+                    ]);
+                }
             }
 
             return $settlement;

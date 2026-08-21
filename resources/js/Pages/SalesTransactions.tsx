@@ -5,6 +5,7 @@ import { ConfigurePaymentSchemeModal } from '@/Components/Modal/ConfigurePayment
 import type { RecordInvoicePaymentModalSubmitData } from '@/Components/Modal/RecordInvoicePaymentModal';
 import { RecordInvoicePaymentModal } from '@/Components/Modal/RecordInvoicePaymentModal';
 import Pagination from '@/Components/Table/Pagination';
+import AuditLogModal from '@/Components/UI/AuditLogModal';
 import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import type {
@@ -150,13 +151,15 @@ interface SalesTransactionProps {
         invoice_number?: string;
     }>;
     clients: Array<{ id: string; name: string }>;
-    sales: Array<{ id: string; name: string }>;
+    sales?: Array<{ id: string; name: string }>;
+    salesList?: Array<{ id: string; name: string }>;
     cashBankAccounts?: Array<{
         id: string | number;
         code: string;
         name: string;
         display_name: string;
     }>;
+    auditLogs?: import('@/Components/UI/AuditLogModal').AuditLogItem[];
 }
 
 const PPN_RATE = 0.11;
@@ -260,10 +263,13 @@ export default function SalesTransactions({
     projects: rawProjects = [],
     clients = [],
     sales = [],
+    salesList = [],
     cashBankAccounts = [],
+    auditLogs = [],
 }: SalesTransactionProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
+    const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState(false);
 
     // Normalize raw projects from backend to match frontend Project shape
     const formattedProjects: Project[] = rawProjects.map((p) => {
@@ -1276,6 +1282,30 @@ export default function SalesTransactions({
                                     Iklan ·{' '}
                                     {isPPN ? 'Mode PPN Aktif' : 'Mode Non-PPN'}
                                 </p>
+                            </div>
+
+                            {/* Header Actions */}
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAuditLogModalOpen(true)}
+                                    title="Riwayat Jejak Audit & Log Penjualan Invoice Client"
+                                    className="shadow-xs inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-95"
+                                >
+                                    <svg
+                                        className="h-4 w-4"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                    </svg>
+                                </button>
                             </div>
                         </div>
 
@@ -3272,6 +3302,26 @@ export default function SalesTransactions({
                     setSelectedPaymentTerm(null);
                 }}
                 onSubmit={handleSaveInvoicePayment}
+            />
+
+            {/* Modal Jejak Audit & Log Penjualan Invoice Client */}
+            <AuditLogModal
+                show={isAuditLogModalOpen}
+                onClose={() => setIsAuditLogModalOpen(false)}
+                title="Jejak Audit & Riwayat Penjualan (Invoice) Client"
+                subtitle="Audit trail penerbitan invoice tagihan, penerimaan pembayaran piutang client, dan penyesuaian skema termin"
+                logs={auditLogs}
+                eventOptions={[
+                    { value: 'all', label: 'Semua Jenis Aktivitas' },
+                    {
+                        value: 'created',
+                        label: '🟢 Invoice Diterbitkan (Issued)',
+                    },
+                    {
+                        value: 'payment_settled',
+                        label: '🔵 Penerimaan Piutang (Paid/Settled)',
+                    },
+                ]}
             />
 
             {/* Floating Toast Notification */}
