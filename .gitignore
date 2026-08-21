@@ -29,3 +29,7 @@ Thumbs.db
 .claude/.sync-backup/
 
 composer.phar
+
+# Public uploaded files
+/public/uploads/*
+!/public/uploads/.gitkeep
