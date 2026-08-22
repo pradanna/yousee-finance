@@ -1,3 +1,4 @@
+import MonthPicker from '@/Components/Form/MonthPicker';
 import SelectInput from '@/Components/Form/SelectInput';
 import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
@@ -251,13 +252,17 @@ export default function JournalReport({
     const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState(false);
 
     // Filter states
+    const now = new Date();
+    const currentYearStr = now.getFullYear().toString();
+    const currentMonthStr = (now.getMonth() + 1).toString().padStart(2, '0');
+
     const [searchQuery, setSearchQuery] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [accountFilter, setAccountFilter] = useState<string>('all');
     const [startDateFilter, setStartDateFilter] = useState('');
     const [endDateFilter, setEndDateFilter] = useState('');
-    const [selectedMonth, setSelectedMonth] = useState<string>('06');
-    const [selectedYear, setSelectedYear] = useState<string>('2026');
+    const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
+    const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
     const [currentPage, setCurrentPage] = useState(1);
 
     // COA Filter states
@@ -1144,7 +1149,7 @@ export default function JournalReport({
                                     d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                                 />
                             </svg>
-                            <span>+ Jurnal Penyesuaian</span>
+                            <span>Jurnal Penyesuaian</span>
                         </button>
                     </div>
                 </div>
@@ -1336,51 +1341,26 @@ export default function JournalReport({
                             />
                         </div>
 
-                        {/* Filter Periode Bulan */}
-                        <div className="space-y-1">
+                        {/* Filter Periode Bulan & Tahun (MonthPicker) */}
+                        <div className="space-y-1 sm:col-span-2 lg:col-span-2">
                             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Periode Bulan
+                                Periode Bulan &amp; Tahun
                             </label>
-                            <SelectInput
-                                value={selectedMonth}
-                                onChange={(e) => {
-                                    setSelectedMonth(e.target.value);
+                            <MonthPicker
+                                value={
+                                    selectedYear !== 'all' &&
+                                    selectedMonth !== 'all'
+                                        ? `${selectedYear}-${selectedMonth}`
+                                        : 'all'
+                                }
+                                onChange={(_val, yr, mo) => {
+                                    setSelectedYear(yr);
+                                    setSelectedMonth(mo);
                                     setCurrentPage(1);
                                 }}
-                                options={[
-                                    { value: 'all', label: 'Semua Bulan' },
-                                    { value: '01', label: 'Januari' },
-                                    { value: '02', label: 'Februari' },
-                                    { value: '03', label: 'Maret' },
-                                    { value: '04', label: 'April' },
-                                    { value: '05', label: 'Mei' },
-                                    { value: '06', label: 'Juni' },
-                                    { value: '07', label: 'Juli' },
-                                    { value: '08', label: 'Agustus' },
-                                    { value: '09', label: 'September' },
-                                    { value: '10', label: 'Oktober' },
-                                    { value: '11', label: 'November' },
-                                    { value: '12', label: 'Desember' },
-                                ]}
-                            />
-                        </div>
-
-                        {/* Filter Periode Tahun */}
-                        <div className="space-y-1">
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Tahun
-                            </label>
-                            <SelectInput
-                                value={selectedYear}
-                                onChange={(e) => {
-                                    setSelectedYear(e.target.value);
-                                    setCurrentPage(1);
-                                }}
-                                options={[
-                                    { value: '2026', label: '2026' },
-                                    { value: '2025', label: '2025' },
-                                    { value: '2024', label: '2024' },
-                                ]}
+                                allowAll={true}
+                                allLabel="Semua Periode"
+                                className="w-full [&>button]:w-full [&>button]:justify-between [&>button]:py-2.5"
                             />
                         </div>
                     </div>

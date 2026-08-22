@@ -1,7 +1,9 @@
+import MonthPicker from '@/Components/Form/MonthPicker';
 import SelectInput from '@/Components/Form/SelectInput';
 import EmptyState from '@/Components/Table/EmptyState';
 import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown, { ActionMenuItem } from '@/Components/UI/ActionDropdown';
+import AuditLogModal, { AuditLogItem } from '@/Components/UI/AuditLogModal';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import React, { useMemo, useState } from 'react';
 
@@ -14,6 +16,8 @@ interface PpnKeluaranItem {
     nsfp: string; // Nomor Seri Faktur Pajak
     client: string;
     npwp: string;
+    projectName?: string;
+    projectCode?: string;
     date: string;
     dpp: number;
     ppn: number;
@@ -27,6 +31,8 @@ interface PpnMasukanItem {
     nsfp: string;
     vendor: string;
     npwp: string;
+    projectName?: string;
+    projectCode?: string;
     date: string;
     dpp: number;
     ppn: number;
@@ -44,6 +50,12 @@ interface TaxSettlementRecord {
     ntpn?: string;
     paidDate?: string;
     bankName?: string;
+}
+
+export interface PpnReportProps {
+    initialPpnKeluaran?: PpnKeluaranItem[];
+    initialPpnMasukan?: PpnMasukanItem[];
+    auditLogs?: AuditLogItem[];
 }
 
 const fmt = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
@@ -74,7 +86,11 @@ const ITEMS_PER_PAGE = 10;
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function PpnReport() {
+export default function PpnReport({
+    initialPpnKeluaran = [],
+    initialPpnMasukan = [],
+    auditLogs = [],
+}: PpnReportProps) {
     const fiscalMode = useFiscalMode();
     const isPPN = fiscalMode === 'ppn';
 
@@ -82,117 +98,38 @@ export default function PpnReport() {
         'keluaran',
     );
 
-    // Data PPN Keluaran (Penjualan Client PKP)
-    const [ppnKeluaran, setPpnKeluaran] = useState<PpnKeluaranItem[]>([
-        {
-            id: 'PK-001',
-            docNo: 'INV-PPN-001',
-            nsfp: '010.000-26.88219001',
-            client: 'PT. Gojek Tokopedia',
-            npwp: '01.312.456.7-011.000',
-            date: '2026-06-25',
-            dpp: 10000000,
-            ppn: 1100000,
-            total: 11100000,
-            efakturStatus: 'approved',
-        },
-        {
-            id: 'PK-002',
-            docNo: 'INV-PPN-002',
-            nsfp: '010.000-26.88219002',
-            client: 'Traveloka Corp',
-            npwp: '02.441.890.1-015.000',
-            date: '2026-06-22',
-            dpp: 5000000,
-            ppn: 550000,
-            total: 5550000,
-            efakturStatus: 'approved',
-        },
-        {
-            id: 'PK-003',
-            docNo: 'INV-PPN-003',
-            nsfp: '010.000-26.88219003',
-            client: 'Shopee Indonesia',
-            npwp: '03.889.123.4-021.000',
-            date: '2026-06-18',
-            dpp: 8000000,
-            ppn: 880000,
-            total: 8880000,
-            efakturStatus: 'ready',
-        },
-        {
-            id: 'PK-004',
-            docNo: 'INV-PPN-004',
-            nsfp: '010.000-26.88219004',
-            client: 'CV. Soto Bangkong Lestari',
-            npwp: '07.123.990.2-521.000',
-            date: '2026-06-10',
-            dpp: 45000000,
-            ppn: 4950000,
-            total: 49950000,
-            efakturStatus: 'draft',
-        },
-    ]);
+    // Data PPN Keluaran (Penjualan Client PKP) dari Database
+    const [ppnKeluaran, setPpnKeluaran] = useState<PpnKeluaranItem[]>(
+        () => initialPpnKeluaran || [],
+    );
 
-    // Data PPN Masukan (Pembelian Vendor PKP)
-    const [ppnMasukan, setPpnMasukan] = useState<PpnMasukanItem[]>([
-        {
-            id: 'PM-001',
-            docNo: 'PO-PPN-001',
-            nsfp: '010.000-26.11029801',
-            vendor: 'PT. Megah Billboard Jaya',
-            npwp: '01.882.331.0-522.000',
-            date: '2026-06-24',
-            dpp: 3000000,
-            ppn: 330000,
-            total: 3330000,
-            creditableStatus: 'creditable',
-            efakturStatus: 'approved',
-        },
-        {
-            id: 'PM-002',
-            docNo: 'PO-PPN-002',
-            nsfp: '010.000-26.11029802',
-            vendor: 'PT. Promosi Outdoor Kreasindo',
-            npwp: '02.991.442.8-511.000',
-            date: '2026-06-20',
-            dpp: 8000000,
-            ppn: 880000,
-            total: 8880000,
-            creditableStatus: 'creditable',
-            efakturStatus: 'approved',
-        },
-        {
-            id: 'PM-003',
-            docNo: 'PO-PPN-003',
-            nsfp: '010.000-26.11029803',
-            vendor: 'CV. Media Ad Perkasa',
-            npwp: '03.771.229.4-523.000',
-            date: '2026-06-15',
-            dpp: 1200000,
-            ppn: 132000,
-            total: 1332000,
-            creditableStatus: 'non_creditable',
-            efakturStatus: 'ready',
-        },
-    ]);
+    // Data PPN Masukan (Pembelian Vendor PKP) dari Database
+    const [ppnMasukan, setPpnMasukan] = useState<PpnMasukanItem[]>(
+        () => initialPpnMasukan || [],
+    );
+
+    // Filter states
+    const now = new Date();
+    const currentYearStr = now.getFullYear().toString();
+    const currentMonthStr = (now.getMonth() + 1).toString().padStart(2, '0');
 
     // Data Setoran Pajak Masa PPN
     const [taxSettlement, setTaxSettlement] = useState<TaxSettlementRecord>({
-        taxPeriod: 'Masa Juni 2026',
-        ppnKeluaranTotal: 7480000,
-        ppnMasukanTotal: 1342000,
-        netAmount: 6138000,
+        taxPeriod: `Masa ${currentMonthStr}-${currentYearStr}`,
+        ppnKeluaranTotal: 0,
+        ppnMasukanTotal: 0,
+        netAmount: 0,
         status: 'unpaid',
-        ntpn: '2606271109281200',
-        paidDate: '2026-07-10',
+        ntpn: '',
+        paidDate: '',
         bankName: 'Bank Mandiri Solo Baru',
     });
 
-    // Filter states
+    const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [periodFilter, setPeriodFilter] = useState('06-2026');
+    const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
+    const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
     const [keluaranPage, setKeluaranPage] = useState(1);
     const [masukanPage, setMasukanPage] = useState(1);
 
@@ -213,14 +150,17 @@ export default function PpnReport() {
     );
     const [successAlert, setSuccessAlert] = useState<string | null>(null);
 
+    const periodFilterLabel =
+        selectedYear !== 'all' && selectedMonth !== 'all'
+            ? `Masa ${selectedMonth}-${selectedYear}`
+            : 'Semua Periode';
+
     // Export Handlers
     const handleExportExcel = () => {
-        const periodLabel =
-            periodFilter === 'all' ? 'Semua Periode' : `Masa ${periodFilter}`;
         let csvContent = `data:text/csv;charset=utf-8,\uFEFF`;
 
         csvContent += `REKAPITULASI LAPORAN PPN & PEMBAYARAN KAS NEGARA (DJP)\n`;
-        csvContent += `PERIODE MASA PAJAK: ${periodLabel}\n`;
+        csvContent += `PERIODE MASA PAJAK: ${periodFilterLabel}\n`;
         csvContent += `TANGGAL DICETAK: ${new Date().toLocaleDateString('id-ID')}\n\n`;
 
         csvContent += `1. RINGKASAN MASA PAJAK & PENYETORAN NTPN\n`;
@@ -252,27 +192,36 @@ export default function PpnReport() {
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement('a');
         link.setAttribute('href', encodedUri);
-        link.setAttribute('download', `Laporan_PPN_DJP_${periodFilter}.csv`);
+        link.setAttribute('download', `Laporan_PPN_DJP_${selectedMonth}-${selectedYear}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
     const handleExportCsvEfaktur = () => {
+        // Format baku skema impor e-Faktur DJP
+        // Menggunakan formula text ="..." agar saat dibuka langsung di Microsoft Excel, nomor faktur 16 digit dan NPWP 15 digit tidak diubah paksa oleh Excel menjadi eksponensial (1E+14 / 1.65E+13)
         let content = `FK,KD_JENIS_TRANSAKSI,FG_PENGGANTI,NOMOR_FAKTUR,MASA_PAJAK,TAHUN_PAJAK,TANGGAL_FAKTUR,NPWP,NAMA,ALAMAT_LENGKAP,JUMLAH_DPP,JUMLAH_PPN,JUMLAH_PPNBM,ID_KETERANGAN_TAMBAHAN,FG_UANG_MUKA,UANG_MUKA_DPP,UANG_MUKA_PPN,UANG_MUKA_PPNBM,REFERENSI\n`;
         filteredKeluaran.forEach((k) => {
-            const [yyyy, mm] = k.date.split('-');
+            const [yyyy, mm, dd] = k.date.split('-');
             const cleanNsfp = k.nsfp.replace(/[^0-9]/g, '');
-            content += `FK,01,0,${cleanNsfp},${parseInt(mm, 10)},${yyyy},${k.date},"${k.npwp.replace(/[^0-9]/g, '')}","${k.client}","Indonesia",${k.dpp},${k.ppn},0,,,0,0,0,"${k.docNo}"\n`;
+            const cleanNpwp = k.npwp ? k.npwp.replace(/[^0-9]/g, '') : '000000000000000';
+            const formattedDate = `${dd}/${mm}/${yyyy}`; // Format DD/MM/YYYY
+            const safeClient = (k.client || 'Client Umum').replace(/"/g, '""');
+            const safeDocNo = (k.docNo || '').replace(/"/g, '""');
+
+            // Force text formatting di Excel dengan '="010000..."'
+            content += `FK,01,0,="${cleanNsfp}",${parseInt(mm, 10)},${yyyy},="${formattedDate}",="${cleanNpwp}","${safeClient}","Indonesia",${Math.round(k.dpp)},${Math.round(k.ppn)},0,,,0,0,0,"${safeDocNo}"\n`;
         });
 
-        const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+        // Simpan file CSV dengan UTF-8 BOM
+        const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
         link.setAttribute(
             'download',
-            `eFaktur_FK_Penjualan_${periodFilter}.csv`,
+            `eFaktur_FK_Penjualan_${selectedMonth}-${selectedYear}.csv`,
         );
         document.body.appendChild(link);
         link.click();
@@ -302,13 +251,8 @@ export default function PpnReport() {
         };
 
         appendInput('_token', csrfToken);
-        appendInput('period', periodFilter);
-        appendInput(
-            'periodLabel',
-            periodFilter === 'all'
-                ? 'Semua Periode Masa Pajak'
-                : `Masa ${periodFilter}`,
-        );
+        appendInput('period', `${selectedMonth}-${selectedYear}`);
+        appendInput('periodLabel', periodFilterLabel);
 
         appendInput('taxSettlement[taxPeriod]', taxSettlement.taxPeriod);
         appendInput('taxSettlement[ppnKeluaranTotal]', totalKeluaranPpn);
@@ -362,7 +306,9 @@ export default function PpnReport() {
                 k.docNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 k.nsfp.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 k.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                k.npwp.toLowerCase().includes(searchQuery.toLowerCase());
+                k.npwp.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (k.projectName && k.projectName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (k.projectCode && k.projectCode.toLowerCase().includes(searchQuery.toLowerCase()));
 
             let matchesStatus = true;
             if (statusFilter === 'approved')
@@ -372,16 +318,19 @@ export default function PpnReport() {
             else if (statusFilter === 'draft')
                 matchesStatus = k.efakturStatus === 'draft';
 
-            const matchesPeriod =
-                periodFilter === 'all' ||
-                (() => {
-                    const [mm, yyyy] = periodFilter.split('-');
-                    return k.date.startsWith(`${yyyy}-${mm}`);
-                })();
+            let matchesPeriod = true;
+            if (selectedMonth !== 'all') {
+                matchesPeriod =
+                    matchesPeriod &&
+                    k.date.startsWith(`${selectedYear}-${selectedMonth}`);
+            } else if (selectedYear !== 'all') {
+                matchesPeriod =
+                    matchesPeriod && k.date.startsWith(`${selectedYear}-`);
+            }
 
             return matchesSearch && matchesStatus && matchesPeriod;
         });
-    }, [ppnKeluaran, searchQuery, statusFilter, periodFilter]);
+    }, [ppnKeluaran, searchQuery, statusFilter, selectedMonth, selectedYear]);
 
     const filteredMasukan = useMemo(() => {
         return ppnMasukan.filter((m) => {
@@ -389,7 +338,9 @@ export default function PpnReport() {
                 m.docNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 m.nsfp.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 m.vendor.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                m.npwp.toLowerCase().includes(searchQuery.toLowerCase());
+                m.npwp.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (m.projectName && m.projectName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (m.projectCode && m.projectCode.toLowerCase().includes(searchQuery.toLowerCase()));
 
             let matchesStatus = true;
             if (statusFilter === 'approved')
@@ -401,16 +352,19 @@ export default function PpnReport() {
             else if (statusFilter === 'creditable')
                 matchesStatus = m.creditableStatus === 'creditable';
 
-            const matchesPeriod =
-                periodFilter === 'all' ||
-                (() => {
-                    const [mm, yyyy] = periodFilter.split('-');
-                    return m.date.startsWith(`${yyyy}-${mm}`);
-                })();
+            let matchesPeriod = true;
+            if (selectedMonth !== 'all') {
+                matchesPeriod =
+                    matchesPeriod &&
+                    m.date.startsWith(`${selectedYear}-${selectedMonth}`);
+            } else if (selectedYear !== 'all') {
+                matchesPeriod =
+                    matchesPeriod && m.date.startsWith(`${selectedYear}-`);
+            }
 
             return matchesSearch && matchesStatus && matchesPeriod;
         });
-    }, [ppnMasukan, searchQuery, statusFilter, periodFilter]);
+    }, [ppnMasukan, searchQuery, statusFilter, selectedMonth, selectedYear]);
 
     // Dynamic Calculations based on Filtered datasets
     const totalKeluaranDpp = filteredKeluaran.reduce((s, k) => s + k.dpp, 0);
@@ -618,9 +572,30 @@ export default function PpnReport() {
 
                         <div className="flex flex-wrap items-center gap-2 md:w-auto">
                             <button
+                                type="button"
+                                onClick={() => setIsAuditLogModalOpen(true)}
+                                title="Riwayat Jejak Audit & Log Aktivitas PPN / e-Faktur"
+                                className="shadow-xs inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-95"
+                            >
+                                <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                </svg>
+                            </button>
+
+                            <button
                                 onClick={handleExportExcel}
                                 className="shadow-2xs flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100"
-                                title="Unduh Rekap Laporan PPN per Invoice Format Excel"
+                                title="Unduh Rekapitulasi Laporan PPN Internal (Format Excel / CSV untuk Arsip Keuangan & Meeting Manajemen)"
                             >
                                 <svg
                                     className="h-4 w-4 text-emerald-600"
@@ -641,7 +616,7 @@ export default function PpnReport() {
                             <button
                                 onClick={handleExportPdf}
                                 className="shadow-2xs flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 transition-all hover:bg-rose-100"
-                                title="Cetak / Simpan PDF Laporan PPN Masa Pajak"
+                                title="Cetak / Unduh Dokumen PDF Resmi SPT Masa PPN 1111 Lengkap dengan Rincian Pajak"
                             >
                                 <svg
                                     className="h-4 w-4 text-rose-600"
@@ -661,8 +636,8 @@ export default function PpnReport() {
 
                             <button
                                 onClick={handleExportCsvEfaktur}
-                                className="shadow-2xs flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50"
-                                title="Ekspor CSV Schema Impor e-Faktur Penjualan DJP Online"
+                                className="shadow-2xs flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50/70 px-3.5 py-2 text-xs font-bold text-blue-800 transition-all hover:bg-blue-100"
+                                title="Unduh Skema Impor CSV e-Faktur Resmi untuk Diunggah (Upload Massal) Langsung ke Aplikasi e-Faktur DJP Online Tanpa Ketik Manual"
                             >
                                 <svg
                                     className="h-4 w-4 text-blue-600"
@@ -988,41 +963,22 @@ export default function PpnReport() {
                                     <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                         Masa Pajak
                                     </label>
-                                    <SelectInput
-                                        value={periodFilter}
-                                        onChange={(e) =>
-                                            setPeriodFilter(e.target.value)
+                                    <MonthPicker
+                                        value={
+                                            selectedYear !== 'all' &&
+                                            selectedMonth !== 'all'
+                                                ? `${selectedYear}-${selectedMonth}`
+                                                : 'all'
                                         }
-                                        options={[
-                                            {
-                                                value: 'all',
-                                                label: 'Semua Masa Pajak',
-                                            },
-                                            {
-                                                value: '06-2026',
-                                                label: 'Masa Juni 2026',
-                                            },
-                                            {
-                                                value: '05-2026',
-                                                label: 'Masa Mei 2026',
-                                            },
-                                            {
-                                                value: '04-2026',
-                                                label: 'Masa April 2026',
-                                            },
-                                            {
-                                                value: '03-2026',
-                                                label: 'Masa Maret 2026',
-                                            },
-                                            {
-                                                value: '02-2026',
-                                                label: 'Masa Februari 2026',
-                                            },
-                                            {
-                                                value: '01-2026',
-                                                label: 'Masa Januari 2026',
-                                            },
-                                        ]}
+                                        onChange={(_val, yr, mo) => {
+                                            setSelectedYear(yr);
+                                            setSelectedMonth(mo);
+                                            setKeluaranPage(1);
+                                            setMasukanPage(1);
+                                        }}
+                                        allowAll={true}
+                                        allLabel="Semua Masa Pajak"
+                                        className="w-full [&>button]:w-full [&>button]:justify-between [&>button]:py-2.5"
                                     />
                                 </div>
                             </div>
@@ -1078,6 +1034,11 @@ export default function PpnReport() {
                                                     <div className="text-[10.5px] font-medium text-slate-400">
                                                         {formatDateIndo(k.date)}
                                                     </div>
+                                                    {k.projectName && k.projectName !== '-' && (
+                                                        <div className="mt-0.5 inline-block rounded border border-blue-100 bg-blue-50/60 px-1.5 py-0.5 text-[9.5px] font-bold text-blue-700">
+                                                            📁 {k.projectName}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-800">
@@ -1193,6 +1154,11 @@ export default function PpnReport() {
                                                     <div className="text-[10.5px] font-medium text-slate-400">
                                                         {formatDateIndo(m.date)}
                                                     </div>
+                                                    {m.projectName && m.projectName !== '-' && (
+                                                        <div className="mt-0.5 inline-block rounded border border-amber-100 bg-amber-50/60 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-800">
+                                                            📁 {m.projectName}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-800">
@@ -1588,6 +1554,29 @@ export default function PpnReport() {
                     </div>
                 </div>
             )}
+            {/* Modal Jejak Audit & Log Aktivitas PPN */}
+            <AuditLogModal
+                show={isAuditLogModalOpen}
+                onClose={() => setIsAuditLogModalOpen(false)}
+                title="Jejak Audit & Log Aktivitas PPN / e-Faktur"
+                subtitle="Riwayat audit pemungutan PPN penjualan (invoice), PPN masukan (PO), pengisian nomor seri faktur pajak (NSFP), dan pencatatan setor kas negara (NTPN)"
+                logs={auditLogs}
+                eventOptions={[
+                    { value: 'all', label: 'Semua Jenis Aktivitas' },
+                    {
+                        value: 'created',
+                        label: '🟢 Faktur PPN Baru Diterbitkan',
+                    },
+                    {
+                        value: 'updated',
+                        label: '🟡 Update Nomor Seri Faktur (NSFP)',
+                    },
+                    {
+                        value: 'payment_settled',
+                        label: '🔵 Penyetoran Kas Negara (NTPN)',
+                    },
+                ]}
+            />
         </AppLayout>
     );
 }

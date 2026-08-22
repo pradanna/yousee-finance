@@ -103,9 +103,7 @@ Route::middleware('auth')->group(function () {
     // Laporan
     Route::get('/journal', [\App\Http\Controllers\Accounting\JournalReportController::class, 'index'])->name('journal');
 
-    Route::get('/ppn', function () {
-        return Inertia::render('PpnReport');
-    })->name('ppn');
+    Route::get('/ppn', [\App\Http\Controllers\Accounting\PpnReportController::class, 'index'])->name('ppn');
 
     Route::get('/cashflow', function () {
         return Inertia::render('CashflowReport');
