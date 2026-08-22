@@ -192,7 +192,10 @@ export default function PpnReport({
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement('a');
         link.setAttribute('href', encodedUri);
-        link.setAttribute('download', `Laporan_PPN_DJP_${selectedMonth}-${selectedYear}.csv`);
+        link.setAttribute(
+            'download',
+            `Laporan_PPN_DJP_${selectedMonth}-${selectedYear}.csv`,
+        );
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -205,7 +208,9 @@ export default function PpnReport({
         filteredKeluaran.forEach((k) => {
             const [yyyy, mm, dd] = k.date.split('-');
             const cleanNsfp = k.nsfp.replace(/[^0-9]/g, '');
-            const cleanNpwp = k.npwp ? k.npwp.replace(/[^0-9]/g, '') : '000000000000000';
+            const cleanNpwp = k.npwp
+                ? k.npwp.replace(/[^0-9]/g, '')
+                : '000000000000000';
             const formattedDate = `${dd}/${mm}/${yyyy}`; // Format DD/MM/YYYY
             const safeClient = (k.client || 'Client Umum').replace(/"/g, '""');
             const safeDocNo = (k.docNo || '').replace(/"/g, '""');
@@ -215,7 +220,9 @@ export default function PpnReport({
         });
 
         // Simpan file CSV dengan UTF-8 BOM
-        const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob(['\uFEFF' + content], {
+            type: 'text/csv;charset=utf-8;',
+        });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
@@ -246,7 +253,9 @@ export default function PpnReport({
             input.type = 'hidden';
             input.name = name;
             input.value =
-                typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '');
+                typeof value === 'object' && value !== null
+                    ? JSON.stringify(value)
+                    : String(value ?? '');
             form.appendChild(input);
         };
 
@@ -307,8 +316,14 @@ export default function PpnReport({
                 k.nsfp.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 k.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 k.npwp.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (k.projectName && k.projectName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (k.projectCode && k.projectCode.toLowerCase().includes(searchQuery.toLowerCase()));
+                (k.projectName &&
+                    k.projectName
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase())) ||
+                (k.projectCode &&
+                    k.projectCode
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()));
 
             let matchesStatus = true;
             if (statusFilter === 'approved')
@@ -339,8 +354,14 @@ export default function PpnReport({
                 m.nsfp.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 m.vendor.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 m.npwp.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (m.projectName && m.projectName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (m.projectCode && m.projectCode.toLowerCase().includes(searchQuery.toLowerCase()));
+                (m.projectName &&
+                    m.projectName
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase())) ||
+                (m.projectCode &&
+                    m.projectCode
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()));
 
             let matchesStatus = true;
             if (statusFilter === 'approved')
@@ -1034,11 +1055,14 @@ export default function PpnReport({
                                                     <div className="text-[10.5px] font-medium text-slate-400">
                                                         {formatDateIndo(k.date)}
                                                     </div>
-                                                    {k.projectName && k.projectName !== '-' && (
-                                                        <div className="mt-0.5 inline-block rounded border border-blue-100 bg-blue-50/60 px-1.5 py-0.5 text-[9.5px] font-bold text-blue-700">
-                                                            📁 {k.projectName}
-                                                        </div>
-                                                    )}
+                                                    {k.projectName &&
+                                                        k.projectName !==
+                                                            '-' && (
+                                                            <div className="mt-0.5 inline-block rounded border border-blue-100 bg-blue-50/60 px-1.5 py-0.5 text-[9.5px] font-bold text-blue-700">
+                                                                📁{' '}
+                                                                {k.projectName}
+                                                            </div>
+                                                        )}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-800">
@@ -1154,11 +1178,14 @@ export default function PpnReport({
                                                     <div className="text-[10.5px] font-medium text-slate-400">
                                                         {formatDateIndo(m.date)}
                                                     </div>
-                                                    {m.projectName && m.projectName !== '-' && (
-                                                        <div className="mt-0.5 inline-block rounded border border-amber-100 bg-amber-50/60 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-800">
-                                                            📁 {m.projectName}
-                                                        </div>
-                                                    )}
+                                                    {m.projectName &&
+                                                        m.projectName !==
+                                                            '-' && (
+                                                            <div className="mt-0.5 inline-block rounded border border-amber-100 bg-amber-50/60 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-800">
+                                                                📁{' '}
+                                                                {m.projectName}
+                                                            </div>
+                                                        )}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="font-bold text-slate-800">
