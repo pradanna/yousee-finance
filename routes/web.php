@@ -104,10 +104,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/journal', [\App\Http\Controllers\Accounting\JournalReportController::class, 'index'])->name('journal');
 
     Route::get('/ppn', [\App\Http\Controllers\Accounting\PpnReportController::class, 'index'])->name('ppn');
+    Route::post('/ppn/settle', [\App\Http\Controllers\Accounting\PpnReportController::class, 'settle'])->name('ppn.settle');
 
-    Route::get('/cashflow', function () {
-        return Inertia::render('CashflowReport');
-    })->name('cashflow');
+    Route::get('/cashflow', [\App\Http\Controllers\Accounting\CashflowReportController::class, 'index'])->name('cashflow');
+    Route::match(['get', 'post'], '/cashflow-pdf', [\App\Http\Controllers\Accounting\CashflowReportController::class, 'exportPdf'])->name('cashflow.pdf');
 
     // PDF Reports
     Route::match(['get', 'post'], '/po-pdf', [\App\Http\Controllers\PurchaseOrderPdfController::class, 'generatePdf'])->name('po.pdf');

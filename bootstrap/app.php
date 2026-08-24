@@ -19,6 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             '/po-pdf',
             '/client-invoice-pdf',
+            '/kwitansi-pdf',
+            '/ppn-pdf',
+            '/cash-out-pdf',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
