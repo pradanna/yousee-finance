@@ -1,4 +1,6 @@
 import AuditLogModal from '@/Components/UI/AuditLogModal';
+import ExcelButton from '@/Components/Button/ExcelButton';
+import PrintButton from '@/Components/Button/PrintButton';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import { router } from '@inertiajs/react';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -611,47 +613,15 @@ export default function PpnReport({
                                 </svg>
                             </button>
 
-                            <button
+                            <ExcelButton
                                 onClick={handleExportExcel}
-                                className="shadow-2xs flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100"
                                 title="Unduh Rekapitulasi Laporan PPN Internal (Format Excel / CSV)"
-                            >
-                                <svg
-                                    className="h-4 w-4 text-emerald-600"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                    />
-                                </svg>
-                                <span>Export Excel</span>
-                            </button>
+                            />
 
-                            <button
+                            <PrintButton
                                 onClick={handleExportPdf}
-                                className="shadow-2xs flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 transition-all hover:bg-rose-100"
                                 title="Cetak / Unduh Dokumen PDF Resmi SPT Masa PPN 1111"
-                            >
-                                <svg
-                                    className="h-4 w-4 text-rose-600"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                                    />
-                                </svg>
-                                <span>Cetak / PDF</span>
-                            </button>
+                            />
 
                             <button
                                 onClick={handleExportCsvEfaktur}

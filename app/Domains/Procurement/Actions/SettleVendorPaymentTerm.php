@@ -44,10 +44,11 @@ class SettleVendorPaymentTerm
             ]);
 
             // Hitung total yang sudah dibayar (termasuk settlement baru).
+            // Diberikan toleransi Rp 1 untuk mengantisipasi selisih koma/desimal pembulatan sistem
             $totalPaid = (float) $term->settlements()->sum('amount');
             $termAmount = (float) $term->amount;
 
-            $newStatus = $totalPaid >= $termAmount
+            $newStatus = $totalPaid >= ($termAmount - 1.0)
                 ? PaymentTermStatus::PAID
                 : PaymentTermStatus::UNPAID;
 

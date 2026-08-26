@@ -14,6 +14,7 @@ class ExpenseCategorySeeder extends Seeder
     {
         $categories = [
             ['name' => 'Gaji, Lembur & Honorarium Karyawan', 'code' => '5210'],
+            ['name' => 'Beban Komisi & Bonus Sales', 'code' => '5210'],
             ['name' => 'Sewa Kantor & Fasilitas', 'code' => '5220'],
             ['name' => 'Listrik, Air, Telepon & Internet Kantor', 'code' => '5230'],
             ['name' => 'Bensin, Tol, Parkir & Operasional Lapangan', 'code' => '5240'],
@@ -23,6 +24,7 @@ class ExpenseCategorySeeder extends Seeder
             ['name' => 'Biaya Vendor Titik (Non-PO)', 'code' => '5110'],
             ['name' => 'Pajak Reklame & Retribusi Daerah', 'code' => '5130'],
             ['name' => 'Biaya Admin Bank & Transfer', 'code' => '5910'],
+            ['name' => 'Setoran ke Owner / Prive Pemilik', 'code' => '3110'],
         ];
 
         foreach ($categories as $cat) {

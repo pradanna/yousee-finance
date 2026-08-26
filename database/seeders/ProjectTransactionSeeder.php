@@ -187,6 +187,10 @@ class ProjectTransactionSeeder extends Seeder
             $codeTag = $isPpn ? 'PPN' : 'NON';
             $code = sprintf('PRJ-%d-%s%02d', $year, $codeTag, $idx + 1);
 
+            if (Project::where('code', $code)->exists()) {
+                continue;
+            }
+
             $project = Project::create([
                 'code' => $code,
                 'name' => $tmpl['name'],

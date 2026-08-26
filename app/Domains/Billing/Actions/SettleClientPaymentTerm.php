@@ -81,7 +81,70 @@ class SettleClientPaymentTerm
                 );
 
                 if ($receivableAccountId && $cashBankAccountId) {
-                    $amount = (float) $data['amount'];
+                    $paidAmount = (float) $data['amount'];
+                    $termExpectedAmount = (float) $term->amount;
+                    $diff = $termExpectedAmount - $paidAmount;
+
+                    $items = [
+                        [
+                            'account_id' => $cashBankAccountId,
+                            'debit'      => $paidAmount,
+                            'credit'     => 0,
+                            'project_id' => $invoice->project_id,
+                            'memo'       => "Penerimaan Kas/Bank untuk {$invNumber} - {$term->label}",
+                        ],
+                    ];
+
+                    // Jika terdapat selisih pembulatan kecil (<= Rp 100), seimbangkan ke akun Beban/Pendapatan Pembulatan
+                    if (abs($diff) > 0.001 && abs($diff) <= 100.0 && $newTermStatus === PaymentTermStatus::PAID) {
+                        if ($diff > 0) {
+                            // Kurang bayar receh -> Masuk Beban Selisih Pembulatan (5920)
+                            $roundingExpenseAccount = ChartOfAccount::where('code', '5920')->first();
+                            $roundingAccountId = $roundingExpenseAccount?->id ?? $receivableAccountId;
+                            $items[] = [
+                                'account_id' => $roundingAccountId,
+                                'debit'      => round($diff, 2),
+                                'credit'     => 0,
+                                'project_id' => $invoice->project_id,
+                                'memo'       => "Beban Selisih Pembulatan {$invNumber} - {$term->label}",
+                            ];
+                            $items[] = [
+                                'account_id' => $receivableAccountId,
+                                'debit'      => 0,
+                                'credit'     => round($termExpectedAmount, 2),
+                                'project_id' => $invoice->project_id,
+                                'memo'       => "Pelunasan Penuh Piutang Client {$invNumber} - {$term->label}",
+                            ];
+                        } else {
+                            // Lebih bayar receh -> Masuk Pendapatan Selisih Pembulatan (4910)
+                            $roundingRevenueAccount = ChartOfAccount::where('code', '4910')->first();
+                            $roundingAccountId = $roundingRevenueAccount?->id ?? $receivableAccountId;
+                            $items[] = [
+                                'account_id' => $receivableAccountId,
+                                'debit'      => 0,
+                                'credit'     => round($termExpectedAmount, 2),
+                                'project_id' => $invoice->project_id,
+                                'memo'       => "Pelunasan Piutang Client {$invNumber} - {$term->label}",
+                            ];
+                            $items[] = [
+                                'account_id' => $roundingAccountId,
+                                'debit'      => 0,
+                                'credit'     => round(abs($diff), 2),
+                                'project_id' => $invoice->project_id,
+                                'memo'       => "Pendapatan Selisih Pembulatan {$invNumber} - {$term->label}",
+                            ];
+                        }
+                    } else {
+                        // Tanpa selisih
+                        $items[] = [
+                            'account_id' => $receivableAccountId,
+                            'debit'      => 0,
+                            'credit'     => $paidAmount,
+                            'project_id' => $invoice->project_id,
+                            'memo'       => "Pelunasan Piutang Client {$invNumber} - {$term->label}",
+                        ];
+                    }
+
                     $clientName = $invoice->client?->name ?? 'Client';
                     $invNumber = $invoice->invoice_number ?? 'Invoice';
 
@@ -92,22 +155,7 @@ class SettleClientPaymentTerm
                             'description'      => "Penerimaan Pembayaran Piutang - {$clientName} ({$invNumber}) [{$term->label}]",
                             'project_id'       => $invoice->project_id,
                         ],
-                        items: [
-                            [
-                                'account_id' => $cashBankAccountId,
-                                'debit'      => $amount,
-                                'credit'     => 0,
-                                'project_id' => $invoice->project_id,
-                                'memo'       => "Penerimaan Kas/Bank untuk {$invNumber} - {$term->label}",
-                            ],
-                            [
-                                'account_id' => $receivableAccountId,
-                                'debit'      => 0,
-                                'credit'     => $amount,
-                                'project_id' => $invoice->project_id,
-                                'memo'       => "Pelunasan Piutang Client {$invNumber} - {$term->label}",
-                            ],
-                        ],
+                        items: $items,
                         source: $settlement,
                     );
                 }

@@ -55,6 +55,7 @@ interface AppLayoutProps {
         | 'sales-transactions'
         | 'coa'
         | 'accounting-settings'
+        | 'closing-periods'
         | 'journal'
         | 'ppn'
         | 'cashflow';

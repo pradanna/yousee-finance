@@ -77,6 +77,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/cash-out-export', [\App\Http\Controllers\Accounting\CashOutController::class, 'exportCsv'])->name('cash-out.export');
     Route::post('/cash-out', [\App\Http\Controllers\Accounting\CashOutController::class, 'store'])->name('cash-out.store');
     Route::post('/cash-out/categories', [\App\Http\Controllers\Accounting\CashOutController::class, 'storeCategory'])->name('cash-out.categories.store');
+    Route::post('/cash-out/commissions/pay', [\App\Http\Controllers\Accounting\CashOutController::class, 'payCommission'])->name('cash-out.commissions.pay');
+    Route::post('/cash-out/transfer', [\App\Http\Controllers\Accounting\CashOutController::class, 'transfer'])->name('cash-out.transfer');
     Route::post('/cash-out/{cashTransaction}/void', [\App\Http\Controllers\Accounting\CashOutController::class, 'void'])->name('cash-out.void');
     Route::post('/cash-out/{cashTransaction}', [\App\Http\Controllers\Accounting\CashOutController::class, 'update'])->name('cash-out.update');
     Route::delete('/cash-out/{cashTransaction}', [\App\Http\Controllers\Accounting\CashOutController::class, 'destroy'])->name('cash-out.destroy');
@@ -98,6 +100,10 @@ Route::middleware('auth')->group(function () {
 
         Route::get('settings', [\App\Http\Controllers\Accounting\AccountingSettingsController::class, 'index'])->name('settings.index');
         Route::put('settings', [\App\Http\Controllers\Accounting\AccountingSettingsController::class, 'update'])->name('settings.update');
+
+        Route::get('closing-periods', [\App\Http\Controllers\Accounting\ClosingPeriodController::class, 'index'])->name('closing-periods.index');
+        Route::post('closing-periods/lock', [\App\Http\Controllers\Accounting\ClosingPeriodController::class, 'lock'])->name('closing-periods.lock');
+        Route::post('closing-periods/unlock', [\App\Http\Controllers\Accounting\ClosingPeriodController::class, 'unlock'])->name('closing-periods.unlock');
     });
 
     // Laporan

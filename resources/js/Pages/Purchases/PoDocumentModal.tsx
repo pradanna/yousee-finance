@@ -1,3 +1,4 @@
+import PrintButton from '@/Components/Button/PrintButton';
 import type { BillboardLocation, VendorPO } from './purchasesTypes';
 import { PPN_RATE, fmt, formatDate } from './purchasesTypes';
 
@@ -59,25 +60,12 @@ export function PoDocumentModal({
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <button
+                        <PrintButton
                             onClick={() => window.print()}
-                            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white transition-all hover:bg-blue-700"
+                            className="bg-white/10 text-white border-white/20 hover:bg-white/20 active:bg-white/30"
                         >
-                            <svg
-                                className="h-3.5 w-3.5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2.5}
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                                />
-                            </svg>
                             Cetak PDF / Print
-                        </button>
+                        </PrintButton>
                         <button
                             onClick={onClose}
                             className="rounded-xl bg-slate-800 px-3.5 py-1.5 text-xs font-bold text-slate-400 transition-all hover:bg-slate-700 hover:text-white"

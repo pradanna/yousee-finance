@@ -104,6 +104,7 @@ class GetCashflowReportData
             'journalEntry.items.account',
             'journalEntry.project:id,code,name',
             'journalEntry.postedBy:id,name',
+            'journalEntry.source',
             'account',
         ])
             ->whereIn('account_id', $cashBankAccountIds)
@@ -174,6 +175,17 @@ class GetCashflowReportData
                 }
             }
 
+            // Jika sumber berasal dari CashTransaction (Kas Keluar), ambil rincian asli
+            $cleanDescription = $journal->description ?: 'Mutasi Kas ' . $item->account?->name;
+            if ($journal->source instanceof \App\Domains\Accounting\Models\CashTransaction) {
+                $cleanDescription = $journal->source->description ?: $cleanDescription;
+            } elseif (! empty($journal->description) && preg_match('/Pengeluaran Kas \[[^\]]+\]:\s*(.+)/', $journal->description, $descMatches)) {
+                $cleanDescription = trim($descMatches[1]);
+                if (preg_match('/^(.+)\s*\(Penerima:\s*.+\)$/', $cleanDescription, $cleanMatches)) {
+                    $cleanDescription = trim($cleanMatches[1]);
+                }
+            }
+
             $partnerName = $this->resolvePartnerName($journal, $contraName);
 
             $rawEntries[] = [
@@ -187,7 +199,7 @@ class GetCashflowReportData
                 'accountName'        => $item->account?->name ?? 'Kas / Bank',
                 'contraCode'         => $contraCode,
                 'contraName'         => $contraName,
-                'description'        => $item->memo ?: ($journal->description ?: 'Mutasi Kas ' . $item->account?->name),
+                'description'        => $cleanDescription,
                 'partnerName'        => $partnerName,
                 'projectName'        => $journal->project?->name,
                 'projectCode'        => $journal->project?->code,
@@ -391,6 +403,14 @@ class GetCashflowReportData
      */
     private function resolvePartnerName(JournalEntry $journal, string $defaultContraName): string
     {
+        if ($journal->source instanceof \App\Domains\Accounting\Models\CashTransaction && ! empty($journal->source->recipient)) {
+            return $journal->source->recipient;
+        }
+
+        if (! empty($journal->description) && preg_match('/\(Penerima:\s*([^\)]+)\)/', $journal->description, $matches)) {
+            return trim($matches[1]);
+        }
+
         if ($journal->project && $journal->project->client) {
             return $journal->project->client->name ?? 'Client YouSee';
         }

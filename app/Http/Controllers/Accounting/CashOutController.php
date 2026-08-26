@@ -214,6 +214,16 @@ class CashOutController extends Controller
             }
         }
 
+        // Ambil data komisi & bonus sales
+        $salesCommissionAction = app(\App\Domains\Accounting\Actions\GetSalesCommissionList::class);
+        $commissionData = $salesCommissionAction->execute([
+            'month'       => $month,
+            'year'        => $year,
+            'search'      => $search,
+            'fiscal_mode' => $fiscalMode,
+            'status'      => $request->query('commission_status', 'all'),
+        ]);
+
         return Inertia::render('CashOut', [
             'transactions' => $transactions,
             'paymentAccounts' => $paymentAccounts,
@@ -221,6 +231,8 @@ class CashOutController extends Controller
             'leafExpenseAccounts' => $leafExpenseAccounts,
             'isPeriodLocked' => $isPeriodLocked,
             'auditLogs' => $recentAuditLogs,
+            'commissions' => $commissionData['items'],
+            'commissionSummary' => $commissionData['summary'],
             'stats' => [
                 'currentMonthTotal' => $currentMonthTotal,
                 'lastMonthTotal'    => $lastMonthTotal,
@@ -233,8 +245,99 @@ class CashOutController extends Controller
                 'search'              => $search ?? '',
                 'payment_account_id'  => $paymentAccountId ?? 'all',
                 'expense_category_id' => $expenseCategoryId ?? 'all',
+                'commission_status'   => $request->query('commission_status', 'all'),
+                'active_tab'          => $request->query('tab', 'expenses'),
             ],
         ]);
+    }
+
+    /**
+     * Memproses pembayaran komisi / bonus sales secara instan via Pengeluaran Kas.
+     */
+    public function payCommission(Request $request, CreateCashTransaction $action): RedirectResponse
+    {
+        $validated = $request->validate([
+            'project_id'         => ['required', 'string', 'exists:projects,id'],
+            'payment_account_id' => ['required', 'string', 'exists:chart_of_accounts,id'],
+            'expense_account_id' => ['nullable', 'string', 'exists:chart_of_accounts,id'],
+            'amount'             => ['required', 'numeric', 'min:1'],
+            'transaction_date'   => ['required', 'date'],
+            'recipient'          => ['required', 'string', 'max:255'],
+            'description'        => ['required', 'string', 'max:500'],
+        ]);
+
+        $project = Project::with('sales')->findOrFail($validated['project_id']);
+
+        // Default expense account ke Beban Gaji & Bonus (5210)
+        $expenseAccountId = $validated['expense_account_id'] ?? null;
+        if (empty($expenseAccountId)) {
+            $bonusCategory = ExpenseCategory::where('name', 'like', '%Komisi%')
+                ->orWhere('name', 'like', '%Gaji%')
+                ->first();
+            $expenseAccountId = $bonusCategory?->account_id;
+            if (! $expenseAccountId) {
+                $expenseAccount = ChartOfAccount::where('code', '5210')->firstOrFail();
+                $expenseAccountId = $expenseAccount->id;
+            }
+        }
+
+        try {
+            $tx = $action->execute([
+                'fiscal_mode'        => $project->fiscal_mode,
+                'payment_account_id' => $validated['payment_account_id'],
+                'expense_account_id' => $expenseAccountId,
+                'project_id'         => $project->id,
+                'amount'             => (float) $validated['amount'],
+                'transaction_date'   => $validated['transaction_date'],
+                'recipient'          => $validated['recipient'],
+                'description'        => $validated['description'],
+                'created_by'         => (string) $request->user()->id,
+            ]);
+
+            return redirect()->back()->with(
+                'success',
+                "Pembayaran bonus sales untuk proyek '{$project->code}' berhasil dibukukan dengan No. {$tx->transaction_number}."
+            );
+        } catch (\DomainException $e) {
+            return redirect()->back()->withErrors(['amount' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Memproses transfer / pindah dana internal antar rekening Kas & Bank.
+     */
+    public function transfer(Request $request, \App\Domains\Accounting\Actions\TransferCashAccount $action): RedirectResponse
+    {
+        $fiscalMode = $request->header('X-Fiscal-Mode') ?? $request->input('fiscal_mode', 'ppn');
+
+        $validated = $request->validate([
+            'from_account_id'  => ['required', 'string', 'exists:chart_of_accounts,id'],
+            'to_account_id'    => ['required', 'string', 'exists:chart_of_accounts,id', 'different:from_account_id'],
+            'amount'           => ['required', 'numeric', 'min:1'],
+            'transaction_date' => ['required', 'date'],
+            'reference_number' => ['nullable', 'string', 'max:100'],
+            'description'      => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $tx = $action->execute([
+                'fiscal_mode'      => $fiscalMode,
+                'from_account_id'  => $validated['from_account_id'],
+                'to_account_id'    => $validated['to_account_id'],
+                'amount'           => (float) $validated['amount'],
+                'transaction_date' => $validated['transaction_date'],
+                'reference_number' => $validated['reference_number'] ?? null,
+                'description'      => $validated['description'] ?? null,
+                'created_by'       => (string) $request->user()->id,
+            ]);
+
+            return redirect()->back()->with(
+                'success',
+                "Pindah dana antar rekening berhasil dibukukan dengan No. {$tx->transaction_number}."
+            );
+        } catch (\DomainException $e) {
+            return redirect()->back()->withErrors(['transfer_error' => $e->getMessage()]);
+        }
     }
 
     /**

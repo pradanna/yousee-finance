@@ -1,3 +1,4 @@
+import PrintButton from '@/Components/Button/PrintButton';
 import MonthPicker from '@/Components/Form/MonthPicker';
 import SelectInput from '@/Components/Form/SelectInput';
 import TextInput from '@/Components/Form/TextInput';
@@ -2757,17 +2758,15 @@ export default function SalesTransactions({
                                                         Skema Terkunci
                                                     </button>
                                                 )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        handleDownloadInvoicePdf(
-                                                            activeProject,
-                                                        )
-                                                    }
-                                                    className="cursor-pointer rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
-                                                >
-                                                    Cetak Invoice PDF
-                                                </button>
+                                                <PrintButton
+                                                     onClick={() =>
+                                                         handleDownloadInvoicePdf(
+                                                             activeProject,
+                                                         )
+                                                     }
+                                                 >
+                                                     Cetak Invoice PDF
+                                                 </PrintButton>
                                             </div>
                                         </div>
 
@@ -2975,37 +2974,17 @@ export default function SalesTransactions({
                                                                     </td>
                                                                     <td className="px-4 py-2.5 text-center">
                                                                         <div className="flex items-center justify-center gap-2">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() =>
-                                                                                    handleDownloadInvoicePdf(
-                                                                                        activeProject,
-                                                                                        item,
-                                                                                    )
-                                                                                }
-                                                                                className="shadow-2xs inline-flex cursor-pointer items-center gap-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-all hover:bg-indigo-100"
-                                                                                title={`Cetak Invoice PDF Tagihan ${item.label}`}
-                                                                            >
-                                                                                <svg
-                                                                                    className="h-3.5 w-3.5 text-indigo-600"
-                                                                                    fill="none"
-                                                                                    viewBox="0 0 24 24"
-                                                                                    stroke="currentColor"
-                                                                                    strokeWidth={
-                                                                                        2
-                                                                                    }
-                                                                                >
-                                                                                    <path
-                                                                                        strokeLinecap="round"
-                                                                                        strokeLinejoin="round"
-                                                                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                    />
-                                                                                </svg>
-                                                                                <span>
-                                                                                    Cetak
-                                                                                    Invoice
-                                                                                </span>
-                                                                            </button>
+                                                                            <PrintButton
+                                                                                 onClick={() =>
+                                                                                     handleDownloadInvoicePdf(
+                                                                                         activeProject,
+                                                                                         item,
+                                                                                     )
+                                                                                 }
+                                                                                 title={`Cetak Invoice PDF Tagihan ${item.label}`}
+                                                                             >
+                                                                                 Cetak Invoice
+                                                                             </PrintButton>
                                                                             {!isTermFullyPaid &&
                                                                                 (isPreviousTermPaid ? (
                                                                                     <button
@@ -3142,37 +3121,17 @@ export default function SalesTransactions({
                                                                         )}
                                                                     </td>
                                                                     <td className="px-4 py-2.5 text-center">
-                                                                        <button
-                                                                            type="button"
+                                                                        <PrintButton
                                                                             onClick={() =>
                                                                                 handleDownloadKwitansiPdf(
                                                                                     activeProject,
                                                                                     pmt,
                                                                                 )
                                                                             }
-                                                                            className="mx-auto flex cursor-pointer items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10.5px] font-bold text-emerald-700 transition-all hover:bg-emerald-100"
                                                                             title={`Download Kwitansi PDF untuk ${pmt.termLabel}`}
                                                                         >
-                                                                            <svg
-                                                                                className="h-3.5 w-3.5"
-                                                                                fill="none"
-                                                                                viewBox="0 0 24 24"
-                                                                                stroke="currentColor"
-                                                                                strokeWidth={
-                                                                                    2.5
-                                                                                }
-                                                                            >
-                                                                                <path
-                                                                                    strokeLinecap="round"
-                                                                                    strokeLinejoin="round"
-                                                                                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                />
-                                                                            </svg>
-                                                                            <span>
-                                                                                Cetak
-                                                                                Kwitansi
-                                                                            </span>
-                                                                        </button>
+                                                                            Cetak Kwitansi
+                                                                        </PrintButton>
                                                                     </td>
                                                                 </tr>
                                                             ),

@@ -328,21 +328,32 @@ export default function CashflowRegistryTab({
                                                 </span>
                                             </td>
 
-                                            <td className="max-w-xs px-4 py-3">
-                                                <div className="truncate font-bold text-slate-900">
-                                                    {item.description}
+                                            <td className="max-w-md px-4 py-3">
+                                                {/* Baris 1: Kategori / Nama Akun Lawan (e.g. Beban Perlengkapan & ATK Kantor) */}
+                                                <div className="font-bold text-slate-900 leading-tight">
+                                                    {item.contraName || item.accountName}
                                                 </div>
-                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                                                    <span className="font-medium text-slate-700">
+
+                                                {/* Baris 2: Keterangan / Memo Transaksi Asli (e.g. asdasd / Pembelian buku) */}
+                                                {item.description && (
+                                                    <div className="mt-0.5 text-xs text-slate-600 font-normal">
+                                                        {item.description}
+                                                    </div>
+                                                )}
+
+                                                {/* Baris 3: Info Partner & Proyek */}
+                                                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-slate-500">
+                                                    <span className="inline-flex items-center gap-1 font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                                                        <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                        </svg>
                                                         {item.partnerName}
                                                     </span>
                                                     {item.projectName && (
                                                         <>
                                                             <span>•</span>
-                                                            <span className="max-w-[120px] truncate font-bold text-blue-600">
-                                                                {
-                                                                    item.projectName
-                                                                }
+                                                            <span className="max-w-[160px] truncate font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">
+                                                                {item.projectName}
                                                             </span>
                                                         </>
                                                     )}

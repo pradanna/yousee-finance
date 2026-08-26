@@ -72,6 +72,7 @@ class ChartOfAccountSeeder extends Seeder
         // ─────────────────────────────────────────────────────────────────────
         $hEquity = $this->createAccount(null, '3000', 'Ekuitas (Modal)', AccountType::EQUITY, NormalBalance::CREDIT, 'Header Utama Ekuitas');
         $modalDisetor = $this->createAccount($hEquity->id, '3100', 'Modal Disetor Pemilik', AccountType::EQUITY, NormalBalance::CREDIT);
+        $privePemilik = $this->createAccount($hEquity->id, '3110', 'Prive / Setoran ke Owner (Penarikan Modal)', AccountType::EQUITY, NormalBalance::DEBIT, 'Penarikan dana atau pembagian keuntungan kepada pemilik');
         $labaDitahan = $this->createAccount($hEquity->id, '3200', 'Laba Ditahan (Retained Earnings)', AccountType::EQUITY, NormalBalance::CREDIT);
         $labaTahunBerjalan = $this->createAccount($hEquity->id, '3300', 'Laba (Rugi) Periode Berjalan', AccountType::EQUITY, NormalBalance::CREDIT);
         $openingBalanceEquity = $this->createAccount($hEquity->id, '3900', 'Opening Balance Equity', AccountType::EQUITY, NormalBalance::CREDIT, 'Saldo Penyeimbang Migrasi Awal');
@@ -82,7 +83,8 @@ class ChartOfAccountSeeder extends Seeder
         $hRevenue = $this->createAccount(null, '4000', 'Pendapatan Usaha', AccountType::REVENUE, NormalBalance::CREDIT, 'Header Utama Pendapatan');
         $pendapatanSewaMedia = $this->createAccount($hRevenue->id, '4100', 'Pendapatan Sewa Media Reklame & Iklan', AccountType::REVENUE, NormalBalance::CREDIT);
         $pendapatanProduksi = $this->createAccount($hRevenue->id, '4200', 'Pendapatan Cetak Visual & Pasang Banner', AccountType::REVENUE, NormalBalance::CREDIT);
-        $pendapatanLain = $this->createAccount($hRevenue->id, '4900', 'Pendapatan Non-Operasional / Lain-lain', AccountType::REVENUE, NormalBalance::CREDIT);
+        $pendapatanPembulatan = $this->createAccount($hRevenue->id, '4910', 'Pendapatan Selisih Pembulatan', AccountType::REVENUE, NormalBalance::CREDIT, 'Selisih lebih pembulatan / kelebihan transfer pembayaran');
+        $pendapatanLain = $this->createAccount($hRevenue->id, '4990', 'Pendapatan Non-Operasional / Lain-lain', AccountType::REVENUE, NormalBalance::CREDIT);
 
         // ─────────────────────────────────────────────────────────────────────
         // 5. EXPENSES (5000)
@@ -107,6 +109,7 @@ class ChartOfAccountSeeder extends Seeder
         // Beban Penyusutan & Lain-lain (5300 & 5900)
         $bebanPenyusutan = $this->createAccount($hExpense->id, '5300', 'Beban Penyusutan Aset Tetap', AccountType::EXPENSE, NormalBalance::DEBIT);
         $bebanAdminBank = $this->createAccount($hExpense->id, '5910', 'Beban Administrasi Bank & Transfer', AccountType::EXPENSE, NormalBalance::DEBIT);
+        $bebanPembulatan = $this->createAccount($hExpense->id, '5920', 'Beban Selisih Pembulatan', AccountType::EXPENSE, NormalBalance::DEBIT, 'Selisih kurang pembulatan / toleransi sisa perak');
         $bebanLainLain = $this->createAccount($hExpense->id, '5990', 'Beban Non-Operasional Lainnya', AccountType::EXPENSE, NormalBalance::DEBIT);
 
         // ─────────────────────────────────────────────────────────────────────

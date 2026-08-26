@@ -1,3 +1,4 @@
+import PrintButton from '@/Components/Button/PrintButton';
 import { router } from '@inertiajs/react';
 import React from 'react';
 import { Project, fmt, SCHEME_LABELS, ClientPaymentPlan, PaymentTermStatus, formatIndoDate, calcPaymentSummary, calcFinancials, PaymentTerm } from '../projectTypes';
@@ -376,28 +377,13 @@ export default function InvoiceTab({
                                                 ) : (
                                                     /* Case 3: Invoice already issued */
                                                     <>
-                                                        <button
-                                                            type="button"
+                                                        <PrintButton
                                                             onClick={() =>
                                                                 handleDownloadInvoicePdf()
                                                             }
-                                                            className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-blue-700"
                                                         >
-                                                            <svg
-                                                                className="h-4 w-4"
-                                                                fill="none"
-                                                                viewBox="0 0 24 24"
-                                                                stroke="currentColor"
-                                                                strokeWidth={2}
-                                                            >
-                                                                <path
-                                                                    strokeLinecap="round"
-                                                                    strokeLinejoin="round"
-                                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                />
-                                                            </svg>
                                                             Cetak Invoice Utama
-                                                        </button>
+                                                        </PrintButton>
 
                                                         {!hasPaidTerm ? (
                                                             <button
@@ -576,30 +562,15 @@ export default function InvoiceTab({
                                                                         </div>
 
                                                                         {/* Tombol Cetak Invoice Dokumen PDF */}
-                                                                        <button
-                                                                            type="button"
+                                                                        <PrintButton
                                                                             onClick={() =>
                                                                                 handleDownloadInvoicePdf(
                                                                                     term,
                                                                                 )
                                                                             }
-                                                                            className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-blue-700"
                                                                         >
-                                                                            <svg
-                                                                                className="h-3.5 w-3.5"
-                                                                                fill="none"
-                                                                                viewBox="0 0 24 24"
-                                                                                stroke="currentColor"
-                                                                                strokeWidth={2}
-                                                                            >
-                                                                                <path
-                                                                                    strokeLinecap="round"
-                                                                                    strokeLinejoin="round"
-                                                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                />
-                                                                            </svg>
                                                                             Cetak Invoice
-                                                                        </button>
+                                                                        </PrintButton>
 
                                                                         {term.status !== 'paid' && (() => {
                                                                             const isPreviousTermPaid = tIdx === 0 || (() => {
@@ -822,31 +793,16 @@ export default function InvoiceTab({
                                                                                         Dana Masuk Diterima
                                                                                     </div>
                                                                                 </div>
-                                                                                <button
-                                                                                    type="button"
+                                                                                <PrintButton
                                                                                     onClick={() =>
                                                                                         handleDownloadKwitansiPdf(
                                                                                             term,
                                                                                         )
                                                                                     }
-                                                                                    className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 transition-all hover:bg-emerald-100"
                                                                                     title="Cetak Kwitansi Pembayaran Resmi"
                                                                                 >
-                                                                                    <svg
-                                                                                        className="h-3.5 w-3.5 text-emerald-600"
-                                                                                        fill="none"
-                                                                                        viewBox="0 0 24 24"
-                                                                                        stroke="currentColor"
-                                                                                        strokeWidth={2}
-                                                                                    >
-                                                                                        <path
-                                                                                            strokeLinecap="round"
-                                                                                            strokeLinejoin="round"
-                                                                                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                                                                        />
-                                                                                    </svg>
-                                                                                    Kwitansi
-                                                                                </button>
+                                                                                    Cetak Kwitansi
+                                                                                </PrintButton>
                                                                             </div>
                                                                         </div>
                                                                     );

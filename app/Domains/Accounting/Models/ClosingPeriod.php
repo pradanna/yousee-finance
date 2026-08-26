@@ -91,10 +91,18 @@ class ClosingPeriod extends Model
             ? $this->fiscal_mode->value
             : (string) $this->fiscal_mode;
 
-        AuditLog::create([
-            'user_id' => $user->id,
-            'action' => 'UNLOCK_PERIOD',
-            'details' => "Pimpinan {$user->name} membuka kembali periode {$this->month}-{$this->year} Mode: {$modeVal}. Alasan: {$reason}",
+        \App\Domains\Shared\Models\AuditLog::create([
+            'auditable_type' => self::class,
+            'auditable_id'   => $this->id,
+            'event'          => 'unlock_period',
+            'user_id'        => $user->id,
+            'description'    => "Pimpinan {$user->name} membuka kembali periode {$this->month}-{$this->year} Mode: {$modeVal}. Alasan: {$reason}",
+            'properties'     => [
+                'month'       => $this->month,
+                'year'        => $this->year,
+                'fiscal_mode' => $modeVal,
+                'reason'      => $reason,
+            ],
         ]);
     }
 }

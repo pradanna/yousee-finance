@@ -1,3 +1,5 @@
+import ExcelButton from '@/Components/Button/ExcelButton';
+import PrintButton from '@/Components/Button/PrintButton';
 import MonthPicker from '@/Components/Form/MonthPicker';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import { router } from '@inertiajs/react';
@@ -107,34 +109,32 @@ export default function CashflowReport({
             'ID Transaksi',
             'Tanggal',
             'No Referensi',
-            'No Dokumen',
-            'Kode Akun',
+            'Kode Akun Kas',
             'Nama Akun Kas',
-            'Akun Lawan',
+            'Kategori / Akun Lawan',
+            'Rincian Keterangan',
+            'Penerima / Partner',
+            'Proyek Billboard',
             'Kategori PSAK',
             'Jenis Kas',
-            'Nominal',
-            'Saldo Berjalan',
-            'Deskripsi',
-            'Partner',
-            'Proyek',
+            'Nominal (Rp)',
+            'Saldo Berjalan (Rp)',
         ];
 
         const rows = initialCashflowData.entries.map((e) => [
             `"${e.id}"`,
             `"${formatDateIndo(e.date)}"`,
             `"${e.refNo}"`,
-            `"${e.docNo}"`,
             `"${e.accountCode}"`,
             `"${e.accountName}"`,
-            `"${e.contraCode} - ${e.contraName}"`,
-            `"${e.category}"`,
-            `"${e.type.toUpperCase()}"`,
-            e.amount,
-            e.runningBalance ?? 0,
+            `"${(e.contraName || e.accountName || '').replace(/"/g, '""')}"`,
             `"${(e.description || '').replace(/"/g, '""')}"`,
             `"${(e.partnerName || '').replace(/"/g, '""')}"`,
             `"${(e.projectName || '').replace(/"/g, '""')}"`,
+            `"${e.isInternalTransfer ? 'Transfer Kas Internal' : e.category.toUpperCase()}"`,
+            `"${e.type === 'inflow' ? 'KAS MASUK' : 'KAS KELUAR'}"`,
+            e.amount,
+            e.runningBalance ?? 0,
         ]);
 
         const csvContent =
@@ -199,47 +199,19 @@ export default function CashflowReport({
 
                         {/* Export Buttons */}
                         <div className="flex items-center gap-2">
-                            <button
+                            <ExcelButton
                                 onClick={handleExportCsv}
-                                className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 active:bg-slate-100"
                                 title="Unduh data arus kas ke format CSV / Excel"
                             >
-                                <svg
-                                    className="h-4 w-4 text-emerald-600"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                    />
-                                </svg>
-                                <span>CSV / Excel</span>
-                            </button>
+                                CSV / Excel
+                            </ExcelButton>
 
-                            <button
+                            <PrintButton
                                 onClick={handleExportPdf}
-                                className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800 active:bg-slate-950"
                                 title="Cetak dokumen resmi Laporan Arus Kas PSAK 2 ke PDF"
                             >
-                                <svg
-                                    className="h-4 w-4 text-rose-400"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                                    />
-                                </svg>
-                                <span>Cetak PDF</span>
-                            </button>
+                                Cetak PDF
+                            </PrintButton>
                         </div>
                     </div>
                 </div>

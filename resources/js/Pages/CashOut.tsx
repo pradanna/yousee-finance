@@ -1,9 +1,16 @@
+import ExcelButton from '@/Components/Button/ExcelButton';
+import PrintButton from '@/Components/Button/PrintButton';
 import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown, { ActionMenuItem } from '@/Components/UI/ActionDropdown';
 import AuditLogModal from '@/Components/UI/AuditLogModal';
 import Modal from '@/Components/UI/Modal';
 import Toast from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
+import TransferCashModal from '@/Pages/CashOut/Modals/TransferCashModal';
+import SalesCommissionTab, {
+    CommissionItem,
+    CommissionSummary,
+} from '@/Pages/CashOut/Tabs/SalesCommissionTab';
 import type { PageProps as BasePageProps } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import React, { useState } from 'react';
@@ -111,6 +118,8 @@ export interface CashOutPageProps extends BasePageProps {
     leafExpenseAccounts: CoaOption[];
     isPeriodLocked?: boolean;
     auditLogs?: AuditLogItem[];
+    commissions?: CommissionItem[];
+    commissionSummary?: CommissionSummary;
     stats: {
         currentMonthTotal: number;
         lastMonthTotal: number;
@@ -123,6 +132,8 @@ export interface CashOutPageProps extends BasePageProps {
         search?: string;
         payment_account_id?: string;
         expense_category_id?: string;
+        commission_status?: string;
+        active_tab?: 'expenses' | 'commissions';
     };
 }
 
@@ -176,13 +187,28 @@ export default function CashOut() {
         leafExpenseAccounts,
         isPeriodLocked = false,
         auditLogs = [],
+        commissions = [],
+        commissionSummary = {
+            totalCommissionEarned: 0,
+            totalCommissionReady: 0,
+            totalCommissionPaid: 0,
+            totalCommissionPending: 0,
+            readyCount: 0,
+            paidCount: 0,
+            pendingCount: 0,
+        },
         stats,
         filters,
     } = usePage<CashOutPageProps>().props;
 
     const fiscalMode = useFiscalMode();
 
+    const [activeTab, setActiveTab] = useState<'expenses' | 'commissions'>(
+        filters?.active_tab || 'expenses',
+    );
+
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
     const [viewingTransaction, setViewingTransaction] =
         useState<CashTransactionItem | null>(null);
@@ -639,48 +665,22 @@ export default function CashOut() {
 
                     <div className="flex flex-wrap items-center gap-2.5">
                         {/* Tombol Cetak PDF Rekap Kas (DomPDF) */}
-                        <a
+                        <PrintButton
+                            as="a"
                             href={`/cash-out-pdf?month=${selectedMonth}&year=${selectedYear}&payment_account_id=${selectedPaymentAcc}&expense_category_id=${selectedCategory}&search=${encodeURIComponent(searchQuery)}&fiscal_mode=${fiscalMode}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50"
                         >
-                            <svg
-                                className="h-4 w-4 text-rose-500"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                                />
-                            </svg>
-                            <span>Cetak PDF</span>
-                        </a>
+                            Cetak PDF
+                        </PrintButton>
 
                         {/* Tombol Export Excel */}
-                        <a
+                        <ExcelButton
+                            as="a"
                             href={`/cash-out-export?month=${selectedMonth}&year=${selectedYear}&payment_account_id=${selectedPaymentAcc}&expense_category_id=${selectedCategory}&search=${encodeURIComponent(searchQuery)}&fiscal_mode=${fiscalMode}`}
-                            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-emerald-700 transition-all hover:border-emerald-300 hover:bg-emerald-50/50"
                         >
-                            <svg
-                                className="h-4 w-4 text-emerald-600"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                />
-                            </svg>
-                            <span>Export Excel</span>
-                        </a>
+                            Export Excel
+                        </ExcelButton>
 
                         <button
                             type="button"
@@ -702,6 +702,27 @@ export default function CashOut() {
                                 />
                             </svg>
                             Kategori Baru
+                        </button>
+
+                        <button
+                            disabled={isPeriodLocked}
+                            onClick={() => setIsTransferModalOpen(true)}
+                            className="flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/80 px-4 py-2.5 text-xs font-bold text-indigo-700 transition-all hover:bg-indigo-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <svg
+                                className="h-4 w-4 text-indigo-600"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                                />
+                            </svg>
+                            Pindah Dana / Transfer
                         </button>
 
                         <button
@@ -908,8 +929,90 @@ export default function CashOut() {
                     </div>
                 </div>
 
-                {/* Filter & Search Toolbar */}
-                <div className="shadow-2xs flex flex-col gap-3 rounded-2xl border border-slate-200/90 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
+                {/* Tab Switcher: Pengeluaran Operasional Umum vs Komisi Sales */}
+                <div className="flex flex-col items-center justify-between gap-4 border-b border-slate-200 pb-3 sm:flex-row">
+                    <div className="flex w-full gap-1 rounded-2xl border border-slate-200/90 bg-slate-100/80 p-1 sm:w-auto">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('expenses')}
+                            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all sm:flex-initial ${
+                                activeTab === 'expenses'
+                                    ? 'shadow-xs bg-white text-slate-900'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                        >
+                            <svg
+                                className="h-4 w-4 text-primary"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+                                />
+                            </svg>
+                            <span>1. Pengeluaran Operasional Umum</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('commissions')}
+                            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all sm:flex-initial ${
+                                activeTab === 'commissions'
+                                    ? 'shadow-xs bg-white text-slate-900'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                        >
+                            <svg
+                                className="h-4 w-4 text-emerald-600"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                                />
+                            </svg>
+                            <span>2. Pembayaran Bonus / Komisi Sales</span>
+                            {commissionSummary?.readyCount > 0 && (
+                                <span className="inline-flex h-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-extrabold text-white">
+                                    {commissionSummary.readyCount} Siap Cair
+                                </span>
+                            )}
+                        </button>
+                    </div>
+
+                    <div className="text-[11px] font-semibold text-slate-500">
+                        {activeTab === 'expenses' ? (
+                            <span>Menampilkan riwayat kas operasional harian</span>
+                        ) : (
+                            <span>Pencairan komisi sales dari invoice klien lunas</span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Konten Tab 2: Komisi Sales */}
+                {activeTab === 'commissions' && (
+                    <SalesCommissionTab
+                        commissions={commissions}
+                        summary={commissionSummary}
+                        paymentAccounts={paymentAccounts}
+                        isPeriodLocked={isPeriodLocked}
+                        onTriggerToast={triggerToast}
+                    />
+                )}
+
+                {/* Konten Tab 1: Pengeluaran Kas Operasional */}
+                {activeTab === 'expenses' && (
+                    <>
+                        {/* Filter & Search Toolbar */}
+                        <div className="shadow-2xs flex flex-col gap-3 rounded-2xl border border-slate-200/90 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex flex-1 flex-wrap items-center gap-2.5">
                         {/* Month Filter */}
                         <div className="min-w-[130px]">
@@ -1367,6 +1470,8 @@ export default function CashOut() {
                         />
                     )}
                 </div>
+                    </>
+                )}
 
                 {/* Baris Bawah: Widget Top Kategori Pengeluaran & Live Audit Log (Berdampingan) */}
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
@@ -2645,6 +2750,15 @@ export default function CashOut() {
                 title="Jejak Audit Keamanan & Riwayat Mutasi Kas"
                 subtitle="Audit trail mutasi pencatatan, pembaruan, pembatalan (void), dan penghapusan transaksi kas"
                 logs={auditLogs || []}
+            />
+
+            {/* Modal: Pindah Dana / Transfer Antar Rekening Kas & Bank */}
+            <TransferCashModal
+                show={isTransferModalOpen}
+                onClose={() => setIsTransferModalOpen(false)}
+                paymentAccounts={paymentAccounts}
+                fiscalMode={fiscalMode}
+                onTriggerToast={triggerToast}
             />
 
             {/* Global Toast */}

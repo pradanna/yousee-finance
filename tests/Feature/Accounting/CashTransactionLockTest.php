@@ -120,4 +120,44 @@ class CashTransactionLockTest extends TestCase
             'created_by' => $this->user->id,
         ]);
     }
+
+    public function test_can_execute_inter_account_cash_transfer(): void
+    {
+        $this->actingAs($this->user);
+
+        $bankAccount = ChartOfAccount::where('code', '1121')->firstOrFail(); // Bank BCA
+
+        $response = $this->post(route('cash-out.transfer'), [
+            'fiscal_mode' => 'ppn',
+            'transaction_date' => '2026-06-10',
+            'from_account_id' => $bankAccount->id,
+            'to_account_id' => $this->cashAccount->id,
+            'amount' => 2500000,
+            'reference_number' => 'REF-BCA-KAS-01',
+            'description' => 'Tarik tunai isi kas operasional',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cash_transactions', [
+            'payment_account_id' => $bankAccount->id,
+            'expense_account_id' => $this->cashAccount->id,
+            'amount' => 2500000,
+        ]);
+
+        $transferTx = CashTransaction::where('payment_account_id', $bankAccount->id)
+            ->where('expense_account_id', $this->cashAccount->id)
+            ->firstOrFail();
+
+        $this->assertNotNull($transferTx->journalEntry);
+        $this->assertCount(2, $transferTx->journalEntry->items);
+
+        // Pastikan debit di Kas Kecil dan credit di Bank BCA
+        $debitItem = $transferTx->journalEntry->items->firstWhere('account_id', $this->cashAccount->id);
+        $creditItem = $transferTx->journalEntry->items->firstWhere('account_id', $bankAccount->id);
+
+        $this->assertEquals(2500000, (float) $debitItem->debit);
+        $this->assertEquals(2500000, (float) $creditItem->credit);
+    }
 }

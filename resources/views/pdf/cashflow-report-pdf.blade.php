@@ -368,6 +368,69 @@
         </tbody>
     </table>
 
+    <!-- 3. Rincian Mutasi Buku Kas Harian -->
+    <div style="page-break-before: always;"></div>
+    <div class="section-title">III. Rincian Mutasi Buku Kas & Transaksi Harian</div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 12%;">Tanggal</th>
+                <th style="width: 16%;">Akun Kas & Lawan</th>
+                <th style="width: 32%;">Deskripsi & Keterangan</th>
+                <th style="width: 12%;">Kategori</th>
+                <th style="width: 14%; text-align: right;">Kas Masuk (Rp)</th>
+                <th style="width: 14%; text-align: right;">Kas Keluar (Rp)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($data['entries'] as $e)
+            <tr>
+                <td style="font-size: 7.5px;">
+                    <strong>{{ \Carbon\Carbon::parse($e['date'])->translatedFormat('d M Y') }}</strong><br>
+                    <span style="color: #64748b;">{{ $e['refNo'] }}</span>
+                </td>
+                <td style="font-size: 7.5px;">
+                    <strong>{{ $e['accountCode'] }}</strong> ({{ $e['accountName'] }})<br>
+                    <span style="color: #475569;">Lawan: {{ $e['contraName'] ?: $e['contraCode'] }}</span>
+                </td>
+                <td>
+                    <strong>{{ $e['contraName'] ?: $e['accountName'] }}</strong>
+                    @if(!empty($e['description']) && $e['description'] !== $e['contraName'])
+                        <div style="color: #334155; margin-top: 1px; font-size: 7.5px;">{{ $e['description'] }}</div>
+                    @endif
+                    <div style="color: #64748b; font-size: 7px; margin-top: 2px;">
+                        Penerima/Partner: <strong>{{ $e['partnerName'] }}</strong>
+                        @if(!empty($e['projectName']))
+                            | Proyek: <strong>{{ $e['projectName'] }}</strong>
+                        @endif
+                    </div>
+                </td>
+                <td style="font-size: 7.5px; text-transform: uppercase;">
+                    @if($e['isInternalTransfer'])
+                        <span style="color: #475569;">Transfer Kas</span>
+                    @elseif($e['category'] === 'investing')
+                        <span style="color: #0284c7;">Investasi</span>
+                    @elseif($e['category'] === 'financing')
+                        <span style="color: #7c3aed;">Pendanaan</span>
+                    @else
+                        <span style="color: #059669;">Operasional</span>
+                    @endif
+                </td>
+                <td class="text-right text-emerald" style="font-size: 8px;">
+                    {{ $e['type'] === 'inflow' ? number_format($e['amount'], 0, ',', '.') : '-' }}
+                </td>
+                <td class="text-right text-rose" style="font-size: 8px;">
+                    {{ $e['type'] === 'outflow' ? number_format($e['amount'], 0, ',', '.') : '-' }}
+                </td>
+            </tr>
+            @empty
+            <tr>
+                <td colspan="6" class="text-center" style="padding: 15px; color: #64748b;">Tidak ada mutasi kas pada periode ini.</td>
+            </tr>
+            @endforelse
+        </tbody>
+    </table>
+
     <!-- Tanda Tangan Otorisasi -->
     <table class="signature-table">
         <tr>
