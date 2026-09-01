@@ -21,6 +21,8 @@ interface SidebarProps {
         | 'ppn'
         | 'cashflow';
     isCollapsed?: boolean;
+    mobileOpen?: boolean;
+    onMobileClose?: () => void;
 }
 
 interface NavItem {
@@ -40,6 +42,8 @@ interface NavSection {
 export default function Sidebar({
     activePage,
     isCollapsed = false,
+    mobileOpen = false,
+    onMobileClose,
 }: SidebarProps) {
     const { auth } = usePage<PageProps>().props;
     const userRoles = auth?.user?.roles || [];
@@ -402,81 +406,135 @@ export default function Sidebar({
         .filter((s): s is NavSection => s !== null);
 
     return (
-        <aside
-            className={`shadow-xs fixed bottom-0 left-0 top-0 z-40 flex min-h-screen flex-col justify-between overflow-y-auto border-r border-slate-200/80 bg-white text-slate-700 transition-all duration-300 ${
-                isCollapsed ? 'w-20' : 'w-72'
-            }`}
-        >
-            {/* Top Logo Container - Completely Undisturbed */}
-            <div>
-                <div className="sticky top-0 z-20 flex h-16 items-center justify-center border-b border-slate-100 bg-white px-4">
-                    <Link
-                        href={isStaffOnly ? '/projects' : '/overview'}
-                        className="flex w-full items-center justify-center gap-3 overflow-hidden"
-                    >
-                        {isCollapsed ? (
-                            <img
-                                src="/images/yousee.png"
-                                alt="Yousee Icon"
-                                className="h-9 w-auto object-contain"
-                                title="Yousee Indonesia"
-                            />
-                        ) : (
-                            <img
-                                src="/images/logo-yousee-panjang.png"
-                                alt="Yousee Indonesia Logo"
-                                className="h-9 w-auto object-contain"
-                            />
-                        )}
-                    </Link>
-                </div>
-
-                {/* Navigation Links */}
+        <>
+            {/* Mobile Backdrop Overlay */}
+            {mobileOpen && (
                 <div
-                    className={`space-y-4 py-3 ${isCollapsed ? 'px-2' : 'px-3'}`}
-                >
-                    {visibleSections.map((section, sIdx) => (
-                        <div key={sIdx} className="space-y-1">
-                            {section.sectionTitle && !isCollapsed && (
-                                <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    {section.sectionTitle}
-                                </div>
+                    className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs transition-opacity lg:hidden"
+                    onClick={onMobileClose}
+                    aria-hidden="true"
+                />
+            )}
+
+            <aside
+                className={`fixed bottom-0 top-0 z-50 flex min-h-screen flex-col justify-between overflow-y-auto border-r border-slate-200/80 bg-white text-slate-700 shadow-2xl transition-all duration-300 lg:z-40 lg:shadow-xs ${
+                    mobileOpen ? 'left-0' : '-left-full lg:left-0'
+                } ${isCollapsed ? 'w-72 lg:w-20' : 'w-72'}`}
+            >
+                {/* Top Logo Container */}
+                <div>
+                    <div className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-100 bg-white px-4">
+                        <Link
+                            href={isStaffOnly ? '/projects' : '/overview'}
+                            className="flex w-full items-center justify-center gap-3 overflow-hidden"
+                            onClick={() => onMobileClose && onMobileClose()}
+                        >
+                            {isCollapsed ? (
+                                <>
+                                    <img
+                                        src="/images/yousee.png"
+                                        alt="Yousee Icon"
+                                        className="hidden h-9 w-auto object-contain lg:block"
+                                        title="Yousee Indonesia"
+                                    />
+                                    <img
+                                        src="/images/logo-yousee-panjang.png"
+                                        alt="Yousee Indonesia Logo"
+                                        className="h-9 w-auto object-contain lg:hidden"
+                                    />
+                                </>
+                            ) : (
+                                <img
+                                    src="/images/logo-yousee-panjang.png"
+                                    alt="Yousee Indonesia Logo"
+                                    className="h-9 w-auto object-contain"
+                                />
                             )}
-                            <nav className="space-y-1">
-                                {section.items.map((item) => {
-                                    const isActive = activePage === item.id;
-                                    return (
-                                        <Link
-                                            key={item.id}
-                                            id={`sidebar-link-${item.id}`}
-                                            href={item.href}
-                                            title={
-                                                isCollapsed
-                                                    ? item.label
-                                                    : undefined
-                                            }
-                                            className={`flex items-center gap-3 rounded-xl font-bold transition-all ${
-                                                isCollapsed
-                                                    ? 'mx-auto h-11 w-11 justify-center p-3'
-                                                    : 'px-4 py-2.5 text-xs'
-                                            } ${
-                                                isActive
-                                                    ? 'shadow-xs bg-primary text-white shadow-neon-primary'
-                                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                                            }`}
-                                        >
-                                            {item.icon}
-                                            {!isCollapsed && (
-                                                <span>{item.label}</span>
-                                            )}
-                                        </Link>
-                                    );
-                                })}
-                            </nav>
-                        </div>
-                    ))}
+                        </Link>
+
+                        {/* Mobile Close Button */}
+                        <button
+                            type="button"
+                            onClick={onMobileClose}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 lg:hidden"
+                            title="Tutup Menu"
+                        >
+                            <svg
+                                className="h-5 w-5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M6 18L18 6M6 6l12 12"
+                                />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Navigation Links */}
+                    <div
+                        className={`space-y-4 py-3 ${isCollapsed ? 'px-3 lg:px-2' : 'px-3'}`}
+                    >
+                        {visibleSections.map((section, sIdx) => (
+                            <div key={sIdx} className="space-y-1">
+                                {section.sectionTitle && (
+                                    <div
+                                        className={`px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 ${
+                                            isCollapsed ? 'block lg:hidden' : 'block'
+                                        }`}
+                                    >
+                                        {section.sectionTitle}
+                                    </div>
+                                )}
+                                <nav className="space-y-1">
+                                    {section.items.map((item) => {
+                                        const isActive = activePage === item.id;
+                                        return (
+                                            <Link
+                                                key={item.id}
+                                                id={`sidebar-link-${item.id}`}
+                                                href={item.href}
+                                                onClick={() =>
+                                                    onMobileClose && onMobileClose()
+                                                }
+                                                title={
+                                                    isCollapsed
+                                                        ? item.label
+                                                        : undefined
+                                                }
+                                                className={`flex items-center gap-3 rounded-xl font-bold transition-all ${
+                                                    isCollapsed
+                                                        ? 'px-4 py-2.5 text-xs lg:mx-auto lg:h-11 lg:w-11 lg:justify-center lg:p-3'
+                                                        : 'px-4 py-2.5 text-xs'
+                                                } ${
+                                                    isActive
+                                                        ? 'shadow-xs bg-primary text-white shadow-neon-primary'
+                                                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                {item.icon}
+                                                <span
+                                                    className={
+                                                        isCollapsed
+                                                            ? 'block lg:hidden'
+                                                            : 'block'
+                                                    }
+                                                >
+                                                    {item.label}
+                                                </span>
+                                            </Link>
+                                        );
+                                    })}
+                                </nav>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            </div>
-        </aside>
+            </aside>
+        </>
     );
 }

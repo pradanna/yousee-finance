@@ -73,7 +73,9 @@ export default function SelectInput({
     const updateCoords = () => {
         if (!buttonRef.current) return;
         const rect = buttonRef.current.getBoundingClientRect();
-        const width = Math.max(rect.width, 200);
+        const screenPadding = 12;
+        const maxWidth = window.innerWidth - screenPadding * 2;
+        const width = Math.min(Math.max(rect.width, 180), maxWidth);
         const estimatedHeight = Math.min(parsedOptions.length * 36 + 16, 240);
 
         const spaceBelow = window.innerHeight - rect.bottom;
@@ -84,9 +86,17 @@ export default function SelectInput({
             ? rect.top - estimatedHeight - 4
             : rect.bottom + 4;
 
+        let left = rect.left;
+        if (left + width > window.innerWidth - screenPadding) {
+            left = window.innerWidth - width - screenPadding;
+        }
+        if (left < screenPadding) {
+            left = screenPadding;
+        }
+
         setCoords({
             top: top + window.scrollY,
-            left: rect.left + window.scrollX,
+            left: left + window.scrollX,
             width,
         });
     };
@@ -95,7 +105,7 @@ export default function SelectInput({
         if (isOpen) {
             updateCoords();
             const handleScrollOrResize = () => updateCoords();
-            const handleClickOutside = (event: MouseEvent) => {
+            const handleClickOutside = (event: MouseEvent | TouchEvent) => {
                 if (
                     buttonRef.current &&
                     !buttonRef.current.contains(event.target as Node) &&
@@ -109,6 +119,7 @@ export default function SelectInput({
             window.addEventListener('scroll', handleScrollOrResize, true);
             window.addEventListener('resize', handleScrollOrResize);
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('touchstart', handleClickOutside);
 
             return () => {
                 window.removeEventListener(
@@ -118,6 +129,7 @@ export default function SelectInput({
                 );
                 window.removeEventListener('resize', handleScrollOrResize);
                 document.removeEventListener('mousedown', handleClickOutside);
+                document.removeEventListener('touchstart', handleClickOutside);
             };
         }
     }, [isOpen, parsedOptions.length]);

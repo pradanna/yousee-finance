@@ -14,6 +14,7 @@ interface HeaderProps {
     fiscalMode?: 'ppn' | 'non-ppn';
     isCollapsed?: boolean;
     onToggleCollapse?: () => void;
+    onMobileMenuToggle?: () => void;
     onFiscalModeToggle?: (mode: 'ppn' | 'non-ppn') => void;
 }
 
@@ -23,6 +24,7 @@ export default function Header({
     fiscalMode,
     isCollapsed = false,
     onToggleCollapse,
+    onMobileMenuToggle,
     onFiscalModeToggle,
 }: HeaderProps) {
     const { auth } = usePage<PageProps>().props;
@@ -99,8 +101,30 @@ export default function Header({
     });
 
     return (
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/55 bg-white/80 px-6 backdrop-blur-md md:px-8">
-            <div className="flex items-center gap-3.5">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/55 bg-white/80 px-4 backdrop-blur-md sm:px-6 md:px-8">
+            <div className="flex items-center gap-2.5 sm:gap-3.5">
+                {/* Mobile Hamburger Button */}
+                <button
+                    type="button"
+                    onClick={onMobileMenuToggle}
+                    className="flex shrink-0 cursor-pointer rounded-xl border border-slate-200/70 p-2 text-slate-600 transition-all hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+                    title="Buka Menu"
+                >
+                    <svg
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M4 6h16M4 12h16M4 18h16"
+                        />
+                    </svg>
+                </button>
+
                 {/* Desktop Sidebar Toggle Button */}
                 <button
                     type="button"

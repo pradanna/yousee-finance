@@ -123,6 +123,8 @@ export default function AppLayout({
         });
     };
 
+    const [mobileOpen, setMobileOpen] = useState<boolean>(false);
+
     return (
         <FiscalContext.Provider value={{ fiscalMode }}>
             <div className="flex min-h-screen bg-slate-100 font-sans">
@@ -130,11 +132,15 @@ export default function AppLayout({
                 <Sidebar
                     activePage={activePage}
                     isCollapsed={isCollapsed}
+                    mobileOpen={mobileOpen}
+                    onMobileClose={() => setMobileOpen(false)}
                 />
 
                 {/* Main Content Area */}
                 <div
-                    className={`flex min-w-0 flex-1 flex-col transition-all duration-300 ${isCollapsed ? 'pl-20' : 'pl-72'}`}
+                    className={`flex min-w-0 flex-1 flex-col transition-all duration-300 pl-0 ${
+                        isCollapsed ? 'lg:pl-20' : 'lg:pl-72'
+                    }`}
                 >
                     <Header
                         title={title}
@@ -142,10 +148,11 @@ export default function AppLayout({
                         fiscalMode={fiscalMode}
                         isCollapsed={isCollapsed}
                         onToggleCollapse={handleToggleCollapse}
+                        onMobileMenuToggle={() => setMobileOpen(true)}
                         onFiscalModeToggle={handleFiscalModeToggle}
                     />
 
-                    <main className="w-full flex-1 overflow-y-auto p-6 md:p-8">
+                    <main className="w-full flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
                         {children}
                     </main>
                 </div>

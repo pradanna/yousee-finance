@@ -56,7 +56,7 @@ export default function ActionDropdown({
         if (isOpen) {
             updateCoords();
             const handleScrollOrResize = () => updateCoords();
-            const handleClickOutside = (event: MouseEvent) => {
+            const handleClickOutside = (event: MouseEvent | TouchEvent) => {
                 if (
                     buttonRef.current &&
                     !buttonRef.current.contains(event.target as Node) &&
@@ -70,6 +70,7 @@ export default function ActionDropdown({
             window.addEventListener('scroll', handleScrollOrResize, true);
             window.addEventListener('resize', handleScrollOrResize);
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('touchstart', handleClickOutside);
 
             return () => {
                 window.removeEventListener(
@@ -79,6 +80,7 @@ export default function ActionDropdown({
                 );
                 window.removeEventListener('resize', handleScrollOrResize);
                 document.removeEventListener('mousedown', handleClickOutside);
+                document.removeEventListener('touchstart', handleClickOutside);
             };
         }
     }, [isOpen, items.length]);
