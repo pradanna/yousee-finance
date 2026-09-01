@@ -18,12 +18,13 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleAndPermissionSeeder::class,
             UserSeeder::class,
-            // VendorSeeder::class, // Dinonaktifkan untuk testing QA dari nol
-            // ClientSeeder::class, // Dinonaktifkan untuk testing QA dari nol
-            // SalesSeeder::class,  // Dinonaktifkan untuk testing QA dari nol
+            VendorSeeder::class,
+            ClientSeeder::class,
+            SalesSeeder::class,
             ChartOfAccountSeeder::class,
             ExpenseCategorySeeder::class,
-            // ProjectTransactionSeeder::class, // Dinonaktifkan agar database bersih untuk QA E2E test
+            ProjectTransactionSeeder::class,
+            OperationalExpenseSeeder::class,
         ]);
     }
 }
