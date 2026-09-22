@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domains\Vendor\Actions;
 
 use App\Domains\Vendor\Models\Vendor;
+use DomainException;
 
 class UpdateVendor
 {
@@ -15,10 +16,25 @@ class UpdateVendor
      */
     public function execute(Vendor $vendor, array $data): Vendor
     {
+        $isPkp = filter_var($data['is_pkp'] ?? $data['pkp'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $npwp = array_key_exists('npwp', $data) ? trim((string) $data['npwp']) : trim((string) $vendor->npwp);
+
+        if ($isPkp && $npwp === '') {
+            throw new DomainException('NPWP wajib diisi jika vendor berstatus PKP.');
+        }
+
         $updateData = [];
+
+        if (array_key_exists('code', $data)) {
+            $updateData['code'] = ! empty($data['code']) ? trim((string) $data['code']) : $vendor->code;
+        }
 
         if (array_key_exists('name', $data)) {
             $updateData['name'] = (string) $data['name'];
+        }
+
+        if (array_key_exists('pic', $data)) {
+            $updateData['pic'] = ! empty($data['pic']) ? (string) $data['pic'] : null;
         }
 
         if (array_key_exists('npwp', $data)) {

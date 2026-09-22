@@ -19,12 +19,14 @@ export interface ClientFormData {
 
 interface ClientFormModalProps {
     isOpen: boolean;
+    isSubmitting?: boolean;
     onClose: () => void;
     onSubmit: (formData: ClientFormData) => void;
 }
 
 export default function ClientFormModal({
     isOpen,
+    isSubmitting = false,
     onClose,
     onSubmit,
 }: ClientFormModalProps) {
@@ -290,12 +292,16 @@ export default function ClientFormModal({
                     <SecondaryButton
                         type="button"
                         onClick={onClose}
-                        className="rounded-xl px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                        disabled={isSubmitting}
+                        className="rounded-xl px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                     >
                         Batal
                     </SecondaryButton>
                     <PrimaryButton
                         type="submit"
+                        disabled={isSubmitting}
+                        isLoading={isSubmitting}
+                        loadingText="Menyimpan..."
                         className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold tracking-wider text-white uppercase shadow-md shadow-blue-600/20 hover:bg-blue-700"
                     >
                         Simpan Client

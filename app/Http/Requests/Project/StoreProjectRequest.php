@@ -31,6 +31,7 @@ class StoreProjectRequest extends FormRequest
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'contract_value' => ['required', 'numeric', 'min:0'],
+            'sales_commission' => ['nullable', 'numeric', 'min:0'],
             'is_ppn_inclusive' => ['nullable', 'boolean'],
             'target_qty' => ['nullable', 'integer', 'min:1'],
             'notes' => ['nullable', 'string'],

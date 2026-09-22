@@ -9,9 +9,9 @@ import React, { useEffect, useState } from 'react';
 export interface SalesItem {
     id: string;
     name: string;
-    email: string;
+    email?: string;
     phone?: string;
-    commission_rate: number;
+    commission_rate?: number;
     is_archived: boolean;
     status: 'active' | 'archived';
     projects_count?: number;
@@ -24,6 +24,7 @@ interface SalesEditModalProps {
     onClose: () => void;
     sales: SalesItem | null;
     onSubmit: (updatedSales: SalesItem) => void;
+    isSubmitting?: boolean;
 }
 
 export default function SalesEditModal({
@@ -31,13 +32,13 @@ export default function SalesEditModal({
     onClose,
     sales,
     onSubmit,
+    isSubmitting = false,
 }: SalesEditModalProps) {
     const [form, setForm] = useState<SalesItem>({
         id: '',
         name: '',
         email: '',
         phone: '',
-        commission_rate: 2.0,
         is_archived: false,
         status: 'active',
         projects_count: 0,
@@ -50,7 +51,6 @@ export default function SalesEditModal({
             setForm({
                 ...sales,
                 phone: sales.phone || '',
-                commission_rate: sales.commission_rate ?? 2.0,
             });
             setErrors({});
         }
@@ -64,9 +64,7 @@ export default function SalesEditModal({
             newErrors.name = 'Nama lengkap personil sales wajib diisi.';
         }
 
-        if (!form.email.trim()) {
-            newErrors.email = 'Email resmi kantor wajib diisi.';
-        } else {
+        if (form.email && form.email.trim() !== '') {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(form.email)) {
                 newErrors.email = 'Format email tidak valid.';
@@ -79,7 +77,6 @@ export default function SalesEditModal({
         }
 
         onSubmit(form);
-        onClose();
     };
 
     if (!sales) return null;
@@ -162,7 +159,7 @@ export default function SalesEditModal({
                     <div>
                         <InputLabel
                             htmlFor="edit_email"
-                            value="Email Resmi Kantor *"
+                            value="Email Kantor (Opsional)"
                         />
                         <TextInput
                             id="edit_email"
@@ -199,42 +196,22 @@ export default function SalesEditModal({
                             className="mt-1.5 block w-full"
                         />
                     </div>
-
-                    {/* Komisi Rate (%) */}
-                    <div>
-                        <InputLabel
-                            htmlFor="edit_commission_rate"
-                            value="Standard Komisi Sales (%) *"
-                        />
-                        <div className="relative mt-1.5">
-                            <TextInput
-                                id="edit_commission_rate"
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max="100"
-                                value={form.commission_rate}
-                                onChange={(e) =>
-                                    setForm((prev) => ({
-                                        ...prev,
-                                        commission_rate: parseFloat(e.target.value) || 0,
-                                    }))
-                                }
-                                className="block w-full pr-10"
-                            />
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 font-mono text-xs font-bold text-slate-400">
-                                %
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Footer Actions */}
                 <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-                    <SecondaryButton type="button" onClick={onClose}>
+                    <SecondaryButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                    >
                         Batal
                     </SecondaryButton>
-                    <PrimaryButton type="submit">
+                    <PrimaryButton
+                        type="submit"
+                        isLoading={isSubmitting}
+                        loadingText="Menyimpan..."
+                    >
                         Simpan Perubahan
                     </PrimaryButton>
                 </div>

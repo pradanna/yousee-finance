@@ -151,6 +151,7 @@ class CashDisbursementTest extends TestCase
             'start_date' => '2026-10-01',
             'end_date' => '2026-10-31',
             'contract_value' => 4504504505,
+            'sales_commission' => 112612613,
             'target_qty' => 4,
         ]);
 

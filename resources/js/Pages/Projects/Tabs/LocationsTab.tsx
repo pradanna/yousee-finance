@@ -1,3 +1,5 @@
+import ExcelButton from '@/Components/Button/ExcelButton';
+import LocationImportModal from '@/Components/Modal/LocationImportModal';
 import React, { useMemo, useState } from 'react';
 import { BillboardLocation, fmt, PurchaseOrderWithPlan } from '../projectTypes';
 
@@ -5,12 +7,14 @@ export interface VendorOption {
     id: string;
     name: string;
     npwp?: string | null;
+    is_pkp?: boolean;
 }
 
 const isVendorPkp = (v: VendorOption): boolean =>
-    Boolean(v.npwp && v.npwp.trim().length > 0);
+    v.is_pkp ?? Boolean(v.npwp && v.npwp.trim().length > 0);
 
 export default function LocationsTab({
+    projectId,
     locations,
     isPPN,
     vendors = [],
@@ -20,6 +24,7 @@ export default function LocationsTab({
     onDeleteLocation,
     onCancelPO,
 }: {
+    projectId?: string | number;
     locations: BillboardLocation[];
     isPPN: boolean;
     vendors?: VendorOption[];
@@ -42,6 +47,7 @@ export default function LocationsTab({
     onCancelPO?: (poId: string | number) => void;
 }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [editingLocation, setEditingLocation] =
         useState<BillboardLocation | null>(null);
     const [locationToDelete, setLocationToDelete] =
@@ -156,7 +162,9 @@ export default function LocationsTab({
         if (!form.vendorCost) errs.vendorCost = 'Biaya titik wajib diisi.';
 
         if (isPPN && selectedVendorId) {
-            const selectedVendor = vendors.find((v) => v.id === selectedVendorId);
+            const selectedVendor = vendors.find(
+                (v) => v.id === selectedVendorId,
+            );
             if (selectedVendor && !isVendorPkp(selectedVendor)) {
                 errs.vendorId = `Vendor "${selectedVendor.name}" berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN.`;
             }
@@ -228,25 +236,35 @@ export default function LocationsTab({
                         {locations.length} Titik Lokasi
                     </p>
                 </div>
-                <button
-                    onClick={() => openAddModal('')}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700"
-                >
-                    <svg
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2.5}
+                <div className="flex flex-wrap items-center gap-2.5">
+                    {projectId && (
+                        <ExcelButton
+                            type="button"
+                            onClick={() => setIsImportModalOpen(true)}
+                        >
+                            Import Excel
+                        </ExcelButton>
+                    )}
+                    <button
+                        onClick={() => openAddModal('')}
+                        className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700"
                     >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 4v16m8-8H4"
-                        />
-                    </svg>
-                    Tambah Titik / Vendor
-                </button>
+                        <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M12 4v16m8-8H4"
+                            />
+                        </svg>
+                        Tambah Titik / Vendor
+                    </button>
+                </div>
             </div>
 
             {groupedLocations.length === 0 ? (
@@ -271,12 +289,22 @@ export default function LocationsTab({
                         Pilih vendor terlebih dahulu untuk mulai menambahkan
                         titik lokasi.
                     </p>
-                    <button
-                        onClick={() => openAddModal('')}
-                        className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-50 px-4 py-2 text-xs font-bold text-blue-600 transition-all hover:bg-blue-100"
-                    >
-                        + Tambah Vendor & Titik Pertama
-                    </button>
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+                        {projectId && (
+                            <ExcelButton
+                                type="button"
+                                onClick={() => setIsImportModalOpen(true)}
+                            >
+                                Import Excel
+                            </ExcelButton>
+                        )}
+                        <button
+                            onClick={() => openAddModal('')}
+                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-50 px-4 py-2 text-xs font-bold text-blue-600 transition-all hover:bg-blue-100"
+                        >
+                            + Tambah Vendor & Titik Pertama
+                        </button>
+                    </div>
                 </div>
             ) : (
                 <div className="space-y-5">
@@ -1125,6 +1153,16 @@ export default function LocationsTab({
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Location Import Modal */}
+            {projectId && (
+                <LocationImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    projectId={projectId}
+                    isPPN={isPPN}
+                />
             )}
         </div>
     );

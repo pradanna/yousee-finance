@@ -35,6 +35,7 @@ class CreateProject
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'contract_value' => $contractValue,
+                'sales_commission' => isset($data['sales_commission']) ? (float) $data['sales_commission'] : 0,
                 'target_qty' => $data['target_qty'] ?? 1,
                 'status' => ProjectStatus::DRAFT,
                 'notes' => $data['notes'] ?? null,

@@ -72,7 +72,7 @@ export const SCHEME_LABELS: Record<PaymentScheme, string> = {
     full: 'Lunas Sekaligus',
     dp: 'DP + Pelunasan',
     termin: 'Termin / Milestone',
-    installment: 'Cicilan Berkala',
+    installment: 'Custom Tempo',
 };
 
 // ─── Legacy VendorPaymentTerm (kept for backward compat) ─────────────────────
@@ -125,6 +125,8 @@ export interface BillboardLocation {
     poIssued: boolean;
     poNumber: string;
     purchaseOrderId?: string; // DB UUID of the PO (populated from backend)
+    vendorNpwp?: string | null;
+    vendorIsPkp?: boolean;
     orientation?: 'V' | 'H';
     lighting?: 'Berlampu' | 'Tidak Berlampu';
     topNotes?: string;
@@ -197,6 +199,7 @@ export interface Project {
     salesId?: string;
     salesPIC: string;
     salesCommissionRate?: number;
+    salesCommission?: number;
     period: string;
     startDate?: string;
     endDate?: string;
@@ -315,7 +318,10 @@ export function calcFinancials(
     }
 
     const commissionRate = project.salesCommissionRate ?? 0;
-    const salesCommission = Math.round((dpp * commissionRate) / 100);
+    const salesCommission =
+        project.salesCommission !== undefined
+            ? Math.round(Number(project.salesCommission) || 0)
+            : 0;
 
     const netProfit = dpp - totalDppVendor - salesCommission;
     const ppnNet = ppnKeluaran - ppnMasukan;

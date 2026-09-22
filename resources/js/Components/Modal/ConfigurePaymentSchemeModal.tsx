@@ -14,6 +14,7 @@ export interface ConfigurePaymentSchemeModalSubmitData {
 
 interface ConfigurePaymentSchemeModalProps {
     isOpen: boolean;
+    isLoading?: boolean;
     onClose: () => void;
     clientName: string;
     totalAmount: number;
@@ -40,7 +41,7 @@ const formatIndoDate = (dateStr?: string) => {
 
 export const ConfigurePaymentSchemeModal: React.FC<
     ConfigurePaymentSchemeModalProps
-> = ({ isOpen, onClose, totalAmount, isPPN, onSubmit }) => {
+> = ({ isOpen, isLoading = false, onClose, totalAmount, isPPN, onSubmit }) => {
     const [scheme, setScheme] = useState<ClientPaymentScheme>('termin');
     const [termPercents, setTermPercents] = useState<number[]>([30, 40, 30]);
     const [termDates, setTermDates] = useState<string[]>([
@@ -84,20 +85,27 @@ export const ConfigurePaymentSchemeModal: React.FC<
     if (!isOpen) return null;
 
     const generateInstallments = (count: number) => {
-        setInstallCount(count);
-        const basePercent = Math.floor(100 / count);
-        const percents = Array.from({ length: count }, (_, i) =>
-            i === count - 1 ? 100 - basePercent * (count - 1) : basePercent,
+        const validCount = Math.min(12, Math.max(1, count));
+        setInstallCount(validCount);
+        const basePercent = Math.floor(100 / validCount);
+        const percents = Array.from({ length: validCount }, (_, i) =>
+            i === validCount - 1
+                ? 100 - basePercent * (validCount - 1)
+                : basePercent,
         );
         setTermPercents(percents);
 
-        const dates = Array.from({ length: count }, (_, i) => {
+        const dates = Array.from({ length: validCount }, (_, i) => {
             const d = new Date();
             d.setMonth(d.getMonth() + i + 1); // 1 Month interval
             return d.toISOString().split('T')[0];
         });
         setTermDates(dates);
-        setNotes(`Angsuran berkala ${count} bulan`);
+        setNotes(
+            validCount === 1
+                ? 'Tempo 1 Bulan (Net 30)'
+                : `Tempo ${validCount} Kali (${validCount} Bulan)`,
+        );
     };
 
     const handleSelectScheme = (selectedScheme: ClientPaymentScheme) => {
@@ -220,8 +228,8 @@ export const ConfigurePaymentSchemeModal: React.FC<
                                 },
                                 {
                                     id: 'installment',
-                                    label: 'Cicilan Bulanan',
-                                    desc: 'Angsuran berkala per bulan',
+                                    label: 'Custom Tempo',
+                                    desc: 'Bebas atur termin hingga 12 bulan',
                                 },
                             ].map((s) => (
                                 <button
@@ -249,71 +257,86 @@ export const ConfigurePaymentSchemeModal: React.FC<
                         </div>
                     </div>
 
-                    {/* Installment Durations Selection - Only shown when "installment" is selected */}
+                    {/* Custom Tempo Durations Selection - Only shown when "installment" is selected */}
                     {scheme === 'installment' && (
                         <div className="bg-primary/5 border-primary/20 space-y-3 rounded-3xl border p-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div>
                                     <div className="text-xs font-black text-slate-800">
-                                        Durasi Angsuran Bulanan
+                                        Jumlah Tempo / Termin
                                     </div>
                                     <div className="mt-0.5 text-[10px] font-bold text-primary">
-                                        Ubah jumlah bulan cicilan yang
-                                        diinginkan
+                                        Bebas atur termin pembayaran invoice
+                                        client hingga 12 bulan
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {[3, 6, 12].map((m) => (
-                                        <button
-                                            key={m}
-                                            type="button"
-                                            onClick={() =>
-                                                generateInstallments(m)
-                                            }
-                                            className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
-                                                installCount === m
-                                                    ? 'shadow-2xs bg-primary text-white'
-                                                    : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                                            }`}
-                                        >
-                                            {m} Bulan
-                                        </button>
-                                    ))}
-                                    <div className="mx-1 h-4 w-px bg-slate-200" />
-                                    <div className="flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                generateInstallments(
-                                                    Math.max(
-                                                        2,
-                                                        installCount - 1,
-                                                    ),
-                                                )
-                                            }
-                                            className="px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50"
-                                        >
-                                            -
-                                        </button>
-                                        <span className="min-w-[24px] border-x border-slate-100 px-2.5 py-1.5 text-center text-xs font-black text-slate-800">
-                                            {installCount}
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        disabled={installCount <= 1}
+                                        onClick={() =>
+                                            generateInstallments(
+                                                installCount - 1,
+                                            )
+                                        }
+                                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                                    >
+                                        -
+                                    </button>
+                                    <div className="flex items-center gap-1">
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={12}
+                                            value={installCount}
+                                            onChange={(e) => {
+                                                const val =
+                                                    parseInt(e.target.value) ||
+                                                    1;
+                                                generateInstallments(val);
+                                            }}
+                                            className="w-14 rounded-lg border border-slate-200 bg-white py-1 text-center font-mono text-xs font-bold text-slate-900 focus:border-primary focus:outline-none"
+                                        />
+                                        <span className="text-xs font-bold text-slate-700">
+                                            Kali
                                         </span>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                generateInstallments(
-                                                    Math.min(
-                                                        24,
-                                                        installCount + 1,
-                                                    ),
-                                                )
-                                            }
-                                            className="px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50"
-                                        >
-                                            +
-                                        </button>
                                     </div>
+                                    <button
+                                        type="button"
+                                        disabled={installCount >= 12}
+                                        onClick={() =>
+                                            generateInstallments(
+                                                installCount + 1,
+                                            )
+                                        }
+                                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                                    >
+                                        +
+                                    </button>
                                 </div>
+                            </div>
+
+                            {/* Pilihan Cepat */}
+                            <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-200/60 pt-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Pilihan Cepat:
+                                </span>
+                                {[2, 3, 4, 6, 12].map((cnt) => (
+                                    <button
+                                        key={cnt}
+                                        type="button"
+                                        onClick={() =>
+                                            generateInstallments(cnt)
+                                        }
+                                        className={`cursor-pointer rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                                            installCount === cnt
+                                                ? 'shadow-2xs bg-primary text-white'
+                                                : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {cnt}x Tempo
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -336,14 +359,16 @@ export const ConfigurePaymentSchemeModal: React.FC<
                                 );
                                 const termLabel =
                                     scheme === 'installment'
-                                        ? `Cicilan ${idx + 1} dari ${installCount}`
+                                        ? installCount === 1
+                                            ? 'Tempo 1 Kali – Pelunasan 100%'
+                                            : `Cicilan ${idx + 1} dari ${installCount} (Bulan ${idx + 1})`
                                         : termPercents.length === 1
                                           ? 'Pelunasan Total Client'
                                           : idx === 0
                                             ? 'Termin 1 – Uang Muka'
                                             : idx === termPercents.length - 1
                                               ? `Termin ${idx + 1} – Pelunasan`
-                                              : `Termin ${idx + 1} – Progress`;
+                                              : `Termin ${idx + 1} – Progres`;
 
                                 return (
                                     <div
@@ -451,10 +476,20 @@ export const ConfigurePaymentSchemeModal: React.FC<
 
                 {/* Footer Action Buttons */}
                 <div className="flex flex-shrink-0 items-center justify-end gap-3 border-t border-slate-100 bg-white px-8 py-5">
-                    <SecondaryButton type="button" onClick={onClose}>
+                    <SecondaryButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={isLoading}
+                    >
                         Batal
                     </SecondaryButton>
-                    <PrimaryButton type="button" onClick={handleSubmit}>
+                    <PrimaryButton
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={isLoading}
+                        isLoading={isLoading}
+                        loadingText="Menyimpan Skema..."
+                    >
                         Simpan Skema Pembayaran
                     </PrimaryButton>
                 </div>

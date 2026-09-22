@@ -2012,11 +2012,12 @@ export default function CashOut() {
                     <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
                         <button
                             type="button"
+                            disabled={form.processing}
                             onClick={() => {
                                 setIsModalOpen(false);
                                 setEditingTransaction(null);
                             }}
-                            className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100"
+                            className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50"
                         >
                             Batal
                         </button>
@@ -2025,11 +2026,34 @@ export default function CashOut() {
                             disabled={form.processing}
                             className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700 active:scale-95 disabled:opacity-50"
                         >
-                            {form.processing
-                                ? 'Menyimpan...'
-                                : editingTransaction
-                                  ? 'Simpan Perubahan'
-                                  : 'Simpan Pengeluaran'}
+                            {form.processing ? (
+                                <>
+                                    <svg
+                                        className="h-4 w-4 animate-spin text-white"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        />
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
+                                    </svg>
+                                    <span>Menyimpan...</span>
+                                </>
+                            ) : editingTransaction ? (
+                                'Simpan Perubahan'
+                            ) : (
+                                'Simpan Pengeluaran'
+                            )}
                         </button>
                     </div>
                 </form>
@@ -2214,8 +2238,9 @@ export default function CashOut() {
                     <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
                         <button
                             type="button"
+                            disabled={categoryForm.processing}
                             onClick={() => setIsAddCategoryModalOpen(false)}
-                            className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100"
+                            className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50"
                         >
                             Batal
                         </button>
@@ -2224,9 +2249,32 @@ export default function CashOut() {
                             disabled={categoryForm.processing}
                             className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700 active:scale-95 disabled:opacity-50"
                         >
-                            {categoryForm.processing
-                                ? 'Menyimpan...'
-                                : 'Simpan Kategori'}
+                            {categoryForm.processing ? (
+                                <>
+                                    <svg
+                                        className="h-4 w-4 animate-spin text-white"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        />
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
+                                    </svg>
+                                    <span>Menyimpan...</span>
+                                </>
+                            ) : (
+                                'Simpan Kategori'
+                            )}
                         </button>
                     </div>
                 </form>

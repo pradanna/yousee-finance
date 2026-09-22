@@ -63,6 +63,8 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
             .props;
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isSavingSales, setIsSavingSales] = useState(false);
+    const [isUpdatingSales, setIsUpdatingSales] = useState(false);
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
     const [statusTab, setStatusTab] = useState<'active' | 'archived' | 'all'>(
         filters?.status || 'active',
@@ -182,17 +184,18 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
     };
 
     const handleAddSales = (formData: SalesFormData) => {
+        setIsSavingSales(true);
         router.post(
             route('sales.store'),
             {
                 name: formData.name,
                 email: formData.email,
                 phone: formData.phone,
-                commission_rate: formData.commission_rate,
             },
             {
                 preserveScroll: true,
                 onSuccess: () => {
+                    setIsAddModalOpen(false);
                     triggerToast(
                         `Personil sales "${formData.name}" berhasil didaftarkan.`,
                         'success',
@@ -204,6 +207,9 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                         'Gagal menyimpan personil sales';
                     triggerToast(String(firstError), 'error');
                 },
+                onFinish: () => {
+                    setIsSavingSales(false);
+                },
             },
         );
     };
@@ -214,17 +220,19 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
     };
 
     const handleSaveEditedSales = (updated: SalesItem) => {
+        setIsUpdatingSales(true);
         router.put(
             route('sales.update', updated.id),
             {
                 name: updated.name,
                 email: updated.email,
                 phone: updated.phone,
-                commission_rate: updated.commission_rate,
             },
             {
                 preserveScroll: true,
                 onSuccess: () => {
+                    setIsEditModalOpen(false);
+                    setSelectedSalesForEdit(null);
                     triggerToast(
                         `Perubahan data sales "${updated.name}" berhasil disimpan.`,
                         'success',
@@ -234,6 +242,9 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                     const firstError =
                         Object.values(errs)[0] || 'Gagal memperbarui sales';
                     triggerToast(String(firstError), 'error');
+                },
+                onFinish: () => {
+                    setIsUpdatingSales(false);
                 },
             },
         );
@@ -409,11 +420,11 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                         valueColorClass="text-blue-950"
                     />
 
-                    {/* Card 2: Rata-rata Komisi */}
+                    {/* Card 2: Total Sales Terdaftar */}
                     <MetricCard
-                        title="Rata-rata Komisi Deals"
-                        value={`${avgCommission}%`}
-                        badgeText="Standard Rate"
+                        title="Total Sales Terdaftar"
+                        value={`${metrics?.totalSales ?? 0} Personil`}
+                        badgeText="Database Sales"
                         cardBgClass="bg-emerald-50/60 border-emerald-200/60 shadow-xs"
                         badgeColorClass="bg-white/90 text-emerald-800 border-emerald-200/60"
                         icon={
@@ -427,7 +438,7 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                                 <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
                                 />
                             </svg>
                         }
@@ -569,22 +580,6 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                                             Telepon / WhatsApp
                                         </th>
 
-                                        {/* Sortable: Standard Komisi */}
-                                        <th
-                                            scope="col"
-                                            className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/60"
-                                            onClick={() =>
-                                                handleSort('commission_rate')
-                                            }
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span>Rate Komisi</span>
-                                                {renderSortIcon(
-                                                    'commission_rate',
-                                                )}
-                                            </div>
-                                        </th>
-
                                         {/* Status */}
                                         <th
                                             scope="col"
@@ -660,9 +655,19 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                                                                 <span className="block text-xs font-bold text-slate-900">
                                                                     {sale.name}
                                                                 </span>
-                                                                <span className="block text-[11px] text-slate-400">
-                                                                    {sale.email}
-                                                                </span>
+                                                                {sale.email &&
+                                                                sale.email.trim() !==
+                                                                    '' ? (
+                                                                    <span className="block text-[11px] text-slate-400">
+                                                                        {
+                                                                            sale.email
+                                                                        }
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="block text-[11px] italic text-slate-300">
+                                                                        —
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -695,16 +700,6 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                                                                 —
                                                             </span>
                                                         )}
-                                                    </td>
-
-                                                    {/* Standard Komisi Rate */}
-                                                    <td className="whitespace-nowrap px-6 py-4">
-                                                        <span className="inline-flex items-center rounded-xl border border-blue-200/80 bg-blue-50/70 px-2.5 py-1 font-mono text-xs font-bold text-blue-700">
-                                                            {
-                                                                sale.commission_rate
-                                                            }
-                                                            %
-                                                        </span>
                                                     </td>
 
                                                     {/* Status */}
@@ -872,6 +867,7 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                     isOpen={isAddModalOpen}
                     onClose={() => setIsAddModalOpen(false)}
                     onSubmit={handleAddSales}
+                    isSubmitting={isSavingSales}
                 />
 
                 <SalesEditModal
@@ -879,6 +875,7 @@ export default function Sales({ sales, metrics, filters }: SalesPageProps) {
                     onClose={() => setIsEditModalOpen(false)}
                     sales={selectedSalesForEdit}
                     onSubmit={handleSaveEditedSales}
+                    isSubmitting={isUpdatingSales}
                 />
             </div>
         </AppLayout>

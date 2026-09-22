@@ -46,6 +46,7 @@ export default function VendorPOTab({
         vendorTermScheme?: PaymentScheme,
         vendorTermPercents?: number[],
         vendorTermDates?: string[],
+        onSuccessCallback?: () => void,
     ) => void;
     onIssueBulkPO?: (
         vendorId: string | number,
@@ -56,6 +57,7 @@ export default function VendorPOTab({
         vendorTermScheme?: PaymentScheme,
         vendorTermPercents?: number[],
         vendorTermDates?: string[],
+        onSuccessCallback?: () => void,
     ) => void;
     onUpdateProject: (updated: Project) => void;
 }) {
@@ -108,6 +110,7 @@ export default function VendorPOTab({
     );
     const [vPayRefInput, setVPayRefInput] = useState<string>('');
     const [vPayNotesInput, setVPayNotesInput] = useState<string>('');
+    const [isSubmittingVendorPay, setIsSubmittingVendorPay] = useState(false);
 
     // Collapsible Vendor TOP State
     const [expandedVendorTop, setExpandedVendorTop] = useState<
@@ -117,12 +120,45 @@ export default function VendorPOTab({
     // Vendor TOP Terms Breakdown State
     const [vendorTermScheme, setVendorTermScheme] =
         useState<PaymentScheme>('full');
+    const [customTempoCount, setCustomTempoCount] = useState<number>(3);
     const [vendorTermPercents, setVendorTermPercents] = useState<number[]>([
         100,
     ]);
     const [vendorTermDates, setVendorTermDates] = useState<string[]>([
         new Date().toISOString().split('T')[0],
     ]);
+
+    const calcInstallmentPercents = (count: number): number[] => {
+        if (count <= 1) return [100];
+        const per = Math.round(100 / count);
+        const res = Array(count).fill(per);
+        const sumExceptLast = per * (count - 1);
+        res[count - 1] = 100 - sumExceptLast;
+        return res;
+    };
+
+    const calcInstallmentDates = (count: number): string[] => {
+        const dates: string[] = [];
+        const now = new Date();
+        for (let i = 0; i < count; i++) {
+            const d = new Date(now);
+            d.setMonth(d.getMonth() + (i + 1));
+            dates.push(d.toISOString().split('T')[0]);
+        }
+        return dates;
+    };
+
+    const applyCustomTempo = (count: number) => {
+        const validCount = Math.min(12, Math.max(1, count));
+        setCustomTempoCount(validCount);
+        setVendorTermPercents(calcInstallmentPercents(validCount));
+        setVendorTermDates(calcInstallmentDates(validCount));
+        setPoTopNotes(
+            validCount === 1
+                ? 'Tempo 1 Bulan (Net 30)'
+                : `Tempo ${validCount} Kali (${validCount} Bulan)`,
+        );
+    };
 
     const handleSelectVendorScheme = (scheme: PaymentScheme) => {
         setVendorTermScheme(scheme);
@@ -147,10 +183,97 @@ export default function VendorPOTab({
             setVendorTermDates([today, nextMonth, month2]);
             setPoTopNotes('Termin 3 Tahap (30%, 40%, 30%)');
         } else if (scheme === 'installment') {
-            setVendorTermPercents([100]);
-            setVendorTermDates([nextMonth]);
-            setPoTopNotes('Tempo 30 Hari (Net 30)');
+            applyCustomTempo(customTempoCount || 3);
         }
+    };
+
+    const getTermLabel = (idx: number, totalCount: number) => {
+        if (vendorTermScheme === 'installment') {
+            return totalCount === 1
+                ? 'Tempo 1 Kali – Pelunasan 100%'
+                : `Cicilan ${idx + 1} dari ${totalCount} (Bulan ${idx + 1})`;
+        }
+        if (totalCount === 1) return 'Pelunasan Total Vendor';
+        if (idx === 0) return 'Termin 1 – Uang Muka (DP)';
+        if (idx === totalCount - 1) return `Termin ${idx + 1} – Pelunasan`;
+        return `Termin ${idx + 1} – Progres`;
+    };
+
+    const renderCustomTempoControl = () => {
+        if (vendorTermScheme !== 'installment') return null;
+        return (
+            <div className="mt-3 space-y-2.5 rounded-2xl border border-blue-200/90 bg-blue-50/70 p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <label className="block text-xs font-bold text-blue-950">
+                            Jumlah Tempo / Termin
+                        </label>
+                        <p className="text-[10.5px] font-medium text-blue-700/80">
+                            Bebas atur termin pembayaran vendor hingga 12 bulan
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            disabled={customTempoCount <= 1}
+                            onClick={() =>
+                                applyCustomTempo(customTempoCount - 1)
+                            }
+                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white text-xs font-bold text-blue-900 hover:bg-blue-100 disabled:opacity-40"
+                        >
+                            -
+                        </button>
+                        <div className="flex items-center gap-1">
+                            <input
+                                type="number"
+                                min={1}
+                                max={12}
+                                value={customTempoCount}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 1;
+                                    applyCustomTempo(val);
+                                }}
+                                className="w-14 rounded-lg border border-blue-300 bg-white py-1 text-center font-mono text-xs font-bold text-blue-950 focus:border-blue-600 focus:outline-none"
+                            />
+                            <span className="text-xs font-bold text-blue-900">
+                                Kali
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            disabled={customTempoCount >= 12}
+                            onClick={() =>
+                                applyCustomTempo(customTempoCount + 1)
+                            }
+                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white text-xs font-bold text-blue-900 hover:bg-blue-100 disabled:opacity-40"
+                        >
+                            +
+                        </button>
+                    </div>
+                </div>
+
+                {/* Pilihan Cepat */}
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-blue-200/60 pt-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                        Pilihan Cepat:
+                    </span>
+                    {[2, 3, 4, 6, 12].map((cnt) => (
+                        <button
+                            key={cnt}
+                            type="button"
+                            onClick={() => applyCustomTempo(cnt)}
+                            className={`rounded-lg px-2.5 py-0.5 text-xs font-bold transition-all ${
+                                customTempoCount === cnt
+                                    ? 'shadow-2xs bg-blue-600 text-white'
+                                    : 'border border-blue-200 bg-white text-blue-800 hover:border-blue-300 hover:bg-blue-100'
+                            }`}
+                        >
+                            {cnt}x Tempo
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
     };
 
     const handleDownloadPO = (
@@ -265,13 +388,16 @@ export default function VendorPOTab({
             vendorTermScheme,
             vendorTermPercents,
             vendorTermDates,
+            () => {
+                // Auto Download PDF upon issuance HANYA jika server sukses
+                handleDownloadPO(
+                    confirmingLoc.vendorName || 'Vendor',
+                    poNumber,
+                    [updatedLoc],
+                );
+            },
         );
         setConfirmingLoc(null);
-
-        // Auto Download PDF upon issuance
-        handleDownloadPO(confirmingLoc.vendorName || 'Vendor', poNumber, [
-            updatedLoc,
-        ]);
     };
 
     const handleConfirmVendorBulkPO = () => {
@@ -305,6 +431,14 @@ export default function VendorPOTab({
             vendorTermDates,
         }));
 
+        const onBulkSuccess = () => {
+            handleDownloadPO(
+                confirmingVendorGroup.vendorName,
+                collectivePoNumber,
+                updatedItems,
+            );
+        };
+
         if (onIssueBulkPO) {
             onIssueBulkPO(
                 confirmingVendorGroup.vendorId,
@@ -315,9 +449,10 @@ export default function VendorPOTab({
                 vendorTermScheme,
                 vendorTermPercents,
                 vendorTermDates,
+                onBulkSuccess,
             );
         } else {
-            confirmingVendorGroup.unissuedItems.forEach((loc) => {
+            confirmingVendorGroup.unissuedItems.forEach((loc, idx) => {
                 onIssuePO(
                     loc.id,
                     collectivePoNumber,
@@ -326,17 +461,11 @@ export default function VendorPOTab({
                     vendorTermScheme,
                     vendorTermPercents,
                     vendorTermDates,
+                    idx === 0 ? onBulkSuccess : undefined,
                 );
             });
         }
         setConfirmingVendorGroup(null);
-
-        // Auto Download PDF upon bulk issuance
-        handleDownloadPO(
-            confirmingVendorGroup.vendorName,
-            collectivePoNumber,
-            updatedItems,
-        );
     };
 
     const handleSaveEditPO = () => {
@@ -725,6 +854,10 @@ export default function VendorPOTab({
                             uniquePoNumbers.size > 1 ||
                             (issuedItems.length === 1 &&
                                 group.items.length === 1);
+                        const isVendorPkp = group.items.some(
+                            (l) => l.vendorIsPkp,
+                        );
+                        const isNonPkpInPpn = isPPN && !isVendorPkp;
 
                         return (
                             <div
@@ -754,6 +887,17 @@ export default function VendorPOTab({
                                                 <h4 className="text-xs font-bold tracking-tight text-slate-900">
                                                     {group.vendorName}
                                                 </h4>
+
+                                                {/* Badge Status Pajak Vendor */}
+                                                {isVendorPkp ? (
+                                                    <span className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700">
+                                                        PKP
+                                                    </span>
+                                                ) : (
+                                                    <span className="rounded-lg border border-slate-300 bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600">
+                                                        Non-PKP
+                                                    </span>
+                                                )}
 
                                                 {/* Badge Skema PO */}
                                                 {isCollectivePO ? (
@@ -827,16 +971,27 @@ export default function VendorPOTab({
                                         {unissuedItems.length > 0 ? (
                                             <button
                                                 type="button"
-                                                onClick={() =>
+                                                disabled={isNonPkpInPpn}
+                                                onClick={() => {
+                                                    if (isNonPkpInPpn) return;
                                                     setConfirmingVendorGroup({
                                                         vendorId:
                                                             group.vendorId,
                                                         vendorName:
                                                             group.vendorName,
                                                         unissuedItems,
-                                                    })
+                                                    });
+                                                }}
+                                                className={`shadow-2xs flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white transition-all ${
+                                                    isNonPkpInPpn
+                                                        ? 'cursor-not-allowed bg-slate-400 opacity-60'
+                                                        : 'cursor-pointer bg-blue-600 hover:bg-blue-700'
+                                                }`}
+                                                title={
+                                                    isNonPkpInPpn
+                                                        ? 'Vendor Non-PKP dilarang pada proyek Mode PPN. Lengkapi NPWP vendor di menu Master Vendor.'
+                                                        : `Terbitkan PO untuk ${unissuedItems.length} titik`
                                                 }
-                                                className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-blue-700"
                                             >
                                                 <svg
                                                     className="h-3.5 w-3.5"
@@ -872,35 +1027,6 @@ export default function VendorPOTab({
                                                     </svg>
                                                     Semua PO Terbit
                                                 </span>
-                                                {isCollectivePO && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            handleDownloadPO(
-                                                                group.vendorName,
-                                                                firstPoNum,
-                                                                issuedItems,
-                                                            )
-                                                        }
-                                                        className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-violet-700"
-                                                        title="Buka Dokumen PO Kolektif PDF"
-                                                    >
-                                                        <svg
-                                                            className="h-3.5 w-3.5"
-                                                            fill="none"
-                                                            viewBox="0 0 24 24"
-                                                            stroke="currentColor"
-                                                            strokeWidth={2}
-                                                        >
-                                                            <path
-                                                                strokeLinecap="round"
-                                                                strokeLinejoin="round"
-                                                                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                            />
-                                                        </svg>
-                                                        Buka PO Kolektif ({issuedItems.length} Titik)
-                                                    </button>
-                                                )}
                                             </div>
                                         )}
 
@@ -1131,11 +1257,46 @@ export default function VendorPOTab({
 
                                 {/* Daftar Titik PO Under Vendor */}
                                 <div className="space-y-3 bg-slate-50/40 p-3.5">
+                                    {/* Banner Peringatan jika Vendor Non-PKP pada proyek Mode PPN */}
+                                    {isNonPkpInPpn && (
+                                        <div className="flex items-center gap-2.5 rounded-2xl border border-amber-300/80 bg-amber-50/90 p-3.5 text-xs text-amber-900">
+                                            <svg
+                                                className="h-5 w-5 flex-shrink-0 text-amber-600"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                                />
+                                            </svg>
+                                            <div className="leading-relaxed">
+                                                <span className="font-bold">
+                                                    Vendor Berstatus Non-PKP:
+                                                </span>{' '}
+                                                Pada proyek{' '}
+                                                <strong>Mode PPN</strong>,
+                                                penerbitan PO dilarang untuk
+                                                vendor Non-PKP demi kepatuhan
+                                                perpajakan (Faktur Pajak
+                                                Masukan). Silakan lengkapi NPWP
+                                                vendor di menu{' '}
+                                                <span className="font-semibold underline">
+                                                    Master Vendor
+                                                </span>{' '}
+                                                atau alihkan ke vendor PKP.
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Banner PO Kolektif jika semua titik lokasi tergabung dalam 1 PO */}
                                     {isCollectivePO && (
                                         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-200/80 bg-violet-50/80 px-4 py-3">
                                             <div className="flex items-center gap-3">
-                                                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white shadow-xs">
+                                                <div className="shadow-xs flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white">
                                                     <svg
                                                         className="h-4 w-4"
                                                         fill="none"
@@ -1156,11 +1317,19 @@ export default function VendorPOTab({
                                                             {firstPoNum}
                                                         </span>
                                                         <span className="rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-800">
-                                                            PO Kolektif &bull; {issuedItems.length} Titik Lokasi
+                                                            PO Kolektif &bull;{' '}
+                                                            {issuedItems.length}{' '}
+                                                            Titik Lokasi
                                                         </span>
                                                     </div>
                                                     <p className="mt-0.5 text-[11px] text-violet-700">
-                                                        Seluruh {issuedItems.length} titik lokasi di bawah tergabung dalam 1 dokumen PO kolektif utuh senilai target PO {fmt(vendorGrandTotal)}.
+                                                        Seluruh{' '}
+                                                        {issuedItems.length}{' '}
+                                                        titik lokasi di bawah
+                                                        tergabung dalam 1
+                                                        dokumen PO kolektif utuh
+                                                        senilai target PO{' '}
+                                                        {fmt(vendorGrandTotal)}.
                                                     </p>
                                                 </div>
                                             </div>
@@ -1271,9 +1440,15 @@ export default function VendorPOTab({
                                                                             loc.poNumber
                                                                         }
                                                                     </span>
-                                                                    {group.items.filter((it) => it.poNumber === loc.poNumber).length > 1 && (
+                                                                    {group.items.filter(
+                                                                        (it) =>
+                                                                            it.poNumber ===
+                                                                            loc.poNumber,
+                                                                    ).length >
+                                                                        1 && (
                                                                         <span className="rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold text-violet-700">
-                                                                            PO Kolektif
+                                                                            PO
+                                                                            Kolektif
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -1282,12 +1457,28 @@ export default function VendorPOTab({
                                                     </div>
                                                     {!loc.poIssued ? (
                                                         <button
-                                                            onClick={() =>
+                                                            disabled={
+                                                                isNonPkpInPpn
+                                                            }
+                                                            onClick={() => {
+                                                                if (
+                                                                    isNonPkpInPpn
+                                                                )
+                                                                    return;
                                                                 setConfirmingLoc(
                                                                     loc,
-                                                                )
+                                                                );
+                                                            }}
+                                                            className={`shadow-2xs flex flex-shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-white transition-all ${
+                                                                isNonPkpInPpn
+                                                                    ? 'cursor-not-allowed bg-slate-400 opacity-60'
+                                                                    : 'cursor-pointer bg-blue-600 hover:bg-blue-700'
+                                                            }`}
+                                                            title={
+                                                                isNonPkpInPpn
+                                                                    ? 'Vendor Non-PKP dilarang pada proyek Mode PPN. Lengkapi NPWP vendor di menu Master Vendor.'
+                                                                    : 'Terbitkan PO Titik Ini'
                                                             }
-                                                            className="shadow-2xs flex flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-blue-700"
                                                         >
                                                             <svg
                                                                 className="h-3.5 w-3.5"
@@ -1307,16 +1498,28 @@ export default function VendorPOTab({
                                                     ) : (
                                                         <div className="flex flex-shrink-0 items-center gap-1.5">
                                                             {(() => {
-                                                                const poLocations = loc.poNumber
-                                                                    ? group.items.filter(
-                                                                          (item) =>
-                                                                              item.poNumber ===
-                                                                              loc.poNumber,
-                                                                      )
-                                                                    : [loc];
+                                                                const poLocations =
+                                                                    loc.poNumber
+                                                                        ? group.items.filter(
+                                                                              (
+                                                                                  item,
+                                                                              ) =>
+                                                                                  item.poNumber ===
+                                                                                  loc.poNumber,
+                                                                          )
+                                                                        : [loc];
                                                                 const isPartCollective =
                                                                     poLocations.length >
                                                                     1;
+
+                                                                // Jika seluruh vendor tergabung dalam PO Kolektif, dokumen PDF cukup dibuka via Banner PO Kolektif di atas
+                                                                if (
+                                                                    isCollectivePO &&
+                                                                    isPartCollective
+                                                                ) {
+                                                                    return null;
+                                                                }
+
                                                                 return (
                                                                     <button
                                                                         onClick={() =>
@@ -1865,6 +2068,7 @@ export default function VendorPOTab({
                                                                                                                     {
                                                                                                                         term.percent
                                                                                                                     }
+
                                                                                                                     %
                                                                                                                 </strong>
                                                                                                             </span>
@@ -1912,6 +2116,7 @@ export default function VendorPOTab({
                                                                                                                     {fmt(
                                                                                                                         term.targetAmount,
                                                                                                                     )}
+
                                                                                                                     )
                                                                                                                 </span>
                                                                                                             ) : (
@@ -2673,8 +2878,9 @@ export default function VendorPOTab({
                         <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
                             <button
                                 type="button"
+                                disabled={isSubmittingVendorPay}
                                 onClick={() => setSelectedVendorForPay(null)}
-                                className="cursor-pointer px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800"
+                                className="cursor-pointer px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 disabled:opacity-50"
                             >
                                 Batal
                             </button>
@@ -2699,9 +2905,16 @@ export default function VendorPOTab({
                                 return (
                                     <button
                                         type="button"
-                                        disabled={isInvalidAmount}
+                                        disabled={
+                                            isInvalidAmount ||
+                                            isSubmittingVendorPay
+                                        }
                                         onClick={() => {
-                                            if (isInvalidAmount) return;
+                                            if (
+                                                isInvalidAmount ||
+                                                isSubmittingVendorPay
+                                            )
+                                                return;
                                             const poId =
                                                 selectedVendorForPay.poId;
                                             const termId =
@@ -2743,6 +2956,7 @@ export default function VendorPOTab({
                                                     );
                                                 }
 
+                                                setIsSubmittingVendorPay(true);
                                                 router.post(
                                                     `/projects/${projectId}/purchase-orders/${poId}/payment-terms/${termId}/settle`,
                                                     {
@@ -2799,6 +3013,11 @@ export default function VendorPOTab({
                                                                 );
                                                             }
                                                         },
+                                                        onFinish: () => {
+                                                            setIsSubmittingVendorPay(
+                                                                false,
+                                                            );
+                                                        },
                                                     },
                                                 );
                                                 return;
@@ -2839,12 +3058,40 @@ export default function VendorPOTab({
                                             setSelectedVendorForPay(null);
                                         }}
                                         className={`shadow-xs rounded-xl px-5 py-2.5 text-xs font-bold transition-all ${
-                                            isInvalidAmount
+                                            isInvalidAmount ||
+                                            isSubmittingVendorPay
                                                 ? 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-60'
                                                 : 'hover:bg-primary/90 cursor-pointer bg-primary text-white shadow-neon-primary'
                                         }`}
                                     >
-                                        Simpan Pembayaran Vendor
+                                        {isSubmittingVendorPay ? (
+                                            <span className="flex items-center gap-2">
+                                                <svg
+                                                    className="h-4 w-4 animate-spin text-white"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <circle
+                                                        className="opacity-25"
+                                                        cx="12"
+                                                        cy="12"
+                                                        r="10"
+                                                        stroke="currentColor"
+                                                        strokeWidth="4"
+                                                    />
+                                                    <path
+                                                        className="opacity-75"
+                                                        fill="currentColor"
+                                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                                    />
+                                                </svg>
+                                                <span>
+                                                    Menyimpan Pembayaran...
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            'Simpan Pembayaran Vendor'
+                                        )}
                                     </button>
                                 );
                             })()}
@@ -3004,8 +3251,8 @@ export default function VendorPOTab({
                                                     },
                                                     {
                                                         id: 'installment',
-                                                        label: 'Tempo / Net 30',
-                                                        desc: 'Pelunasan 30 hari kalender',
+                                                        label: 'Custom Tempo',
+                                                        desc: 'Bebas atur termin hingga 12 bulan',
                                                     },
                                                 ].map((s) => (
                                                     <button
@@ -3032,6 +3279,7 @@ export default function VendorPOTab({
                                                     </button>
                                                 ))}
                                             </div>
+                                            {renderCustomTempoControl()}
                                         </div>
                                     </div>
 
@@ -3098,17 +3346,10 @@ export default function VendorPOTab({
                                                                             100,
                                                                     );
                                                                 const termLabel =
-                                                                    vendorTermPercents.length ===
-                                                                    1
-                                                                        ? 'Pelunasan Total Vendor'
-                                                                        : idx ===
-                                                                            0
-                                                                          ? 'Termin 1 – Uang Muka (DP)'
-                                                                          : idx ===
-                                                                              vendorTermPercents.length -
-                                                                                  1
-                                                                            ? `Termin ${idx + 1} – Pelunasan`
-                                                                            : `Termin ${idx + 1} – Progres`;
+                                                                    getTermLabel(
+                                                                        idx,
+                                                                        vendorTermPercents.length,
+                                                                    );
 
                                                                 return (
                                                                     <div
@@ -3259,7 +3500,13 @@ export default function VendorPOTab({
                             </button>
                             <button
                                 onClick={handleSaveEditPO}
-                                className="flex-1 cursor-pointer rounded-xl bg-amber-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-amber-700"
+                                disabled={
+                                    vendorTermPercents.reduce(
+                                        (a, b) => a + (Number(b) || 0),
+                                        0,
+                                    ) !== 100
+                                }
+                                className="flex-1 cursor-pointer rounded-xl bg-amber-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Simpan Perubahan PO
                             </button>
@@ -3418,8 +3665,8 @@ export default function VendorPOTab({
                                                     },
                                                     {
                                                         id: 'installment',
-                                                        label: 'Tempo / Net 30',
-                                                        desc: 'Pelunasan 30 hari kalender',
+                                                        label: 'Custom Tempo',
+                                                        desc: 'Bebas atur termin hingga 12 bulan',
                                                     },
                                                 ].map((s) => (
                                                     <button
@@ -3446,6 +3693,7 @@ export default function VendorPOTab({
                                                     </button>
                                                 ))}
                                             </div>
+                                            {renderCustomTempoControl()}
                                         </div>
                                     </div>
 
@@ -3512,17 +3760,10 @@ export default function VendorPOTab({
                                                                             100,
                                                                     );
                                                                 const termLabel =
-                                                                    vendorTermPercents.length ===
-                                                                    1
-                                                                        ? 'Pelunasan Total Vendor'
-                                                                        : idx ===
-                                                                            0
-                                                                          ? 'Termin 1 – Uang Muka (DP)'
-                                                                          : idx ===
-                                                                              vendorTermPercents.length -
-                                                                                  1
-                                                                            ? `Termin ${idx + 1} – Pelunasan`
-                                                                            : `Termin ${idx + 1} – Progres`;
+                                                                    getTermLabel(
+                                                                        idx,
+                                                                        vendorTermPercents.length,
+                                                                    );
 
                                                                 return (
                                                                     <div
@@ -3703,7 +3944,14 @@ export default function VendorPOTab({
                             </button>
                             <button
                                 onClick={handleConfirmPO}
-                                className="flex-1 cursor-pointer rounded-xl bg-primary py-2.5 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700"
+                                disabled={
+                                    vendorTermPercents.reduce(
+                                        (a, b) => a + (Number(b) || 0),
+                                        0,
+                                    ) !== 100 ||
+                                    (isPPN && !confirmingLoc.vendorIsPkp)
+                                }
+                                className="flex-1 cursor-pointer rounded-xl bg-primary py-2.5 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Ya, Terbitkan PO Titik Ini
                             </button>
@@ -3873,8 +4121,8 @@ export default function VendorPOTab({
                                                     },
                                                     {
                                                         id: 'installment',
-                                                        label: 'Tempo / Net 30',
-                                                        desc: 'Pelunasan 30 hari kalender',
+                                                        label: 'Custom Tempo',
+                                                        desc: 'Bebas atur termin hingga 12 bulan',
                                                     },
                                                 ].map((s) => (
                                                     <button
@@ -3901,6 +4149,7 @@ export default function VendorPOTab({
                                                     </button>
                                                 ))}
                                             </div>
+                                            {renderCustomTempoControl()}
                                         </div>
                                     </div>
 
@@ -3970,17 +4219,10 @@ export default function VendorPOTab({
                                                                             100,
                                                                     );
                                                                 const termLabel =
-                                                                    vendorTermPercents.length ===
-                                                                    1
-                                                                        ? 'Pelunasan Total Vendor'
-                                                                        : idx ===
-                                                                            0
-                                                                          ? 'Termin 1 – Uang Muka (DP)'
-                                                                          : idx ===
-                                                                              vendorTermPercents.length -
-                                                                                  1
-                                                                            ? `Termin ${idx + 1} – Pelunasan`
-                                                                            : `Termin ${idx + 1} – Progres`;
+                                                                    getTermLabel(
+                                                                        idx,
+                                                                        vendorTermPercents.length,
+                                                                    );
 
                                                                 return (
                                                                     <div
@@ -4175,7 +4417,17 @@ export default function VendorPOTab({
                             </button>
                             <button
                                 onClick={handleConfirmVendorBulkPO}
-                                className="flex-1 cursor-pointer rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700"
+                                disabled={
+                                    vendorTermPercents.reduce(
+                                        (a, b) => a + (Number(b) || 0),
+                                        0,
+                                    ) !== 100 ||
+                                    (isPPN &&
+                                        !confirmingVendorGroup.unissuedItems.some(
+                                            (it) => it.vendorIsPkp,
+                                        ))
+                                }
+                                className="flex-1 cursor-pointer rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Ya, Terbitkan PO Kolektif Vendor Ini
                             </button>

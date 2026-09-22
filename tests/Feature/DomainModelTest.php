@@ -102,7 +102,7 @@ class DomainModelTest extends TestCase
         $this->assertDatabaseHas('vendors', ['name' => 'Vendor Maju Jaya']);
 
         // Test delete protection
-        $project = Project::create(['name' => 'Project A', 'status' => 'active']);
+        $project = Project::create(['code' => 'PRJ-TEST-A', 'name' => 'Project A', 'status' => 'active']);
         $po = PurchaseOrder::create([
             'vendor_id' => $vendor->id,
             'project_id' => $project->id,
@@ -151,7 +151,7 @@ class DomainModelTest extends TestCase
     {
         $client = Client::create(['name' => 'Client A']);
         $sales = Sales::create(['name' => 'Sales Bintang', 'email' => 'sales2@yousee.com']);
-        $project = Project::create(['name' => 'Project Tower', 'status' => 'active']);
+        $project = Project::create(['code' => 'PRJ-TEST-TOWER', 'name' => 'Project Tower', 'status' => 'active']);
 
         // 1. Invoice PPN
         $invoice1 = Invoice::create([
@@ -253,11 +253,11 @@ class DomainModelTest extends TestCase
         // 2. Transisi yang benar: draft -> issued -> paid
         $invoice->status = 'issued';
         $invoice->save();
-        $this->assertEquals('issued', $invoice->status);
+        $this->assertEquals('issued', $invoice->status->value);
 
         $invoice->status = 'paid';
         $invoice->save();
-        $this->assertEquals('paid', $invoice->status);
+        $this->assertEquals('paid', $invoice->status->value);
 
         // 3. Status paid tidak bisa diubah kembali
         try {

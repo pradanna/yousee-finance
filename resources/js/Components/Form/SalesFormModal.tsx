@@ -8,27 +8,27 @@ import React, { useState } from 'react';
 
 export interface SalesFormData {
     name: string;
-    email: string;
+    email?: string;
     phone: string;
-    commission_rate: number;
 }
 
 interface SalesFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSubmit: (formData: SalesFormData) => void;
+    isSubmitting?: boolean;
 }
 
 export default function SalesFormModal({
     isOpen,
     onClose,
     onSubmit,
+    isSubmitting = false,
 }: SalesFormModalProps) {
     const [form, setForm] = useState<SalesFormData>({
         name: '',
         email: '',
         phone: '',
-        commission_rate: 2.0,
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -41,9 +41,7 @@ export default function SalesFormModal({
             newErrors.name = 'Nama lengkap personil sales wajib diisi.';
         }
 
-        if (!form.email.trim()) {
-            newErrors.email = 'Email resmi kantor wajib diisi.';
-        } else {
+        if (form.email && form.email.trim() !== '') {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(form.email)) {
                 newErrors.email = 'Format email tidak valid.';
@@ -56,9 +54,6 @@ export default function SalesFormModal({
         }
 
         onSubmit(form);
-        setForm({ name: '', email: '', phone: '', commission_rate: 2.0 });
-        setErrors({});
-        onClose();
     };
 
     return (
@@ -140,7 +135,7 @@ export default function SalesFormModal({
                     <div>
                         <InputLabel
                             htmlFor="email"
-                            value="Email Resmi Kantor *"
+                            value="Email Kantor (Opsional)"
                         />
                         <TextInput
                             id="email"
@@ -178,46 +173,22 @@ export default function SalesFormModal({
                             className="mt-1.5 block w-full"
                         />
                     </div>
-
-                    {/* Komisi Rate (%) */}
-                    <div>
-                        <InputLabel
-                            htmlFor="commission_rate"
-                            value="Standard Komisi Sales (%) *"
-                        />
-                        <div className="relative mt-1.5">
-                            <TextInput
-                                id="commission_rate"
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max="100"
-                                placeholder="2.0"
-                                value={form.commission_rate}
-                                onChange={(e) =>
-                                    setForm((prev) => ({
-                                        ...prev,
-                                        commission_rate: parseFloat(e.target.value) || 0,
-                                    }))
-                                }
-                                className="block w-full pr-10"
-                            />
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 font-mono text-xs font-bold text-slate-400">
-                                %
-                            </div>
-                        </div>
-                        <p className="mt-1 text-[11px] text-slate-400">
-                            Persentase standard estimasi komisi per nilai kontrak proyek yang dicapai.
-                        </p>
-                    </div>
                 </div>
 
                 {/* Footer Actions */}
                 <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-                    <SecondaryButton type="button" onClick={onClose}>
+                    <SecondaryButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                    >
                         Batal
                     </SecondaryButton>
-                    <PrimaryButton type="submit">
+                    <PrimaryButton
+                        type="submit"
+                        isLoading={isSubmitting}
+                        loadingText="Menyimpan..."
+                    >
                         Simpan Personil Sales
                     </PrimaryButton>
                 </div>

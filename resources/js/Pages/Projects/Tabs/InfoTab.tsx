@@ -1,7 +1,9 @@
+import Modal from '@/Components/UI/Modal';
 import { StatusBadge } from '@/Components/UI/ProjectStatusBadge';
-import { Project, fmt } from '../projectTypes';
+import { router } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Project, fmt, calcFinancials } from '../projectTypes';
 
-import { calcFinancials } from '../projectTypes';
 export default function InfoTab({
     project,
     isPPN,
@@ -12,6 +14,35 @@ export default function InfoTab({
     const locations = project.locations || [];
     const poCount = locations.filter((l) => l.poIssued).length;
     const fin = calcFinancials(project, locations, isPPN ? 'ppn' : 'non-ppn');
+
+    const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
+    const [commissionInput, setCommissionInput] = useState<string>(
+        String(project.salesCommission ?? 0),
+    );
+    const [isSavingCommission, setIsSavingCommission] = useState(false);
+
+    const handleSaveCommission = (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSavingCommission(true);
+        const numericVal =
+            parseFloat(commissionInput.replace(/[^0-9.]/g, '')) || 0;
+
+        router.put(
+            `/projects/${project.id}`,
+            {
+                sales_commission: numericVal,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsCommissionModalOpen(false);
+                },
+                onFinish: () => {
+                    setIsSavingCommission(false);
+                },
+            },
+        );
+    };
 
     return (
         <div className="space-y-6">
@@ -128,12 +159,39 @@ export default function InfoTab({
                                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-[10px] font-extrabold text-rose-800">
                                         -
                                     </span>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span>Komisi Sales PIC</span>
                                         <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 font-mono text-[10px] font-bold text-slate-600">
-                                            {project.salesPIC} (
-                                            {fin.commissionRate}%)
+                                            {project.salesPIC}
                                         </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCommissionInput(
+                                                    String(
+                                                        project.salesCommission ??
+                                                            0,
+                                                    ),
+                                                );
+                                                setIsCommissionModalOpen(true);
+                                            }}
+                                            className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 transition hover:bg-blue-100"
+                                        >
+                                            <svg
+                                                className="h-3 w-3"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                                                />
+                                            </svg>
+                                            Atur Komisi
+                                        </button>
                                     </div>
                                 </div>
                                 <span className="font-mono text-xs font-bold text-rose-700">
@@ -141,8 +199,7 @@ export default function InfoTab({
                                 </span>
                             </div>
                             <p className="ml-7 text-[10px] text-slate-400">
-                                Dihitung dari {fin.commissionRate}% × DPP
-                                Kontrak ({fmt(fin.dpp)})
+                                Nominal komisi diinput manual tanpa persentase
                             </p>
                         </div>
                     </div>
@@ -341,6 +398,46 @@ export default function InfoTab({
                             ),
                         },
                         {
+                            label: 'Komisi Sales PIC',
+                            value: (
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="font-mono font-bold text-slate-900">
+                                        {fmt(project.salesCommission ?? 0)}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCommissionInput(
+                                                String(
+                                                    project.salesCommission ??
+                                                        0,
+                                                ),
+                                            );
+                                            setIsCommissionModalOpen(true);
+                                        }}
+                                        className="cursor-pointer text-[10px] font-bold text-blue-600 hover:underline"
+                                    >
+                                        Ubah
+                                    </button>
+                                </div>
+                            ),
+                            icon: (
+                                <svg
+                                    className="h-4 w-4 text-emerald-600"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                </svg>
+                            ),
+                        },
+                        {
                             label: 'Periode Kampanye',
                             value: project.period,
                             icon: (
@@ -395,7 +492,7 @@ export default function InfoTab({
                             <div className="shadow-2xs flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white">
                                 {row.icon}
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                     {row.label}
                                 </div>
@@ -458,6 +555,142 @@ export default function InfoTab({
                     />
                 </div>
             </div>
+
+            {/* Modal Input Komisi Sales Manual */}
+            <Modal
+                show={isCommissionModalOpen}
+                onClose={() => setIsCommissionModalOpen(false)}
+                maxWidth="md"
+            >
+                <form onSubmit={handleSaveCommission} className="p-6">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-600">
+                                <svg
+                                    className="h-5 w-5"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900">
+                                    Atur Komisi Sales PIC
+                                </h3>
+                                <p className="text-[11px] text-slate-500">
+                                    Input nominal manual tanpa persentase
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsCommissionModalOpen(false)}
+                            className="cursor-pointer rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <div className="space-y-4 py-4">
+                        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs space-y-1">
+                            <div className="flex justify-between text-slate-500">
+                                <span>Sales PIC:</span>
+                                <span className="font-bold text-slate-800">
+                                    {project.salesPIC}
+                                </span>
+                            </div>
+                            <div className="flex justify-between text-slate-500">
+                                <span>Nilai Kontrak (DPP):</span>
+                                <span className="font-mono font-bold text-slate-800">
+                                    {fmt(fin.dpp)}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="mb-1 block text-xs font-bold text-slate-700">
+                                Nominal Komisi (Rp)
+                            </label>
+                            <div className="relative">
+                                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-bold text-slate-400">
+                                    Rp
+                                </span>
+                                <input
+                                    type="text"
+                                    required
+                                    value={commissionInput}
+                                    onChange={(e) => {
+                                        const raw = e.target.value.replace(
+                                            /[^0-9]/g,
+                                            '',
+                                        );
+                                        setCommissionInput(raw);
+                                    }}
+                                    placeholder="0"
+                                    className="w-full rounded-xl border border-slate-300 py-2.5 pl-10 pr-3 font-mono text-sm font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                />
+                            </div>
+                            <p className="mt-1.5 text-[11px] text-slate-400">
+                                Terbaca:{' '}
+                                <strong className="font-mono text-slate-700">
+                                    {fmt(Number(commissionInput) || 0)}
+                                </strong>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                        <button
+                            type="button"
+                            disabled={isSavingCommission}
+                            onClick={() => setIsCommissionModalOpen(false)}
+                            className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSavingCommission}
+                            className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {isSavingCommission ? (
+                                <>
+                                    <svg
+                                        className="h-4 w-4 animate-spin text-white"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        />
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
+                                    </svg>
+                                    <span>Menyimpan...</span>
+                                </>
+                            ) : (
+                                'Simpan Komisi'
+                            )}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 }
+

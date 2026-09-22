@@ -33,7 +33,7 @@ class SalesController extends Controller
         $sortBy = (string) $request->query('sort_by', 'updated_at');
         $sortDirection = strtolower((string) $request->query('sort_direction', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $allowedSorts = ['name', 'email', 'commission_rate', 'updated_at', 'created_at'];
+        $allowedSorts = ['name', 'email', 'updated_at', 'created_at'];
         if (! in_array($sortBy, $allowedSorts, true)) {
             $sortBy = 'updated_at';
             $sortDirection = 'desc';

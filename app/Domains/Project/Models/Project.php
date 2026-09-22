@@ -35,6 +35,7 @@ class Project extends Model
         'start_date',
         'end_date',
         'contract_value',
+        'sales_commission',
         'target_qty',
         'status',
         'notes',
@@ -48,6 +49,7 @@ class Project extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'contract_value' => 'decimal:2',
+            'sales_commission' => 'decimal:2',
             'target_qty' => 'integer',
         ];
     }

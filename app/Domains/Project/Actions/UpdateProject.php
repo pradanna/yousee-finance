@@ -20,11 +20,16 @@ class UpdateProject
     {
         return DB::transaction(function () use ($project, $data) {
             $oldContractValue = (float) $project->contract_value;
+            $oldCommission = (float) ($project->sales_commission ?? 0);
             $oldStatus = $project->status instanceof \App\Domains\Project\Enums\ProjectStatus ? $project->status->value : (string) $project->status;
 
             $newContractValue = array_key_exists('contract_value', $data)
                 ? $this->resolveDpp($project->fiscal_mode instanceof FiscalMode ? $project->fiscal_mode->value : $project->fiscal_mode, (float) $data['contract_value'], (bool) ($data['is_ppn_inclusive'] ?? false))
                 : (float) $project->contract_value;
+
+            $newCommission = array_key_exists('sales_commission', $data)
+                ? (float) $data['sales_commission']
+                : $oldCommission;
 
             $newStatus = isset($data['status'])
                 ? ($data['status'] instanceof \App\Domains\Project\Enums\ProjectStatus ? $data['status']->value : (string) $data['status'])
@@ -37,6 +42,7 @@ class UpdateProject
                 'start_date' => $data['start_date'] ?? $project->start_date,
                 'end_date' => $data['end_date'] ?? $project->end_date,
                 'contract_value' => $newContractValue,
+                'sales_commission' => $newCommission,
                 'target_qty' => $data['target_qty'] ?? $project->target_qty,
                 'status' => $data['status'] ?? $project->status,
                 'notes' => array_key_exists('notes', $data) ? $data['notes'] : $project->notes,
@@ -53,6 +59,10 @@ class UpdateProject
 
             if (round($oldContractValue, 2) !== round($newContractValue, 2)) {
                 $descParts[] = "Nilai kontrak berubah dari Rp " . number_format($oldContractValue, 0, ',', '.') . " menjadi Rp " . number_format($newContractValue, 0, ',', '.');
+            }
+
+            if (round($oldCommission, 2) !== round($newCommission, 2)) {
+                $descParts[] = "Komisi sales diubah menjadi Rp " . number_format($newCommission, 0, ',', '.');
             }
 
             $description = ! empty($descParts)

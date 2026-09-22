@@ -370,7 +370,7 @@ export default function ProjectPayment({
         },
         {
             value: 'installment',
-            desc: 'Cicilan berkala dengan jumlah sama',
+            desc: 'Bebas atur termin hingga 12 bulan',
             color: 'border-amber-400 bg-amber-50 text-amber-700',
         },
     ];
@@ -725,7 +725,7 @@ export default function ProjectPayment({
                                     <div className="space-y-3">
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                                Jumlah Cicilan
+                                                Jumlah Tempo / Termin
                                             </label>
                                             <div className="flex gap-2">
                                                 {[2, 3, 4, 6, 12].map((n) => (

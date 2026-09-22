@@ -19,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class VendorController extends Controller
 {
@@ -33,7 +34,7 @@ class VendorController extends Controller
         $sortBy = (string) $request->query('sort_by', 'updated_at');
         $sortDirection = strtolower((string) $request->query('sort_direction', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-        $allowedSorts = ['name', 'npwp', 'updated_at', 'created_at', 'total', 'count'];
+        $allowedSorts = ['name', 'code', 'pic', 'npwp', 'updated_at', 'created_at', 'total', 'count'];
         if (! in_array($sortBy, $allowedSorts, true)) {
             $sortBy = 'updated_at';
             $sortDirection = 'desc';
@@ -46,6 +47,8 @@ class VendorController extends Controller
             $searchTerm = '%' . trim((string) $search) . '%';
             $query->where(function ($q) use ($searchTerm) {
                 $q->where('name', 'like', $searchTerm)
+                  ->orWhere('code', 'like', $searchTerm)
+                  ->orWhere('pic', 'like', $searchTerm)
                   ->orWhere('npwp', 'like', $searchTerm);
             });
         }
@@ -185,6 +188,113 @@ class VendorController extends Controller
                 'npwp' => $vendor->npwp,
             ],
             'transactions' => $pos,
+        ]);
+    }
+
+    /**
+     * Export daftar vendor ke format spreadsheet Excel / CSV kompatibel Microsoft Excel.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $search = $request->query('search');
+        $status = $request->query('status', 'all');
+        $pkp = $request->query('pkp', 'all');
+        $sortBy = (string) $request->query('sort_by', 'code');
+        $sortDirection = strtolower((string) $request->query('sort_direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        $allowedSorts = ['code', 'name', 'pic', 'npwp', 'updated_at', 'created_at', 'total', 'count'];
+        if (! in_array($sortBy, $allowedSorts, true)) {
+            $sortBy = 'code';
+            $sortDirection = 'asc';
+        }
+
+        $query = Vendor::withCount('purchaseOrders')
+            ->withSum('purchaseOrders', 'total');
+
+        if (! empty($search)) {
+            $searchTerm = '%' . trim((string) $search) . '%';
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'like', $searchTerm)
+                  ->orWhere('code', 'like', $searchTerm)
+                  ->orWhere('pic', 'like', $searchTerm)
+                  ->orWhere('npwp', 'like', $searchTerm);
+            });
+        }
+
+        if ($status === 'active') {
+            $query->where('is_archived', false);
+        } elseif ($status === 'archived') {
+            $query->where('is_archived', true);
+        }
+
+        if ($pkp === 'pkp') {
+            $query->whereNotNull('npwp')->where('npwp', '!=', '');
+        } elseif ($pkp === 'non-pkp') {
+            $query->where(function ($q) {
+                $q->whereNull('npwp')->orWhere('npwp', '');
+            });
+        }
+
+        // Sorting
+        if ($sortBy === 'total') {
+            $query->orderBy('purchase_orders_sum_total', $sortDirection);
+        } elseif ($sortBy === 'count') {
+            $query->orderBy('purchase_orders_count', $sortDirection);
+        } else {
+            $query->orderBy($sortBy, $sortDirection);
+        }
+
+        $vendors = $query->get();
+
+        $timestamp = now()->format('Ymd_His');
+        $filename = "Daftar_Vendor_{$timestamp}.csv";
+
+        return response()->streamDownload(function () use ($vendors) {
+            $handle = fopen('php://output', 'w');
+
+            // UTF-8 BOM untuk kompatibilitas sempurna dengan Microsoft Excel di Windows
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            // Header Kolom
+            fputcsv($handle, [
+                'No',
+                'Kode Vendor',
+                'Nama Vendor',
+                'PIC / Kontak Person',
+                'NPWP Resmi',
+                'Status PKP',
+                'Telepon / WhatsApp',
+                'Email',
+                'Alamat',
+                'Status',
+                'Total PO',
+                'Total Nominal Transaksi (Rp)',
+                'Terdaftar Pada',
+            ]);
+
+            foreach ($vendors as $idx => $v) {
+                $hasNpwp = ! empty($v->npwp) && trim((string) $v->npwp) !== '';
+                fputcsv($handle, [
+                    $idx + 1,
+                    (string) ($v->code ?? ''),
+                    (string) $v->name,
+                    (string) ($v->pic ?? '-'),
+                    (string) ($v->npwp ?? '-'),
+                    $hasNpwp ? 'PKP' : 'Non-PKP',
+                    (string) ($v->phone ?? '-'),
+                    (string) ($v->email ?? '-'),
+                    (string) ($v->address ?? '-'),
+                    $v->is_archived ? 'Diarsipkan' : 'Aktif',
+                    (int) ($v->purchase_orders_count ?? 0),
+                    (float) ($v->purchase_orders_sum_total ?? 0),
+                    $v->created_at ? $v->created_at->format('Y-m-d H:i') : '-',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
     }
 }

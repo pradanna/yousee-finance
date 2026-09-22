@@ -25,6 +25,7 @@ export interface ClientItem {
 
 interface ClientEditModalProps {
     isOpen: boolean;
+    isSubmitting?: boolean;
     onClose: () => void;
     client: ClientItem | null;
     onSubmit: (updatedClient: ClientItem) => void;
@@ -32,6 +33,7 @@ interface ClientEditModalProps {
 
 export default function ClientEditModal({
     isOpen,
+    isSubmitting = false,
     onClose,
     client,
     onSubmit,
@@ -295,12 +297,16 @@ export default function ClientEditModal({
                     <SecondaryButton
                         type="button"
                         onClick={onClose}
-                        className="rounded-xl px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                        disabled={isSubmitting}
+                        className="rounded-xl px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                     >
                         Batal
                     </SecondaryButton>
                     <PrimaryButton
                         type="submit"
+                        disabled={isSubmitting}
+                        isLoading={isSubmitting}
+                        loadingText="Menyimpan..."
                         className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold tracking-wider text-white uppercase shadow-md shadow-blue-600/20 hover:bg-blue-700"
                     >
                         Simpan Perubahan

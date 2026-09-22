@@ -1,3 +1,4 @@
+import ExcelButton from '@/Components/Button/ExcelButton';
 import PrimaryButton from '@/Components/Button/PrimaryButton';
 import MetricCard from '@/Components/Card/MetricCard';
 import SelectInput from '@/Components/Form/SelectInput';
@@ -60,17 +61,15 @@ const formatDate = (isoString?: string) => {
     }
 };
 
-export default function Vendors({
-    vendors,
-    metrics,
-    filters,
-}: VendorsProps) {
+export default function Vendors({ vendors, metrics, filters }: VendorsProps) {
     const fiscalMode = useFiscalMode();
     const { flash } =
         usePage<PageProps<{ flash?: { success?: string; error?: string } }>>()
             .props;
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isSavingVendor, setIsSavingVendor] = useState(false);
+    const [isUpdatingVendor, setIsUpdatingVendor] = useState(false);
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
     const [pkpFilter, setPkpFilter] = useState<'all' | 'pkp' | 'non-pkp'>(
         filters?.pkp || 'all',
@@ -205,11 +204,16 @@ export default function Vendors({
     };
 
     const handleAddVendor = (formData: VendorFormData) => {
+        setIsSavingVendor(true);
         router.post(
             route('vendors.store'),
             {
+                code: formData.code ? formData.code : null,
                 name: formData.name,
+                pic: formData.pic ? formData.pic : null,
                 npwp: formData.npwp ? formData.npwp : null,
+                is_pkp: formData.pkp,
+                pkp: formData.pkp,
                 phone: formData.phone ? formData.phone : null,
                 email: formData.email ? formData.email : null,
                 address: formData.address ? formData.address : null,
@@ -227,11 +231,10 @@ export default function Vendors({
                     const firstErr =
                         Object.values(errs)[0] ||
                         'Gagal mendaftarkan vendor. Silakan periksa kembali formulir.';
-                    triggerToast(
-                        firstErr,
-                        'error',
-                        'Pendaftaran Gagal',
-                    );
+                    triggerToast(firstErr, 'error', 'Pendaftaran Gagal');
+                },
+                onFinish: () => {
+                    setIsSavingVendor(false);
                 },
             },
         );
@@ -243,11 +246,16 @@ export default function Vendors({
     };
 
     const handleSaveEditedVendor = (updated: VendorItem) => {
+        setIsUpdatingVendor(true);
         router.put(
             route('vendors.update', updated.id),
             {
+                code: updated.code ? updated.code : null,
                 name: updated.name,
+                pic: updated.pic ? updated.pic : null,
                 npwp: updated.npwp ? updated.npwp : null,
+                is_pkp: updated.pkp,
+                pkp: updated.pkp,
                 phone: updated.phone ? updated.phone : null,
                 email: updated.email ? updated.email : null,
                 address: updated.address ? updated.address : null,
@@ -264,8 +272,11 @@ export default function Vendors({
                 onError: (errs) => {
                     const firstErr =
                         Object.values(errs)[0] ||
-                        'Gagal memperbarui data vendor.';
+                        'Gagal memperbarui vendor. Silakan periksa kembali formulir.';
                     triggerToast(firstErr, 'error', 'Pembaruan Gagal');
+                },
+                onFinish: () => {
+                    setIsUpdatingVendor(false);
                 },
             },
         );
@@ -333,7 +344,7 @@ export default function Vendors({
     const renderSortIcon = (column: string) => {
         const isActive = sortBy === column;
         return (
-            <span className="inline-flex items-center ml-1.5 transition-colors">
+            <span className="ml-1.5 inline-flex items-center transition-colors">
                 {isActive ? (
                     sortDirection === 'asc' ? (
                         <svg
@@ -413,7 +424,9 @@ export default function Vendors({
                     type={toast.type}
                     title={toast.title}
                     message={toast.message}
-                    onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+                    onClose={() =>
+                        setToast((prev) => ({ ...prev, show: false }))
+                    }
                 />
 
                 {/* Header Title & CTA */}
@@ -427,22 +440,36 @@ export default function Vendors({
                             Order (PO)
                         </p>
                     </div>
-                    <PrimaryButton onClick={() => setIsAddModalOpen(true)}>
-                        <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2.5}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <ExcelButton
+                            as="a"
+                            href={route('vendors.export', {
+                                search: searchQuery || undefined,
+                                status: statusTab,
+                                pkp: pkpFilter,
+                                sort_by: sortBy,
+                                sort_direction: sortDirection,
+                            })}
                         >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M12 4v16m8-8H4"
-                            />
-                        </svg>
-                        Daftarkan Vendor Baru
-                    </PrimaryButton>
+                            Download Excel
+                        </ExcelButton>
+                        <PrimaryButton onClick={() => setIsAddModalOpen(true)}>
+                            <svg
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.5}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M12 4v16m8-8H4"
+                                />
+                            </svg>
+                            Daftarkan Vendor Baru
+                        </PrimaryButton>
+                    </div>
                 </div>
 
                 {/* Metric Summary Grid */}
@@ -543,12 +570,12 @@ export default function Vendors({
                             </div>
                             <TextInput
                                 type="text"
-                                placeholder="Cari nama vendor atau NPWP..."
+                                placeholder="Cari kode vendor, nama, PIC, atau NPWP..."
                                 value={searchQuery}
                                 onChange={(e) =>
                                     handleSearchChange(e.target.value)
                                 }
-                                className="block w-full rounded-2xl border-slate-200 bg-slate-50/50 py-2.5 pr-4 pl-10 text-xs text-slate-800 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                                className="block w-full rounded-2xl border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-4 text-xs text-slate-800 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
                             />
                             {searchQuery && (
                                 <button
@@ -571,7 +598,7 @@ export default function Vendors({
                                 onClick={() => handleStatusChange('active')}
                                 className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
                                     statusTab === 'active'
-                                        ? 'bg-white text-blue-600 shadow-xs'
+                                        ? 'shadow-xs bg-white text-blue-600'
                                         : 'text-slate-500 hover:text-slate-700'
                                 }`}
                             >
@@ -582,7 +609,7 @@ export default function Vendors({
                                 onClick={() => handleStatusChange('archived')}
                                 className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
                                     statusTab === 'archived'
-                                        ? 'bg-white text-blue-600 shadow-xs'
+                                        ? 'shadow-xs bg-white text-blue-600'
                                         : 'text-slate-500 hover:text-slate-700'
                                 }`}
                             >
@@ -593,7 +620,7 @@ export default function Vendors({
                                 onClick={() => handleStatusChange('all')}
                                 className={`cursor-pointer rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
                                     statusTab === 'all'
-                                        ? 'bg-white text-blue-600 shadow-xs'
+                                        ? 'shadow-xs bg-white text-blue-600'
                                         : 'text-slate-500 hover:text-slate-700'
                                 }`}
                             >
@@ -644,6 +671,19 @@ export default function Vendors({
                                 <table className="w-full border-collapse">
                                     <thead>
                                         <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                            {/* Kode Vendor (Sortable) */}
+                                            <th
+                                                onClick={() =>
+                                                    handleSort('code')
+                                                }
+                                                className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/70 hover:text-slate-800"
+                                            >
+                                                <div className="flex items-center">
+                                                    <span>Kode</span>
+                                                    {renderSortIcon('code')}
+                                                </div>
+                                            </th>
+
                                             {/* Nama Vendor (Sortable) */}
                                             <th
                                                 onClick={() =>
@@ -654,6 +694,19 @@ export default function Vendors({
                                                 <div className="flex items-center">
                                                     <span>Nama Vendor</span>
                                                     {renderSortIcon('name')}
+                                                </div>
+                                            </th>
+
+                                            {/* PIC (Sortable) */}
+                                            <th
+                                                onClick={() =>
+                                                    handleSort('pic')
+                                                }
+                                                className="group cursor-pointer select-none px-6 py-4 transition-colors hover:bg-slate-100/70 hover:text-slate-800"
+                                            >
+                                                <div className="flex items-center">
+                                                    <span>PIC</span>
+                                                    {renderSortIcon('pic')}
                                                 </div>
                                             </th>
 
@@ -689,7 +742,9 @@ export default function Vendors({
                                             >
                                                 <div className="flex items-center">
                                                     <span>Terakhir Update</span>
-                                                    {renderSortIcon('updated_at')}
+                                                    {renderSortIcon(
+                                                        'updated_at',
+                                                    )}
                                                 </div>
                                             </th>
 
@@ -721,6 +776,20 @@ export default function Vendors({
                                                             : 'hover:bg-slate-50/50'
                                                     }`}
                                                 >
+                                                    {/* Kode Vendor */}
+                                                    <td className="whitespace-nowrap px-6 py-4">
+                                                        {vendor.code ? (
+                                                            <span className="shadow-2xs inline-flex items-center rounded-lg border border-slate-200/80 bg-slate-100/90 px-2.5 py-1 font-mono text-xs font-bold text-slate-700">
+                                                                {vendor.code}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="font-mono text-xs text-slate-300">
+                                                                —
+                                                            </span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Nama Vendor */}
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-2">
                                                             <span
@@ -739,16 +808,21 @@ export default function Vendors({
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                                            ID: VND-
-                                                            {vendor.id
-                                                                .toString()
-                                                                .substring(
-                                                                    0,
-                                                                    8,
-                                                                )}
-                                                        </div>
+                                                        {vendor.email && (
+                                                            <div className="mt-0.5 text-[11px] font-medium text-slate-400">
+                                                                {vendor.email}
+                                                            </div>
+                                                        )}
                                                     </td>
+
+                                                    {/* PIC */}
+                                                    <td className="whitespace-nowrap px-6 py-4">
+                                                        <span className="text-xs font-semibold text-slate-700">
+                                                            {vendor.pic || '—'}
+                                                        </span>
+                                                    </td>
+
+                                                    {/* NPWP */}
                                                     <td className="px-6 py-4 font-mono text-xs font-bold text-slate-600">
                                                         {vendor.npwp || '—'}
                                                     </td>
@@ -771,7 +845,7 @@ export default function Vendors({
                                                                 }
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="group/wa inline-flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 transition-all hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-950 hover:shadow-xs"
+                                                                className="group/wa hover:shadow-xs inline-flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 transition-all hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-950"
                                                                 title={`Chat WhatsApp ke ${vendor.phone}`}
                                                             >
                                                                 <svg
@@ -940,6 +1014,7 @@ export default function Vendors({
                 {/* Register New Vendor Modal */}
                 <VendorFormModal
                     isOpen={isAddModalOpen}
+                    isSubmitting={isSavingVendor}
                     onClose={() => setIsAddModalOpen(false)}
                     onSubmit={handleAddVendor}
                 />
@@ -947,6 +1022,7 @@ export default function Vendors({
                 {/* Edit Vendor Modal */}
                 <VendorEditModal
                     isOpen={isEditModalOpen}
+                    isSubmitting={isUpdatingVendor}
                     onClose={() => setIsEditModalOpen(false)}
                     vendor={selectedVendorForEdit}
                     onSubmit={handleSaveEditedVendor}

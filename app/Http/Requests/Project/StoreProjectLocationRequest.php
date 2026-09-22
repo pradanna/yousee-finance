@@ -7,8 +7,12 @@ namespace App\Http\Requests\Project;
 use App\Domains\Project\Enums\LocationLighting;
 use App\Domains\Project\Enums\LocationOrientation;
 use App\Domains\Project\Enums\LocationType;
+use App\Domains\Project\Models\Project;
+use App\Domains\Shared\Enums\FiscalMode;
+use App\Domains\Vendor\Models\Vendor;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreProjectLocationRequest extends FormRequest
 {
@@ -40,5 +44,32 @@ class StoreProjectLocationRequest extends FormRequest
             'is_ppn_inclusive' => ['nullable', 'boolean'],
             'top_notes' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * Invariant: Pada proyek Mode PPN, vendor Non-PKP dilarang ditambahkan.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $project = $this->route('project');
+            $vendorId = $this->input('vendor_id');
+
+            if ($project instanceof Project && $vendorId) {
+                $isProjectPpn = $project->fiscal_mode instanceof FiscalMode
+                    ? $project->fiscal_mode === FiscalMode::PPN
+                    : $project->fiscal_mode === FiscalMode::PPN->value;
+
+                if ($isProjectPpn) {
+                    $vendor = Vendor::find($vendorId);
+                    if ($vendor && ! $vendor->isPkp()) {
+                        $validator->errors()->add(
+                            'vendor_id',
+                            "Vendor '{$vendor->name}' berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN. Silakan pilih vendor berstatus PKP atau alihkan transaksi ke proyek Mode Non-PPN."
+                        );
+                    }
+                }
+            }
+        });
     }
 }

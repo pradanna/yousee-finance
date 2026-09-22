@@ -65,6 +65,8 @@ export default function Clients({ clients, metrics, filters }: ClientsProps) {
             .props;
 
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isSavingClient, setIsSavingClient] = useState(false);
+    const [isUpdatingClient, setIsUpdatingClient] = useState(false);
     const [searchQuery, setSearchQuery] = useState(filters?.search || '');
     const [pkpFilter, setPkpFilter] = useState<'all' | 'pkp' | 'non-pkp'>(
         filters?.pkp || 'all',
@@ -194,6 +196,7 @@ export default function Clients({ clients, metrics, filters }: ClientsProps) {
     };
 
     const handleAddClient = (formData: ClientFormData) => {
+        setIsSavingClient(true);
         router.post(
             route('clients.store'),
             {
@@ -206,6 +209,7 @@ export default function Clients({ clients, metrics, filters }: ClientsProps) {
             {
                 preserveScroll: true,
                 onSuccess: () => {
+                    setIsAddModalOpen(false);
                     triggerToast(
                         `Client "${formData.name}" berhasil didaftarkan.`,
                         'success',
@@ -215,6 +219,9 @@ export default function Clients({ clients, metrics, filters }: ClientsProps) {
                     const firstError =
                         Object.values(errs)[0] || 'Gagal menyimpan client';
                     triggerToast(String(firstError), 'error');
+                },
+                onFinish: () => {
+                    setIsSavingClient(false);
                 },
             },
         );
@@ -226,6 +233,7 @@ export default function Clients({ clients, metrics, filters }: ClientsProps) {
     };
 
     const handleSaveEditedClient = (updated: ClientItem) => {
+        setIsUpdatingClient(true);
         router.put(
             route('clients.update', updated.id),
             {
@@ -238,6 +246,7 @@ export default function Clients({ clients, metrics, filters }: ClientsProps) {
             {
                 preserveScroll: true,
                 onSuccess: () => {
+                    setIsEditModalOpen(false);
                     triggerToast(
                         `Perubahan data client "${updated.name}" berhasil disimpan.`,
                         'success',
@@ -247,6 +256,9 @@ export default function Clients({ clients, metrics, filters }: ClientsProps) {
                     const firstError =
                         Object.values(errs)[0] || 'Gagal memperbarui client';
                     triggerToast(String(firstError), 'error');
+                },
+                onFinish: () => {
+                    setIsUpdatingClient(false);
                 },
             },
         );
@@ -924,12 +936,14 @@ export default function Clients({ clients, metrics, filters }: ClientsProps) {
                 {/* Modals Container */}
                 <ClientFormModal
                     isOpen={isAddModalOpen}
+                    isSubmitting={isSavingClient}
                     onClose={() => setIsAddModalOpen(false)}
                     onSubmit={handleAddClient}
                 />
 
                 <ClientEditModal
                     isOpen={isEditModalOpen}
+                    isSubmitting={isUpdatingClient}
                     onClose={() => setIsEditModalOpen(false)}
                     client={selectedClientForEdit}
                     onSubmit={handleSaveEditedClient}

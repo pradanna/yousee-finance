@@ -23,6 +23,8 @@ class ProjectLocationResource extends JsonResource
             'vendor' => $this->whenLoaded('vendor', fn () => [
                 'id' => $this->vendor->id,
                 'name' => $this->vendor->name,
+                'npwp' => $this->vendor->npwp,
+                'is_pkp' => $this->vendor->isPkp(),
             ]),
             'code' => $this->code,
             'area' => $this->area,

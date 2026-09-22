@@ -20,7 +20,9 @@ class VendorResource extends JsonResource
 
         return [
             'id' => (string) $this->id,
+            'code' => (string) ($this->code ?? ''),
             'name' => (string) $this->name,
+            'pic' => $this->pic ? (string) $this->pic : null,
             'npwp' => $this->npwp ? (string) $this->npwp : null,
             'phone' => $this->phone ? (string) $this->phone : null,
             'email' => $this->email ? (string) $this->email : null,

@@ -86,10 +86,10 @@ class GetSalesCommissionList
                 continue;
             }
 
-            $commissionRate = (float) $sales->commission_rate;
             $contractValue = (float) $project->contract_value;
-            // Bulatkan ke rupiah bulat (tanpa koma/desimal)
-            $commissionAmount = (float) round($contractValue * ($commissionRate / 100));
+            // Komisi diinput manual di detail proyek (tanpa persentase)
+            $commissionAmount = (float) round((float) ($project->sales_commission ?? 0));
+            $commissionRate = 0;
 
             // Cek status pelunasan invoice klien
             $invoices = $project->invoices;

@@ -9,7 +9,9 @@ import { formatNpwp } from '@/Utils/formatters';
 import React, { useEffect, useState } from 'react';
 
 export interface VendorFormData {
+    code?: string;
     name: string;
+    pic?: string;
     npwp: string;
     email: string;
     phone: string;
@@ -19,17 +21,21 @@ export interface VendorFormData {
 
 interface VendorFormModalProps {
     isOpen: boolean;
+    isSubmitting?: boolean;
     onClose: () => void;
     onSubmit: (data: VendorFormData) => void;
 }
 
 export default function VendorFormModal({
     isOpen,
+    isSubmitting = false,
     onClose,
     onSubmit,
 }: VendorFormModalProps) {
     const [form, setForm] = useState<VendorFormData>({
+        code: '',
         name: '',
+        pic: '',
         npwp: '',
         email: '',
         phone: '',
@@ -42,7 +48,9 @@ export default function VendorFormModal({
     useEffect(() => {
         if (isOpen) {
             setForm({
+                code: '',
                 name: '',
+                pic: '',
                 npwp: '',
                 email: '',
                 phone: '',
@@ -61,7 +69,17 @@ export default function VendorFormModal({
             newErrors.name = 'Nama lengkap vendor wajib diisi.';
         }
 
-        if (form.npwp.trim()) {
+        if (form.pkp) {
+            if (!form.npwp.trim()) {
+                newErrors.npwp = 'NPWP wajib diisi jika vendor berstatus PKP.';
+            } else {
+                const cleanNpwp = form.npwp.replace(/[^0-9]/g, '');
+                if (cleanNpwp.length !== 15 && cleanNpwp.length !== 16) {
+                    newErrors.npwp =
+                        'Format NPWP tidak valid. Harus 15 atau 16 digit angka.';
+                }
+            }
+        } else if (form.npwp.trim()) {
             const cleanNpwp = form.npwp.replace(/[^0-9]/g, '');
             if (cleanNpwp.length !== 15 && cleanNpwp.length !== 16) {
                 newErrors.npwp =
@@ -139,6 +157,54 @@ export default function VendorFormModal({
 
                 {/* Form Fields Grid */}
                 <div className="space-y-4">
+                    {/* Grid: Kode Vendor & PIC */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <InputLabel
+                                htmlFor="vendor-code"
+                                value="Kode Vendor (Opsional)"
+                            />
+                            <TextInput
+                                id="vendor-code"
+                                type="text"
+                                value={form.code}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        code: e.target.value.toUpperCase(),
+                                    })
+                                }
+                                className="mt-1 block w-full font-mono text-xs uppercase"
+                                placeholder="cth: VND-0001 (Auto jika kosong)"
+                            />
+                            <p className="mt-1 text-[10px] text-slate-400">
+                                Kode unik vendor untuk identifikasi impor titik
+                                / PO.
+                            </p>
+                        </div>
+
+                        <div>
+                            <InputLabel
+                                htmlFor="vendor-pic"
+                                value="PIC / Kontak Person (Opsional)"
+                            />
+                            <TextInput
+                                id="vendor-pic"
+                                type="text"
+                                value={form.pic}
+                                onChange={(e) =>
+                                    setForm({ ...form, pic: e.target.value })
+                                }
+                                className="mt-1 block w-full text-xs"
+                                placeholder="cth: Bpk. Hendra Gunawan"
+                            />
+                            <p className="mt-1 text-[10px] text-slate-400">
+                                Nama orang yang bertanggung jawab / kontak
+                                vendor.
+                            </p>
+                        </div>
+                    </div>
+
                     {/* Grid: Nama & NPWP */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
@@ -166,23 +232,49 @@ export default function VendorFormModal({
                         <div>
                             <InputLabel
                                 htmlFor="vendor-npwp"
-                                value="NPWP Resmi Vendor (Opsional)"
+                                value={
+                                    form.pkp
+                                        ? 'NPWP Resmi Vendor * (Wajib untuk PKP)'
+                                        : 'NPWP Resmi Vendor (Opsional)'
+                                }
                             />
                             <TextInput
                                 id="vendor-npwp"
                                 type="text"
                                 value={form.npwp}
                                 onChange={(e) => {
-                                    const formatted = formatNpwp(e.target.value);
-                                    setForm({
-                                        ...form,
+                                    const formatted = formatNpwp(
+                                        e.target.value,
+                                    );
+                                    setForm((prev) => ({
+                                        ...prev,
                                         npwp: formatted,
-                                        pkp: formatted.trim().length > 0,
-                                    });
+                                        pkp:
+                                            formatted.trim().length > 0
+                                                ? true
+                                                : prev.pkp,
+                                    }));
+                                    if (errors.npwp) {
+                                        setErrors((prev) => {
+                                            const copy = { ...prev };
+                                            delete copy.npwp;
+                                            return copy;
+                                        });
+                                    }
                                 }}
-                                className="mt-1 block w-full font-mono text-xs"
+                                className={`mt-1 block w-full font-mono text-xs ${
+                                    form.pkp && !form.npwp.trim()
+                                        ? 'border-amber-300 bg-amber-50/20'
+                                        : ''
+                                }`}
                                 placeholder="01.234.567.8-901.000"
                             />
+                            {form.pkp && !form.npwp.trim() && !errors.npwp && (
+                                <p className="mt-1 text-[10px] font-medium text-amber-600">
+                                    ⚠️ Vendor ditandai PKP: Wajib mengisi NPWP
+                                    resmi 15/16 digit.
+                                </p>
+                            )}
                             <InputError
                                 message={errors.npwp}
                                 className="mt-1"
@@ -249,13 +341,30 @@ export default function VendorFormModal({
                     </div>
 
                     {/* PKP Checkbox Card */}
-                    <div className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div
+                        className={`flex items-start gap-3 rounded-2xl border p-4 transition-all ${
+                            form.pkp && !form.npwp.trim()
+                                ? 'border-amber-200 bg-amber-50/50'
+                                : 'border-slate-100 bg-slate-50'
+                        }`}
+                    >
                         <Checkbox
                             id="pkp-checkbox"
                             checked={form.pkp}
-                            onChange={(e) =>
-                                setForm({ ...form, pkp: e.target.checked })
-                            }
+                            onChange={(e) => {
+                                const checked = e.target.checked;
+                                setForm((prev) => ({ ...prev, pkp: checked }));
+                                if (
+                                    !checked &&
+                                    errors.npwp?.includes('wajib')
+                                ) {
+                                    setErrors((prev) => {
+                                        const copy = { ...prev };
+                                        delete copy.npwp;
+                                        return copy;
+                                    });
+                                }
+                            }}
                             className="mt-0.5"
                         />
                         <div className="space-y-0.5">
@@ -267,18 +376,37 @@ export default function VendorFormModal({
                             </label>
                             <span className="block text-[10px] font-semibold leading-tight text-slate-400">
                                 Centang jika vendor menerbitkan Faktur Pajak PPN
-                                Masukan (11%) resmi.
+                                Masukan (11%) resmi. Wajib melampirkan NPWP
+                                resmi.
                             </span>
+                            {form.pkp && !form.npwp.trim() && (
+                                <span className="block pt-0.5 text-[10px] font-bold text-amber-600">
+                                    ⚠️ NPWP wajib diisi pada kolom di atas jika
+                                    opsi ini dicentang.
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {/* Footer Action Buttons */}
                 <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-                    <SecondaryButton type="button" onClick={onClose}>
+                    <SecondaryButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className="disabled:opacity-50"
+                    >
                         Batal
                     </SecondaryButton>
-                    <PrimaryButton type="submit">Simpan Vendor</PrimaryButton>
+                    <PrimaryButton
+                        type="submit"
+                        disabled={isSubmitting}
+                        isLoading={isSubmitting}
+                        loadingText="Menyimpan..."
+                    >
+                        Simpan Vendor
+                    </PrimaryButton>
                 </div>
             </form>
         </Modal>

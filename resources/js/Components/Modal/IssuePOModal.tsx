@@ -25,6 +25,7 @@ export interface IssuePOModalSubmitData {
 
 export interface IssuePOModalProps {
     isOpen: boolean;
+    isLoading?: boolean;
     onClose: () => void;
     vendorName: string;
     items: IssuePOItem[];
@@ -53,6 +54,7 @@ const formatIndoDate = (dateStr?: string) => {
 
 export const IssuePOModal: React.FC<IssuePOModalProps> = ({
     isOpen,
+    isLoading = false,
     onClose,
     vendorName,
     items,
@@ -64,6 +66,7 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
     );
     const [vendorTermScheme, setVendorTermScheme] =
         useState<PaymentScheme>('full');
+    const [customTempoCount, setCustomTempoCount] = useState<number>(3);
     const [poTopNotes, setPoTopNotes] = useState(
         'Lunas setelah visual terpasang',
     );
@@ -74,10 +77,55 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
         new Date().toISOString().split('T')[0],
     ]);
 
+    const calcInstallmentPercents = (count: number): number[] => {
+        if (count <= 1) return [100];
+        const per = Math.round(100 / count);
+        const res = Array(count).fill(per);
+        const sumExceptLast = per * (count - 1);
+        res[count - 1] = 100 - sumExceptLast;
+        return res;
+    };
+
+    const calcInstallmentDates = (count: number): string[] => {
+        const dates: string[] = [];
+        const now = new Date();
+        for (let i = 0; i < count; i++) {
+            const d = new Date(now);
+            d.setMonth(d.getMonth() + (i + 1));
+            dates.push(d.toISOString().split('T')[0]);
+        }
+        return dates;
+    };
+
+    const applyCustomTempo = (count: number) => {
+        const validCount = Math.min(12, Math.max(1, count));
+        setCustomTempoCount(validCount);
+        setVendorTermPercents(calcInstallmentPercents(validCount));
+        setVendorTermDates(calcInstallmentDates(validCount));
+        setPoTopNotes(
+            validCount === 1
+                ? 'Tempo 1 Bulan (Net 30)'
+                : `Tempo ${validCount} Kali (${validCount} Bulan)`,
+        );
+    };
+
+    const getTermLabel = (idx: number, totalCount: number) => {
+        if (vendorTermScheme === 'installment') {
+            return totalCount === 1
+                ? 'Tempo 1 Kali – Pelunasan 100%'
+                : `Cicilan ${idx + 1} dari ${totalCount} (Bulan ${idx + 1})`;
+        }
+        if (totalCount === 1) return 'Pelunasan Total Vendor';
+        if (idx === 0) return 'Termin 1 – Uang Muka (DP)';
+        if (idx === totalCount - 1) return `Termin ${idx + 1} – Pelunasan`;
+        return `Termin ${idx + 1} – Progres`;
+    };
+
     useEffect(() => {
         if (isOpen) {
             setPoLighting('Berlampu');
             setVendorTermScheme('full');
+            setCustomTempoCount(3);
             setPoTopNotes('Lunas setelah visual terpasang');
             setVendorTermPercents([100]);
             setVendorTermDates([new Date().toISOString().split('T')[0]]);
@@ -115,11 +163,7 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
             ]);
             setPoTopNotes('Termin 1 (30%), Termin 2 (40%), Termin 3 (30%)');
         } else if (scheme === 'installment') {
-            setVendorTermPercents([100]);
-            const d2 = new Date();
-            d2.setDate(d2.getDate() + 30);
-            setVendorTermDates([d2.toISOString().split('T')[0]]);
-            setPoTopNotes('Pelunasan 30 hari kalender (Net 30)');
+            applyCustomTempo(customTempoCount || 3);
         }
     };
 
@@ -186,7 +230,8 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
                     <div className="bg-primary/5 border-primary/20 space-y-2.5 rounded-2xl border p-4">
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-bold text-primary">
-                                Rincian {items.length} Titik Lokasi PO (Database):
+                                Rincian {items.length} Titik Lokasi PO
+                                (Database):
                             </p>
                             <span className="font-mono text-xs font-bold text-slate-700">
                                 Total DPP: {fmt(sumDpp)}
@@ -204,12 +249,12 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
                                                 {i + 1}. {item.description}
                                             </span>
                                             {item.code && (
-                                                <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.2 font-mono text-[10px] font-bold text-slate-600">
+                                                <span className="py-0.2 rounded border border-slate-200 bg-slate-100 px-1.5 font-mono text-[10px] font-bold text-slate-600">
                                                     {item.code}
                                                 </span>
                                             )}
                                             {item.type && (
-                                                <span className="rounded border border-blue-100 bg-blue-50 px-1.5 py-0.2 text-[10px] font-medium text-blue-700">
+                                                <span className="py-0.2 rounded border border-blue-100 bg-blue-50 px-1.5 text-[10px] font-medium text-blue-700">
                                                     {item.type}
                                                 </span>
                                             )}
@@ -241,12 +286,16 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="text-right font-mono flex-shrink-0">
+                                    <div className="flex-shrink-0 text-right font-mono">
                                         <div className="text-[10px] text-slate-400">
-                                            {fmt(item.vendorCost)} &times; {item.qty || 1}
+                                            {fmt(item.vendorCost)} &times;{' '}
+                                            {item.qty || 1}
                                         </div>
-                                        <span className="font-bold text-slate-900 text-xs">
-                                            {fmt(item.vendorCost * (item.qty || 1))}
+                                        <span className="text-xs font-bold text-slate-900">
+                                            {fmt(
+                                                item.vendorCost *
+                                                    (item.qty || 1),
+                                            )}
                                         </span>
                                     </div>
                                 </li>
@@ -344,8 +393,8 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
                                             },
                                             {
                                                 id: 'installment',
-                                                label: 'Tempo / Net 30',
-                                                desc: 'Pelunasan 30 hari kalender',
+                                                label: 'Custom Tempo',
+                                                desc: 'Bebas atur termin hingga 12 bulan',
                                             },
                                         ].map((s) => (
                                             <button
@@ -371,6 +420,108 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
                                             </button>
                                         ))}
                                     </div>
+
+                                    {/* Durasi Custom Tempo */}
+                                    {vendorTermScheme === 'installment' && (
+                                        <div className="mt-3 space-y-2.5 rounded-2xl border border-blue-200/90 bg-blue-50/70 p-3.5">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-blue-950">
+                                                        Jumlah Tempo / Termin
+                                                    </label>
+                                                    <p className="text-[10.5px] font-medium text-blue-700/80">
+                                                        Bebas atur termin
+                                                        pembayaran vendor hingga
+                                                        12 bulan
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        disabled={
+                                                            customTempoCount <=
+                                                            1
+                                                        }
+                                                        onClick={() =>
+                                                            applyCustomTempo(
+                                                                customTempoCount -
+                                                                    1,
+                                                            )
+                                                        }
+                                                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white text-xs font-bold text-blue-900 hover:bg-blue-100 disabled:opacity-40"
+                                                    >
+                                                        -
+                                                    </button>
+                                                    <div className="flex items-center gap-1">
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            max={12}
+                                                            value={
+                                                                customTempoCount
+                                                            }
+                                                            onChange={(e) => {
+                                                                const val =
+                                                                    parseInt(
+                                                                        e.target
+                                                                            .value,
+                                                                    ) || 1;
+                                                                applyCustomTempo(
+                                                                    val,
+                                                                );
+                                                            }}
+                                                            className="w-14 rounded-lg border border-blue-300 bg-white py-1 text-center font-mono text-xs font-bold text-blue-950 focus:border-blue-600 focus:outline-none"
+                                                        />
+                                                        <span className="text-xs font-bold text-blue-900">
+                                                            Kali
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        disabled={
+                                                            customTempoCount >=
+                                                            12
+                                                        }
+                                                        onClick={() =>
+                                                            applyCustomTempo(
+                                                                customTempoCount +
+                                                                    1,
+                                                            )
+                                                        }
+                                                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white text-xs font-bold text-blue-900 hover:bg-blue-100 disabled:opacity-40"
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Pilihan Cepat */}
+                                            <div className="flex flex-wrap items-center gap-1.5 border-t border-blue-200/60 pt-2">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                                                    Pilihan Cepat:
+                                                </span>
+                                                {[2, 3, 4, 6, 12].map((cnt) => (
+                                                    <button
+                                                        key={cnt}
+                                                        type="button"
+                                                        onClick={() =>
+                                                            applyCustomTempo(
+                                                                cnt,
+                                                            )
+                                                        }
+                                                        className={`rounded-lg px-2.5 py-0.5 text-xs font-bold transition-all ${
+                                                            customTempoCount ===
+                                                            cnt
+                                                                ? 'shadow-2xs bg-blue-600 text-white'
+                                                                : 'border border-blue-200 bg-white text-blue-800 hover:border-blue-300 hover:bg-blue-100'
+                                                        }`}
+                                                    >
+                                                        {cnt}x Tempo
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -416,16 +567,10 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
                                             const termAmt = Math.round(
                                                 (sumTotal * (pct || 0)) / 100,
                                             );
-                                            const termLabel =
-                                                vendorTermPercents.length === 1
-                                                    ? 'Pelunasan Total Vendor'
-                                                    : idx === 0
-                                                      ? 'Termin 1 – Uang Muka (DP)'
-                                                      : idx ===
-                                                          vendorTermPercents.length -
-                                                              1
-                                                        ? `Termin ${idx + 1} – Pelunasan`
-                                                        : `Termin ${idx + 1} – Progres`;
+                                            const termLabel = getTermLabel(
+                                                idx,
+                                                vendorTermPercents.length,
+                                            );
 
                                             return (
                                                 <div
@@ -580,10 +725,20 @@ export const IssuePOModal: React.FC<IssuePOModalProps> = ({
 
                 {/* Modal Action Buttons */}
                 <div className="flex flex-shrink-0 items-center justify-end gap-3 border-t border-slate-100 bg-white px-6 py-4">
-                    <SecondaryButton type="button" onClick={onClose}>
+                    <SecondaryButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={isLoading}
+                    >
                         Batal
                     </SecondaryButton>
-                    <PrimaryButton type="button" onClick={handleSubmit}>
+                    <PrimaryButton
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={isLoading || sumPct !== 100}
+                        isLoading={isLoading}
+                        loadingText="Menerbitkan PO..."
+                    >
                         Ya, Terbitkan PO Kolektif Vendor Ini
                     </PrimaryButton>
                 </div>

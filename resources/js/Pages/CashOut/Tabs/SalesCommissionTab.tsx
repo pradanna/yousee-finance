@@ -93,7 +93,7 @@ export default function SalesCommissionTab({
             amount: roundedAmount,
             transaction_date: new Date().toISOString().split('T')[0],
             recipient: item.salesName,
-            description: `Pembayaran Komisi Sales: ${item.salesName} (${item.commissionRate}%) - Proyek ${item.projectCode} (${item.projectName})`,
+            description: `Pembayaran Komisi Sales: ${item.salesName} - Proyek ${item.projectCode} (${item.projectName})`,
         });
         setIsPayModalOpen(true);
     };
@@ -351,11 +351,8 @@ export default function SalesCommissionTab({
                                 <th className="px-5 py-4 text-right">
                                     Nilai Kontrak
                                 </th>
-                                <th className="px-5 py-4 text-center">
-                                    Komisi (%)
-                                </th>
                                 <th className="px-5 py-4 text-right">
-                                    Nominal Bonus
+                                    Nominal Komisi
                                 </th>
                                 <th className="px-5 py-4 text-center">
                                     Status Invoice
@@ -369,7 +366,7 @@ export default function SalesCommissionTab({
                         <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                             {filteredList.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="py-12">
+                                    <td colSpan={7} className="py-12">
                                         <EmptyState
                                             title="Tidak Ada Data Komisi"
                                             description="Belum ada data proyek atau komisi sales yang cocok dengan kriteria filter."
@@ -412,14 +409,7 @@ export default function SalesCommissionTab({
                                             {formatRupiah(item.contractValue)}
                                         </td>
 
-                                        {/* % Komisi */}
-                                        <td className="px-5 py-3.5 text-center font-bold text-slate-700">
-                                            <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700">
-                                                {item.commissionRate}%
-                                            </span>
-                                        </td>
-
-                                        {/* Nominal Bonus */}
+                                        {/* Nominal Komisi */}
                                         <td className="px-5 py-3.5 text-right font-mono font-extrabold text-blue-700">
                                             {formatRupiah(
                                                 item.commissionAmount,
@@ -589,10 +579,6 @@ export default function SalesCommissionTab({
                                 <div className="flex justify-between font-bold">
                                     <span className="text-blue-900">
                                         Proyek: {selectedCommission.projectCode}
-                                    </span>
-                                    <span className="text-slate-600">
-                                        Rate:{' '}
-                                        {selectedCommission.commissionRate}%
                                     </span>
                                 </div>
                                 <div className="mt-1 font-semibold text-slate-800">

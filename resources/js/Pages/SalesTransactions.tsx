@@ -455,6 +455,7 @@ export default function SalesTransactions({
     const [filterMonth, setFilterMonth] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+    const [isSavingPlan, setIsSavingPlan] = useState(false);
 
     // Pagination
     const ITEMS_PER_PAGE = 6;
@@ -686,6 +687,7 @@ export default function SalesTransactions({
     }) => {
         if (!activeProject) return;
 
+        setIsSavingPlan(true);
         router.post(
             `/projects/${activeProject.id}/payment-plan`,
             {
@@ -702,6 +704,9 @@ export default function SalesTransactions({
                         `Skema pembayaran untuk ${activeProject.name} berhasil disimpan!`,
                     );
                     setTimeout(() => setSuccessMessage(''), 4000);
+                },
+                onFinish: () => {
+                    setIsSavingPlan(false);
                 },
             },
         );
@@ -3161,6 +3166,7 @@ export default function SalesTransactions({
             {activeProject && (
                 <ConfigurePaymentSchemeModal
                     isOpen={showInvoiceForm}
+                    isLoading={isSavingPlan}
                     onClose={() => setShowInvoiceForm(false)}
                     clientName={activeProject.clientName}
                     totalAmount={activeTotalAmount}

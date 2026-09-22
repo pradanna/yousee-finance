@@ -25,7 +25,7 @@ class StoreSalesRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:sales,email'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:sales,email'],
             'phone' => ['nullable', 'string', 'max:30'],
             'commission_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];

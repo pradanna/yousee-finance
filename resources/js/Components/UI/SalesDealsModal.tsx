@@ -168,9 +168,7 @@ export default function SalesDealsModal({
                                 <h3 className="text-lg font-bold tracking-tight text-slate-900">
                                     {sales.name}
                                 </h3>
-                                <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700">
-                                    Rate Komisi: {sales.commission_rate}%
-                                </span>
+
                             </div>
                             <p className="mt-1 text-xs font-medium text-slate-500">
                                 Rincian Pencapaian Omset — Total Omset:{' '}
@@ -245,8 +243,7 @@ export default function SalesDealsModal({
                                                 Nominal Omset
                                             </th>
                                             <th className="px-6 py-4 text-right">
-                                                Komisi ({sales.commission_rate}
-                                                %)
+                                                Komisi Sales
                                             </th>
                                             <th className="px-6 py-4 text-center">
                                                 Status

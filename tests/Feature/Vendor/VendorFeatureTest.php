@@ -150,6 +150,7 @@ class VendorFeatureTest extends TestCase
         $response = $this->actingAs($this->user)->post(route('vendors.store'), [
             'name' => 'PT Kreasi Baru',
             'npwp' => '99.888.777.6-555.000',
+            'pic' => 'Bpk. Joko Susilo',
         ]);
 
         $response->assertRedirect();
@@ -158,20 +159,44 @@ class VendorFeatureTest extends TestCase
         $this->assertDatabaseHas('vendors', [
             'name' => 'PT Kreasi Baru',
             'npwp' => '99.888.777.6-555.000',
+            'pic' => 'Bpk. Joko Susilo',
+            'code' => 'VND-0001',
             'is_archived' => false,
+        ]);
+    }
+
+    public function test_can_create_vendor_with_custom_code(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('vendors.store'), [
+            'code' => 'VND-CUSTOM-01',
+            'name' => 'PT Vendor Khusus',
+            'pic' => 'Ibu Siti',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('vendors', [
+            'code' => 'VND-CUSTOM-01',
+            'name' => 'PT Vendor Khusus',
+            'pic' => 'Ibu Siti',
         ]);
     }
 
     public function test_can_update_vendor(): void
     {
         $vendor = Vendor::create([
+            'code' => 'VND-0001',
             'name' => 'Vendor Lama',
+            'pic' => 'PIC Lama',
             'npwp' => null,
             'is_archived' => false,
         ]);
 
         $response = $this->actingAs($this->user)->put(route('vendors.update', $vendor->id), [
+            'code' => 'VND-EDITED-01',
             'name' => 'Vendor Baru Update',
+            'pic' => 'PIC Baru Update',
             'npwp' => '11.222.333.4-555.000',
         ]);
 
@@ -180,7 +205,9 @@ class VendorFeatureTest extends TestCase
 
         $this->assertDatabaseHas('vendors', [
             'id' => $vendor->id,
+            'code' => 'VND-EDITED-01',
             'name' => 'Vendor Baru Update',
+            'pic' => 'PIC Baru Update',
             'npwp' => '11.222.333.4-555.000',
         ]);
     }
@@ -255,5 +282,97 @@ class VendorFeatureTest extends TestCase
             ],
         ]);
         $response->assertJsonCount(1, 'transactions');
+    }
+
+    public function test_can_export_vendors_to_csv(): void
+    {
+        Vendor::create([
+            'code' => 'VND-0001',
+            'name' => 'PT Vendor Mega',
+            'pic' => 'Bpk. Budianto',
+            'npwp' => '01.234.567.8-901.000',
+            'phone' => '08123456789',
+            'email' => 'sales@vendormega.com',
+            'is_archived' => false,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('vendors.export'));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $this->assertTrue(str_contains((string) $response->headers->get('Content-Disposition'), 'Daftar_Vendor_'));
+
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('Kode Vendor', $content);
+        $this->assertStringContainsString('Nama Vendor', $content);
+        $this->assertStringContainsString('PIC / Kontak Person', $content);
+        $this->assertStringContainsString('VND-0001', $content);
+        $this->assertStringContainsString('PT Vendor Mega', $content);
+        $this->assertStringContainsString('Bpk. Budianto', $content);
+    }
+
+    public function test_cannot_create_vendor_with_pkp_true_and_empty_npwp(): void
+    {
+        $response = $this->actingAs($this->user)->post(route('vendors.store'), [
+            'name' => 'PT Vendor PKP Tapi NPWP Kosong',
+            'pkp' => true,
+            'npwp' => '',
+        ]);
+
+        $response->assertSessionHasErrors(['npwp']);
+        $this->assertDatabaseMissing('vendors', [
+            'name' => 'PT Vendor PKP Tapi NPWP Kosong',
+        ]);
+    }
+
+    public function test_cannot_update_vendor_with_pkp_true_and_empty_npwp(): void
+    {
+        $vendor = Vendor::create([
+            'name' => 'Vendor Awal Non-PKP',
+            'npwp' => null,
+            'is_archived' => false,
+        ]);
+
+        $response = $this->actingAs($this->user)->put(route('vendors.update', $vendor->id), [
+            'name' => 'Vendor Awal Diubah PKP',
+            'pkp' => true,
+            'npwp' => '',
+        ]);
+
+        $response->assertSessionHasErrors(['npwp']);
+        $this->assertNull($vendor->fresh()->npwp);
+    }
+
+    public function test_can_update_vendor_with_pkp_true_and_valid_npwp(): void
+    {
+        $vendor = Vendor::create([
+            'name' => 'Vendor Awal Non-PKP',
+            'npwp' => null,
+            'is_archived' => false,
+        ]);
+
+        $response = $this->actingAs($this->user)->put(route('vendors.update', $vendor->id), [
+            'name' => 'Vendor Jadi PKP Valid',
+            'pkp' => true,
+            'npwp' => '01.234.567.8-901.000',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect();
+        $this->assertEquals('01.234.567.8-901.000', $vendor->fresh()->npwp);
+        $this->assertTrue($vendor->fresh()->isPkp());
+    }
+
+    public function test_actions_throw_domain_exception_when_pkp_true_and_npwp_empty(): void
+    {
+        $createAction = app(\App\Domains\Vendor\Actions\CreateVendor::class);
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('NPWP wajib diisi jika vendor berstatus PKP.');
+
+        $createAction->execute([
+            'name' => 'Vendor PKP Action Test',
+            'pkp' => true,
+            'npwp' => '',
+        ]);
     }
 }

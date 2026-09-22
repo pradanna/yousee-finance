@@ -28,6 +28,7 @@ Route::middleware('auth')->group(function () {
         'index' => 'vendors',
     ]);
     Route::get('/vendors-list', [\App\Http\Controllers\Vendor\VendorController::class, 'index'])->name('vendors.index');
+    Route::get('/vendors-export', [\App\Http\Controllers\Vendor\VendorController::class, 'export'])->name('vendors.export');
     Route::get('vendors/{vendor}/transactions', [\App\Http\Controllers\Vendor\VendorController::class, 'transactions'])->name('vendors.transactions');
     Route::post('vendors/{vendor}/archive', [\App\Http\Controllers\Vendor\VendorController::class, 'archive'])->name('vendors.archive');
     Route::post('vendors/{vendor}/unarchive', [\App\Http\Controllers\Vendor\VendorController::class, 'unarchive'])->name('vendors.unarchive');
@@ -55,6 +56,9 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('Projects/ProjectPayment', ['projectId' => (int) $projectId]);
     })->name('project.payment');
     Route::post('projects/{project}/locations', [\App\Http\Controllers\Project\ProjectLocationController::class, 'store'])->name('projects.locations.store');
+    Route::get('projects/{project}/locations-template', [\App\Http\Controllers\Project\ProjectLocationController::class, 'downloadTemplate'])->name('projects.locations.template');
+    Route::post('projects/{project}/locations-preview', [\App\Http\Controllers\Project\ProjectLocationController::class, 'previewImport'])->name('projects.locations.preview');
+    Route::post('projects/{project}/locations-import', [\App\Http\Controllers\Project\ProjectLocationController::class, 'import'])->name('projects.locations.import');
     Route::put('projects/{project}/locations/{location}', [\App\Http\Controllers\Project\ProjectLocationController::class, 'update'])->name('projects.locations.update');
     Route::delete('projects/{project}/locations/{location}', [\App\Http\Controllers\Project\ProjectLocationController::class, 'destroy'])->name('projects.locations.destroy');
 

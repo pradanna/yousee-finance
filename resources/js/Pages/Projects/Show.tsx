@@ -76,7 +76,12 @@ interface DbProjectLocation {
     type?: BillboardLocation['type'];
     size: string;
     vendor_id?: string | null;
-    vendor?: { id: string; name: string };
+    vendor?: {
+        id: string;
+        name: string;
+        npwp?: string | null;
+        is_pkp?: boolean;
+    };
     vendor_cost: number | string;
     po_issued?: boolean;
     po_number?: string;
@@ -96,6 +101,7 @@ interface DbProject {
     sales_id?: string;
     sales?: { id: string; name: string; commission_rate?: number | string };
     sales_commission_rate?: number | string;
+    sales_commission?: number | string;
     sales_pic?: string;
     fiscal_mode?: 'ppn' | 'non-ppn';
     start_date: string;
@@ -202,6 +208,7 @@ export default function Show({
             salesId: dbProject.sales_id,
             salesPIC: dbProject.sales?.name ?? dbProject.sales_pic ?? '-',
             salesCommissionRate: commRate,
+            salesCommission: Number(dbProject.sales_commission) || 0,
             period:
                 periodObj.label ||
                 `${dbProject.start_date} - ${dbProject.end_date}`,
@@ -271,6 +278,8 @@ export default function Show({
                 size: loc.size,
                 vendorId: loc.vendor_id ?? null,
                 vendorName: loc.vendor?.name ?? '-',
+                vendorNpwp: loc.vendor?.npwp ?? null,
+                vendorIsPkp: Boolean(loc.vendor?.is_pkp),
                 vendorCost: Number(loc.vendor_cost) || 0,
                 poIssued: Boolean(loc.po_issued),
                 poNumber: loc.po_number || '',
@@ -287,7 +296,9 @@ export default function Show({
                 const rawTotal = Math.round(Number(po.total) || 0);
                 const nearThousand = Math.round(rawTotal / 1000) * 1000;
                 const normalizedPoTotal =
-                    Math.abs(nearThousand - rawTotal) <= 1 ? nearThousand : rawTotal;
+                    Math.abs(nearThousand - rawTotal) <= 1
+                        ? nearThousand
+                        : rawTotal;
 
                 return {
                     id: po.id,
@@ -305,9 +316,15 @@ export default function Show({
                                   (
                                       term: DbPaymentTerm,
                                   ): VendorPaymentPlanTerm => {
-                                      const rawAmt = Math.round(Number(term.amount) || 0);
-                                      const nearK = Math.round(rawAmt / 1000) * 1000;
-                                      const normAmt = Math.abs(nearK - rawAmt) <= 1 ? nearK : rawAmt;
+                                      const rawAmt = Math.round(
+                                          Number(term.amount) || 0,
+                                      );
+                                      const nearK =
+                                          Math.round(rawAmt / 1000) * 1000;
+                                      const normAmt =
+                                          Math.abs(nearK - rawAmt) <= 1
+                                              ? nearK
+                                              : rawAmt;
                                       const settlements = (
                                           term.settlements ?? []
                                       ).map((s) => ({
@@ -421,6 +438,78 @@ export default function Show({
     const [modalPercentError, setModalPercentError] = useState<string | null>(
         null,
     );
+    const [modalCustomTempoCount, setModalCustomTempoCount] =
+        useState<number>(3);
+    const [isSavingPlan, setIsSavingPlan] = useState(false);
+    const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+
+    const calcInvoiceCustomTempoPercents = (count: number): number[] => {
+        const per = Math.floor(100 / count);
+        const res = Array(count).fill(per);
+        const sumExceptLast = per * (count - 1);
+        res[count - 1] = 100 - sumExceptLast;
+        return res;
+    };
+
+    const calcInvoiceCustomTempoDates = (
+        count: number,
+    ): Record<number, string> => {
+        const now = new Date();
+        const dates: Record<number, string> = {};
+        for (let i = 0; i < count; i++) {
+            const d = new Date(now);
+            d.setMonth(d.getMonth() + (i + 1));
+            dates[i] = d.toISOString().split('T')[0];
+        }
+        return dates;
+    };
+
+    const applyInvoiceCustomTempo = (count: number) => {
+        const validCount = Math.min(12, Math.max(1, count));
+        setModalCustomTempoCount(validCount);
+        setModalTerminPercents(calcInvoiceCustomTempoPercents(validCount));
+        setModalDueDates(calcInvoiceCustomTempoDates(validCount));
+        setModalPercentError(null);
+    };
+
+    const handleOpenInvoiceModal = () => {
+        if (prj.clientPaymentPlan) {
+            const planScheme = prj.clientPaymentPlan.scheme as PaymentScheme;
+            setModalScheme(planScheme);
+            const terms = prj.clientPaymentPlan.terms || [];
+            if (terms.length > 0) {
+                setModalTerminPercents(terms.map((t) => t.percent));
+                const dates: Record<number, string> = {};
+                terms.forEach((t, i) => {
+                    dates[i] = t.dueDate;
+                });
+                setModalDueDates(dates);
+                if (planScheme === 'installment') {
+                    setModalCustomTempoCount(terms.length);
+                }
+            } else {
+                if (planScheme === 'installment') {
+                    applyInvoiceCustomTempo(3);
+                } else if (planScheme === 'full') {
+                    setModalTerminPercents([100]);
+                    setModalDueDates({
+                        0: new Date().toISOString().split('T')[0],
+                    });
+                } else if (planScheme === 'dp') {
+                    setModalTerminPercents([50, 50]);
+                } else {
+                    setModalTerminPercents([30, 40, 30]);
+                }
+            }
+        } else {
+            setModalScheme('termin');
+            setModalTerminPercents([30, 40, 30]);
+            setModalDueDates({});
+            setModalCustomTempoCount(3);
+        }
+        setModalPercentError(null);
+        setShowInvoiceModal(true);
+    };
 
     // Receive Payment Modal State
     const [selectedPayTerm, setSelectedPayTerm] = useState<PaymentTerm | null>(
@@ -814,6 +903,7 @@ export default function Show({
                             {/* LOCATIONS TAB */}
                             {activeTab === 'locations' && (
                                 <LocationsTab
+                                    projectId={prj.id}
                                     locations={locations}
                                     isPPN={isPPN}
                                     vendors={vendors}
@@ -899,6 +989,7 @@ export default function Show({
                                         vendorTermScheme,
                                         vendorTermPercents,
                                         vendorTermDates,
+                                        onSuccessCallback,
                                     ) => {
                                         const targetLoc = locations.find(
                                             (l) => l.id === locId,
@@ -944,6 +1035,7 @@ export default function Show({
                                             {
                                                 preserveScroll: true,
                                                 onSuccess: () => {
+                                                    onSuccessCallback?.();
                                                     router.reload();
                                                 },
                                                 onError: (errors) => {
@@ -970,6 +1062,7 @@ export default function Show({
                                         vendorTermScheme,
                                         vendorTermPercents,
                                         vendorTermDates,
+                                        onSuccessCallback,
                                     ) => {
                                         router.post(
                                             `/projects/${prj.id}/purchase-orders`,
@@ -1007,6 +1100,7 @@ export default function Show({
                                             {
                                                 preserveScroll: true,
                                                 onSuccess: () => {
+                                                    onSuccessCallback?.();
                                                     router.reload();
                                                 },
                                                 onError: (errors) => {
@@ -1033,9 +1127,7 @@ export default function Show({
                                 <InvoiceTab
                                     project={displayedProject}
                                     isPPN={isPPN}
-                                    onOpenInvoiceModal={() =>
-                                        setShowInvoiceModal(true)
-                                    }
+                                    onOpenInvoiceModal={handleOpenInvoiceModal}
                                     onUpdateProject={onUpdateProject}
                                     onTriggerToast={triggerToast}
                                     onOpenPaymentModal={(term) => {
@@ -1290,6 +1382,7 @@ export default function Show({
                                                                                                     {
                                                                                                         k
                                                                                                     }
+
                                                                                                     :
                                                                                                 </span>
                                                                                                 <span className="font-bold text-slate-800">
@@ -1368,6 +1461,7 @@ export default function Show({
                             selectedPayTerm.amount -
                                 (selectedPayTerm.paidAmount || 0),
                         )}
+                        isLoading={isRecordingPayment}
                         onClose={() => setSelectedPayTerm(null)}
                         onSubmit={(
                             data: RecordInvoicePaymentModalSubmitData,
@@ -1382,6 +1476,7 @@ export default function Show({
                                 ? selectedAccount.name
                                 : data.method || 'Transfer Bank BCA';
 
+                            setIsRecordingPayment(true);
                             router.post(
                                 `/projects/${prj.id}/invoice/payment-terms/${termId}/settle`,
                                 {
@@ -1420,6 +1515,9 @@ export default function Show({
                                             'error',
                                             'Gagal Menyimpan',
                                         );
+                                    },
+                                    onFinish: () => {
+                                        setIsRecordingPayment(false);
                                     },
                                 },
                             );
@@ -1478,7 +1576,7 @@ export default function Show({
                                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                                     Pilih Skema Pembayaran
                                 </label>
-                                <div className="grid grid-cols-3 gap-2.5">
+                                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                                     {[
                                         {
                                             id: 'full' as PaymentScheme,
@@ -1492,8 +1590,13 @@ export default function Show({
                                         },
                                         {
                                             id: 'termin' as PaymentScheme,
-                                            label: 'Termin Kustom',
-                                            desc: 'Fleksibel 2-4 tahapan',
+                                            label: 'Termin 3 Tahap',
+                                            desc: 'Milestone progres 30–40–30%',
+                                        },
+                                        {
+                                            id: 'installment' as PaymentScheme,
+                                            label: 'Custom Tempo',
+                                            desc: 'Bebas atur termin hingga 12 bulan',
                                         },
                                     ].map((sc) => (
                                         <button
@@ -1501,18 +1604,58 @@ export default function Show({
                                             type="button"
                                             onClick={() => {
                                                 setModalScheme(sc.id);
+                                                const todayStr = new Date()
+                                                    .toISOString()
+                                                    .split('T')[0];
                                                 if (sc.id === 'full') {
                                                     setModalTerminPercents([
                                                         100,
                                                     ]);
+                                                    setModalDueDates({
+                                                        0: todayStr,
+                                                    });
                                                 } else if (sc.id === 'dp') {
                                                     setModalTerminPercents([
                                                         50, 50,
                                                     ]);
-                                                } else {
+                                                    const d2 = new Date();
+                                                    d2.setDate(
+                                                        d2.getDate() + 14,
+                                                    );
+                                                    setModalDueDates({
+                                                        0: todayStr,
+                                                        1: d2
+                                                            .toISOString()
+                                                            .split('T')[0],
+                                                    });
+                                                } else if (sc.id === 'termin') {
                                                     setModalTerminPercents([
                                                         30, 40, 30,
                                                     ]);
+                                                    const d2 = new Date();
+                                                    d2.setDate(
+                                                        d2.getDate() + 14,
+                                                    );
+                                                    const d3 = new Date();
+                                                    d3.setDate(
+                                                        d3.getDate() + 30,
+                                                    );
+                                                    setModalDueDates({
+                                                        0: todayStr,
+                                                        1: d2
+                                                            .toISOString()
+                                                            .split('T')[0],
+                                                        2: d3
+                                                            .toISOString()
+                                                            .split('T')[0],
+                                                    });
+                                                } else if (
+                                                    sc.id === 'installment'
+                                                ) {
+                                                    applyInvoiceCustomTempo(
+                                                        modalCustomTempoCount ||
+                                                            3,
+                                                    );
                                                 }
                                                 setModalPercentError(null);
                                             }}
@@ -1566,123 +1709,104 @@ export default function Show({
                                     })()}
                                 </div>
 
-                                {/* Additional Duration Controller for Installment Scheme */}
+                                {/* Additional Duration Controller for Custom Tempo Scheme */}
                                 {modalScheme === 'installment' && (
-                                    <div className="flex items-center justify-between rounded-2xl border border-blue-100/90 bg-blue-50/70 p-3">
-                                        <div>
-                                            <div className="text-xs font-bold text-blue-900">
-                                                Durasi Angsuran Bulanan
+                                    <div className="space-y-2.5 rounded-2xl border border-blue-200/90 bg-blue-50/70 p-3.5">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <div>
+                                                <label className="block text-xs font-bold text-blue-950">
+                                                    Jumlah Tempo / Termin
+                                                </label>
+                                                <p className="text-[10.5px] font-medium text-blue-700/80">
+                                                    Bebas atur termin pembayaran
+                                                    invoice client hingga 12
+                                                    bulan
+                                                </p>
                                             </div>
-                                            <div className="mt-0.5 text-[10px] font-medium text-blue-700">
-                                                Ubah jumlah bulan cicilan yang
-                                                diinginkan
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    disabled={
+                                                        modalCustomTempoCount <=
+                                                        1
+                                                    }
+                                                    onClick={() =>
+                                                        applyInvoiceCustomTempo(
+                                                            modalCustomTempoCount -
+                                                                1,
+                                                        )
+                                                    }
+                                                    className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white text-xs font-bold text-blue-900 hover:bg-blue-100 disabled:opacity-40"
+                                                >
+                                                    -
+                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={12}
+                                                        value={
+                                                            modalCustomTempoCount
+                                                        }
+                                                        onChange={(e) => {
+                                                            const val =
+                                                                parseInt(
+                                                                    e.target
+                                                                        .value,
+                                                                ) || 1;
+                                                            applyInvoiceCustomTempo(
+                                                                val,
+                                                            );
+                                                        }}
+                                                        className="w-14 rounded-lg border border-blue-300 bg-white py-1 text-center font-mono text-xs font-bold text-blue-950 focus:border-blue-600 focus:outline-none"
+                                                    />
+                                                    <span className="text-xs font-bold text-blue-900">
+                                                        Kali
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    disabled={
+                                                        modalCustomTempoCount >=
+                                                        12
+                                                    }
+                                                    onClick={() =>
+                                                        applyInvoiceCustomTempo(
+                                                            modalCustomTempoCount +
+                                                                1,
+                                                        )
+                                                    }
+                                                    className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white text-xs font-bold text-blue-900 hover:bg-blue-100 disabled:opacity-40"
+                                                >
+                                                    +
+                                                </button>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {(() => {
-                                                const calcInstallmentPercents =
-                                                    (
-                                                        count: number,
-                                                    ): number[] => {
-                                                        const per = Math.round(
-                                                            100 / count,
-                                                        );
-                                                        const res =
-                                                            Array(count).fill(
-                                                                per,
-                                                            );
-                                                        const sumExceptLast =
-                                                            per * (count - 1);
-                                                        res[count - 1] =
-                                                            100 - sumExceptLast;
-                                                        return res;
-                                                    };
 
-                                                return (
-                                                    <>
-                                                        {[3, 6, 12].map(
-                                                            (monthsCount) => (
-                                                                <button
-                                                                    key={
-                                                                        monthsCount
-                                                                    }
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setModalTerminPercents(
-                                                                            calcInstallmentPercents(
-                                                                                monthsCount,
-                                                                            ),
-                                                                        )
-                                                                    }
-                                                                    className={`cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-bold transition-all ${
-                                                                        modalTerminPercents.length ===
-                                                                        monthsCount
-                                                                            ? 'shadow-2xs border-blue-600 bg-blue-600 text-white'
-                                                                            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                                                                    }`}
-                                                                >
-                                                                    {
-                                                                        monthsCount
-                                                                    }{' '}
-                                                                    Bulan
-                                                                </button>
-                                                            ),
-                                                        )}
-                                                        <div className="mx-1 h-4 w-px bg-blue-200" />
-                                                        <button
-                                                            type="button"
-                                                            disabled={
-                                                                modalTerminPercents.length <=
-                                                                2
-                                                            }
-                                                            onClick={() => {
-                                                                const newCount =
-                                                                    Math.max(
-                                                                        2,
-                                                                        modalTerminPercents.length -
-                                                                            1,
-                                                                    );
-                                                                setModalTerminPercents(
-                                                                    calcInstallmentPercents(
-                                                                        newCount,
-                                                                    ),
-                                                                );
-                                                            }}
-                                                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-                                                        >
-                                                            -
-                                                        </button>
-                                                        <span className="w-5 text-center font-mono text-xs font-bold text-blue-950">
-                                                            {
-                                                                modalTerminPercents.length
-                                                            }
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            disabled={
-                                                                modalTerminPercents.length >=
-                                                                24
-                                                            }
-                                                            onClick={() => {
-                                                                const newCount =
-                                                                    Math.min(
-                                                                        24,
-                                                                        modalTerminPercents.length +
-                                                                            1,
-                                                                    );
-                                                                setModalTerminPercents(
-                                                                    calcInstallmentPercents(
-                                                                        newCount,
-                                                                    ),
-                                                                );
-                                                            }}
-                                                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50"
-                                                        >
-                                                            +
-                                                        </button>
-                                                    </>
-                                                );
-                                            })()}
+                                        {/* Pilihan Cepat */}
+                                        <div className="flex flex-wrap items-center gap-1.5 border-t border-blue-200/60 pt-2">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                                                Pilihan Cepat:
+                                            </span>
+                                            {[2, 3, 4, 6, 12].map((cnt) => (
+                                                <button
+                                                    key={cnt}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        applyInvoiceCustomTempo(
+                                                            cnt,
+                                                        )
+                                                    }
+                                                    className={`cursor-pointer rounded-lg px-2.5 py-0.5 text-xs font-bold transition-all ${
+                                                        modalCustomTempoCount ===
+                                                        cnt
+                                                            ? 'shadow-2xs bg-blue-600 text-white'
+                                                            : 'border border-blue-200 bg-white text-blue-800 hover:border-blue-300 hover:bg-blue-100'
+                                                    }`}
+                                                >
+                                                    {cnt}x Tempo
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -1724,18 +1848,26 @@ export default function Show({
                                                 'Termin 2 – Pelunasan',
                                             ];
                                         } else if (modalScheme === 'termin') {
-                                            defaultLabels = [
-                                                'Termin 1 – Uang Muka',
-                                                'Termin 2 – Progress',
-                                                'Termin 3 – Pelunasan',
-                                            ];
+                                            const count =
+                                                modalTerminPercents.length;
+                                            defaultLabels = Array.from(
+                                                { length: count },
+                                                (_, i) =>
+                                                    i === 0
+                                                        ? 'Termin 1 – Uang Muka'
+                                                        : i === count - 1
+                                                          ? `Termin ${i + 1} – Pelunasan`
+                                                          : `Termin ${i + 1} – Progres`,
+                                            );
                                         } else {
                                             const count =
                                                 modalTerminPercents.length;
                                             defaultLabels = Array.from(
                                                 { length: count },
                                                 (_, i) =>
-                                                    `Cicilan ${i + 1} dari ${count}`,
+                                                    count === 1
+                                                        ? 'Tempo 1 Kali – Pelunasan 100%'
+                                                        : `Cicilan ${i + 1} dari ${count} (Bulan ${i + 1})`,
                                             );
                                         }
 
@@ -1932,6 +2064,12 @@ export default function Show({
                                                 (a, b) => a + (Number(b) || 0),
                                                 0,
                                             );
+                                        if (sumPct !== 100) {
+                                            setModalPercentError(
+                                                `Total persentase termin harus tepat 100%! (Saat ini: ${sumPct}%)`,
+                                            );
+                                            return;
+                                        }
                                         // Persiapkan array due_dates sesuai urutan termin
                                         const now = new Date();
                                         const addDays = (
@@ -1997,6 +2135,7 @@ export default function Show({
                                             );
                                         }
 
+                                        setIsSavingPlan(true);
                                         router.post(
                                             `/projects/${prj.id}/payment-plan`,
                                             {
@@ -2033,29 +2172,66 @@ export default function Show({
                                                         message: errorMsg,
                                                     });
                                                 },
+                                                onFinish: () => {
+                                                    setIsSavingPlan(false);
+                                                },
                                             },
                                         );
                                     }}
-                                    className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-blue-700"
+                                    disabled={
+                                        isSavingPlan ||
+                                        modalTerminPercents.reduce(
+                                            (a, b) => a + (Number(b) || 0),
+                                            0,
+                                        ) !== 100
+                                    }
+                                    className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                    <svg
-                                        className="h-4 w-4"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                        strokeWidth={2}
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            d="M5 13l4 4L19 7"
-                                        />
-                                    </svg>
-                                    {!prj.clientPaymentPlan
-                                        ? 'Simpan Skema Pembayaran'
-                                        : !prj.invoiceIssued
-                                          ? 'Simpan Skema Pembayaran'
-                                          : 'Simpan Perubahan Skema'}
+                                    {isSavingPlan ? (
+                                        <>
+                                            <svg
+                                                className="h-4 w-4 animate-spin text-white"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <circle
+                                                    className="opacity-25"
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="10"
+                                                    stroke="currentColor"
+                                                    strokeWidth="4"
+                                                />
+                                                <path
+                                                    className="opacity-75"
+                                                    fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                                />
+                                            </svg>
+                                            <span>Menyimpan...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg
+                                                className="h-4 w-4"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M5 13l4 4L19 7"
+                                                />
+                                            </svg>
+                                            {!prj.clientPaymentPlan
+                                                ? 'Simpan Skema Pembayaran'
+                                                : !prj.invoiceIssued
+                                                  ? 'Simpan Skema Pembayaran'
+                                                  : 'Simpan Perubahan Skema'}
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>

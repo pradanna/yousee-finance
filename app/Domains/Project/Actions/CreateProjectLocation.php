@@ -7,6 +7,8 @@ namespace App\Domains\Project\Actions;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectLocation;
 use App\Domains\Shared\Enums\FiscalMode;
+use App\Domains\Vendor\Models\Vendor;
+use DomainException;
 use Illuminate\Support\Facades\DB;
 
 class CreateProjectLocation
@@ -20,6 +22,17 @@ class CreateProjectLocation
      */
     public function execute(Project $project, array $data): ProjectLocation
     {
+        $isProjectPpn = $project->fiscal_mode instanceof FiscalMode
+            ? $project->fiscal_mode === FiscalMode::PPN
+            : $project->fiscal_mode === FiscalMode::PPN->value;
+
+        if ($isProjectPpn) {
+            $vendor = Vendor::findOrFail($data['vendor_id']);
+            if (! $vendor->isPkp()) {
+                throw new DomainException("Vendor '{$vendor->name}' berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN.");
+            }
+        }
+
         return DB::transaction(function () use ($project, $data) {
             return ProjectLocation::create([
                 'project_id' => $project->id,

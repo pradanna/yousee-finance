@@ -33,6 +33,7 @@ class UpdateProjectRequest extends FormRequest
             'start_date' => ['sometimes', 'required', 'date'],
             'end_date' => ['sometimes', 'required', 'date', 'after_or_equal:start_date'],
             'contract_value' => ['sometimes', 'required', 'numeric', 'min:0'],
+            'sales_commission' => ['nullable', 'numeric', 'min:0'],
             'is_ppn_inclusive' => ['nullable', 'boolean'],
             'target_qty' => ['sometimes', 'required', 'integer', 'min:1'],
             'status' => ['sometimes', 'required', 'string', 'in:draft,active,completed,cancelled'],

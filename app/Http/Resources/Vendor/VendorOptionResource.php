@@ -21,6 +21,9 @@ class VendorOptionResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'name' => (string) $this->name,
+            'code' => (string) ($this->code ?? ''),
+            'npwp' => $this->npwp,
+            'is_pkp' => $this->isPkp(),
         ];
     }
 }

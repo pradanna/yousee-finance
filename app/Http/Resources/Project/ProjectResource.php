@@ -38,6 +38,7 @@ class ProjectResource extends JsonResource
             'start_date' => $this->start_date?->toDateString(),
             'end_date' => $this->end_date?->toDateString(),
             'contract_value' => (float) $this->contract_value,
+            'sales_commission' => (float) ($this->sales_commission ?? 0),
             'target_qty' => $this->target_qty,
             'status' => $this->status?->value,
             'notes' => $this->notes,

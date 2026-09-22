@@ -423,6 +423,7 @@ export default function Purchases({
         useState<VendorPaymentTermDB | null>(null);
     const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
     const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+    const [isIssuingPO, setIsIssuingPO] = useState(false);
     const [expandedPoPayment, setExpandedPoPayment] = useState<string | null>(
         null,
     );
@@ -484,6 +485,7 @@ export default function Purchases({
 
         const locationIds = poFormVendor.locs.map((l) => l.id);
 
+        setIsIssuingPO(true);
         router.post(
             `/projects/${activeProject.id}/purchase-orders`,
             {
@@ -516,6 +518,9 @@ export default function Purchases({
                         'error',
                         'Penerbitan PO Gagal',
                     );
+                },
+                onFinish: () => {
+                    setIsIssuingPO(false);
                 },
             },
         );
@@ -3706,6 +3711,7 @@ export default function Purchases({
             {poFormVendor && (
                 <IssuePOModal
                     isOpen={showPoForm}
+                    isLoading={isIssuingPO}
                     onClose={() => {
                         setShowPoForm(false);
                         setPoFormVendor(null);
