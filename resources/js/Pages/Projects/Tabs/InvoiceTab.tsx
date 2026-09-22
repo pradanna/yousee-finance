@@ -42,19 +42,21 @@ export default function InvoiceTab({
 
     const handleDownloadInvoicePdf = (term?: PaymentTerm) => {
         const isTermin = !!term;
-        const totalContractDpp = project.contractValue;
-        const totalContractInvoice = isPPN
-            ? Math.round(totalContractDpp * 1.11)
-            : totalContractDpp;
+        const totalContractDpp = Math.round(fin.dpp);
+        const totalContractInvoice = Math.round(fin.totalInvoice);
 
-        // Jika cetak invoice per termin:
-        // DPP termin = term.amount
-        // PPN termin = isPPN ? round(term.amount * 0.11) : 0
-        // Grand Total termin = isPPN ? round(term.amount * 1.11) : term.amount
-        const dppValue = isTermin ? term.amount : totalContractDpp;
-        const invoiceTotalValue = isPPN
-            ? Math.round(dppValue * 1.11)
-            : dppValue;
+        let dppValue: number;
+        let invoiceTotalValue: number;
+
+        if (isTermin) {
+            invoiceTotalValue = Math.round(term.amount);
+            dppValue = isPPN
+                ? Math.round(invoiceTotalValue / (1 + PPN_RATE))
+                : invoiceTotalValue;
+        } else {
+            dppValue = totalContractDpp;
+            invoiceTotalValue = totalContractInvoice;
+        }
 
         const csrfToken =
             (
@@ -86,6 +88,7 @@ export default function InvoiceTab({
         appendInput('isPPN', isPPN ? 'true' : 'false');
         appendInput('dpAmount', '0'); // Tidak mengurangi DP dari subtotal agar total pas sesuai tagihan termin / master
         appendInput('subtotal', String(dppValue));
+        appendInput('grandTotal', String(invoiceTotalValue));
         appendInput('contractTotalDpp', String(totalContractDpp));
         appendInput('contractTotalInvoice', String(totalContractInvoice));
         appendInput(

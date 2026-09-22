@@ -1047,9 +1047,12 @@ export default function SalesTransactions({
 
         // If specific term is requested:
         const isTermInvoice = !!term;
+        const targetGross = isTermInvoice
+            ? Math.round(term.amount)
+            : Math.round(total);
         const targetDpp = isTermInvoice
-            ? Math.round(term.amount / (isPPN ? 1 + PPN_RATE : 1))
-            : p.contractValue;
+            ? (isPPN ? Math.round(targetGross / (1 + PPN_RATE)) : targetGross)
+            : Math.round(p.contractValue);
         const termLabel = isTermInvoice
             ? `Tagihan ${term.label} (${term.percent}%)`
             : p.paymentTerms?.notes || 'Pelunasan Kontrak Penuh';
@@ -1103,6 +1106,7 @@ export default function SalesTransactions({
         }
         appendInput('isPPN', isPPN ? 'true' : 'false');
         appendInput('subtotal', String(targetDpp));
+        appendInput('grandTotal', String(targetGross));
         appendInput('dpAmount', String(dpAmount));
         appendInput('contractTotalDpp', String(p.contractValue));
         appendInput('contractTotalInvoice', String(total));

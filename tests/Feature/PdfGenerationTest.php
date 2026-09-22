@@ -73,6 +73,17 @@ class PdfGenerationTest extends TestCase
         ]);
         $responsePost->assertOk();
         $this->assertStringContainsString('application/pdf', (string) $responsePost->headers->get('content-type'));
+
+        // Test 5 Miliar inclusive deal with DPP 4.504.504.505
+        $response5Miliar = $this->actingAs($this->user)->post('/client-invoice-pdf', [
+            'clientName' => 'PT Paragon Technology and Innovation',
+            'invoiceNumber' => 'INV-09/2026/002',
+            'isPPN' => true,
+            'subtotal' => 4504504505,
+            'grandTotal' => 5000000000,
+        ]);
+        $response5Miliar->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response5Miliar->headers->get('content-type'));
     }
 
     public function test_kwitansi_pdf_generates_successfully_via_get_and_post(): void

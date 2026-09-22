@@ -114,9 +114,20 @@ class ClientInvoicePdfController extends Controller
             }
         }
 
-        $ppnAmount = $isPPN ? round($subtotal * 0.11, 2) : 0.0;
-        $totalBeforeDp = round($subtotal + $ppnAmount, 2);
-        $grandTotal = max(0, round($totalBeforeDp - $dpAmount, 2));
+        if ($request->filled('grandTotal')) {
+            $grandTotal = max(0, round((float) $request->input('grandTotal') - $dpAmount));
+            $ppnAmount = $isPPN ? max(0, round((float) $request->input('grandTotal') - $subtotal)) : 0.0;
+        } else {
+            if ($isPPN) {
+                $targetGross = round($subtotal * 1.11);
+                $ppnAmount = max(0, round($targetGross - $subtotal));
+                $totalBeforeDp = $targetGross;
+            } else {
+                $ppnAmount = 0.0;
+                $totalBeforeDp = $subtotal;
+            }
+            $grandTotal = max(0, round($totalBeforeDp - $dpAmount));
+        }
         $invoiceNumber = $invoiceNumber ?: ($invoice?->invoice_number ?? 'INV-' . date('m/y') . '/001');
 
         $pdf = Pdf::loadView('pdf.client_invoice', [

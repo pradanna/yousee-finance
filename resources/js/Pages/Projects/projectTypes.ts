@@ -244,9 +244,42 @@ export function calcFinancials(
     fiscalMode: FiscalMode,
 ) {
     const isPPN = fiscalMode === 'ppn';
-    const dpp = Math.round(project.contractValue);
-    const ppnKeluaran = isPPN ? Math.round(dpp * PPN_RATE) : 0;
-    const totalInvoice = dpp + ppnKeluaran;
+
+    // Periksa apakah ada client payment plan atau terms yang mendefinisikan total target invoice bulat
+    const termsSum =
+        project.clientPaymentPlan?.terms &&
+        project.clientPaymentPlan.terms.length > 0
+            ? project.clientPaymentPlan.terms.reduce(
+                  (sum, t) => sum + (Number(t.amount) || 0),
+                  0,
+              )
+            : 0;
+    const planTotal =
+        termsSum > 0
+            ? termsSum
+            : Number(project.clientPaymentPlan?.totalAmount) || 0;
+
+    const rawContract = Number(project.contractValue) || 0;
+    let totalInvoice = 0;
+    let dpp = 0;
+    let ppnKeluaran = 0;
+
+    if (isPPN) {
+        if (planTotal > 0) {
+            totalInvoice = Math.round(planTotal);
+            dpp = Math.round(totalInvoice / (1 + PPN_RATE));
+            ppnKeluaran = Math.max(0, totalInvoice - dpp);
+        } else {
+            totalInvoice = Math.round(rawContract * (1 + PPN_RATE));
+            dpp = Math.round(rawContract);
+            ppnKeluaran = Math.max(0, totalInvoice - dpp);
+        }
+    } else {
+        totalInvoice =
+            planTotal > 0 ? Math.round(planTotal) : Math.round(rawContract);
+        dpp = totalInvoice;
+        ppnKeluaran = 0;
+    }
 
     const rawVendorSum = locations.reduce(
         (s, l) => s + Math.round(l.vendorCost) * (l.qty || 1),
