@@ -7,6 +7,7 @@ import Pagination from '@/Components/Table/Pagination';
 import ActionDropdown from '@/Components/UI/ActionDropdown';
 import AuditLogModal, { AuditLogItem } from '@/Components/UI/AuditLogModal';
 import Modal from '@/Components/UI/Modal';
+import { StatusBadge } from '@/Components/UI/ProjectStatusBadge';
 import Toast, { ToastType } from '@/Components/UI/Toast';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import { PageProps } from '@/types';
@@ -18,7 +19,6 @@ import {
     CreateProjectFormData,
     createProjectSchema,
 } from './Projects/createProjectSchema';
-import { StatusBadge } from './Projects/Show';
 
 import { formatPeriod } from '@/Utils/formatters';
 import {

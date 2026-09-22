@@ -23,44 +23,7 @@ import {
     VendorPaymentPlanTerm,
 } from './projectTypes';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StatusBadge
-// ─────────────────────────────────────────────────────────────────────────────
-export const StatusBadge = ({ status }: { status: Project['status'] }) => {
-    const map: Record<
-        Project['status'],
-        { bg: string; dot: string; text: string }
-    > = {
-        Draft: {
-            bg: 'bg-amber-50 text-amber-700 border-amber-100',
-            dot: 'bg-amber-400',
-            text: 'Draft',
-        },
-        Active: {
-            bg: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-            dot: 'bg-emerald-500',
-            text: 'Aktif',
-        },
-        Completed: {
-            bg: 'bg-blue-50 text-blue-700 border-blue-100',
-            dot: 'bg-blue-500',
-            text: 'Selesai',
-        },
-        Cancelled: {
-            bg: 'bg-red-50 text-red-700 border-red-100',
-            dot: 'bg-red-500',
-            text: 'Dibatalkan',
-        },
-    };
-    const s = map[status] || map.Draft;
-    return (
-        <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${s.bg}`}
-        >
-            <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} /> {s.text}
-        </span>
-    );
-};
+import StatusBadge from '@/Components/UI/ProjectStatusBadge';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LocationsTab
@@ -978,7 +941,9 @@ export default function Show({
                                                 },
                                                 onError: (errors) => {
                                                     const firstErr =
-                                                        Object.values(errors)[0] ||
+                                                        Object.values(
+                                                            errors,
+                                                        )[0] ||
                                                         'Gagal menerbitkan PO vendor.';
                                                     triggerToast(
                                                         String(firstErr),
@@ -1039,7 +1004,9 @@ export default function Show({
                                                 },
                                                 onError: (errors) => {
                                                     const firstErr =
-                                                        Object.values(errors)[0] ||
+                                                        Object.values(
+                                                            errors,
+                                                        )[0] ||
                                                         'Gagal menerbitkan PO vendor.';
                                                     triggerToast(
                                                         String(firstErr),
@@ -1125,154 +1092,161 @@ export default function Show({
                                         </div>
                                     ) : (
                                         <div className="relative ml-4 space-y-6 border-l-2 border-slate-200 py-2">
-                                            {auditLogsList.map((log: import('@/Components/UI/AuditLogModal').AuditLogItem) => {
-                                                const event =
-                                                    log.event?.toLowerCase() ||
-                                                    'info';
-                                                const badgeBg =
-                                                    event === 'created'
-                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                        : event === 'updated'
-                                                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                          : event ===
-                                                              'status_changed'
-                                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                            {auditLogsList.map(
+                                                (
+                                                    log: import('@/Components/UI/AuditLogModal').AuditLogItem,
+                                                ) => {
+                                                    const event =
+                                                        log.event?.toLowerCase() ||
+                                                        'info';
+                                                    const badgeBg =
+                                                        event === 'created'
+                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                                             : event ===
-                                                                    'cancelled' ||
-                                                                event ===
-                                                                    'deleted'
-                                                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                                              : 'bg-slate-100 text-slate-700 border-slate-200';
+                                                                'updated'
+                                                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                              : event ===
+                                                                  'status_changed'
+                                                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                                : event ===
+                                                                        'cancelled' ||
+                                                                    event ===
+                                                                        'deleted'
+                                                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                                  : 'bg-slate-100 text-slate-700 border-slate-200';
 
-                                                const dotBg =
-                                                    event === 'created'
-                                                        ? 'bg-emerald-500 ring-emerald-100'
-                                                        : event === 'updated'
-                                                          ? 'bg-amber-500 ring-amber-100'
-                                                          : event ===
-                                                              'status_changed'
-                                                            ? 'bg-blue-500 ring-blue-100'
+                                                    const dotBg =
+                                                        event === 'created'
+                                                            ? 'bg-emerald-500 ring-emerald-100'
                                                             : event ===
-                                                                    'cancelled' ||
-                                                                event ===
-                                                                    'deleted'
-                                                              ? 'bg-rose-500 ring-rose-100'
-                                                              : 'bg-slate-400 ring-slate-100';
+                                                                'updated'
+                                                              ? 'bg-amber-500 ring-amber-100'
+                                                              : event ===
+                                                                  'status_changed'
+                                                                ? 'bg-blue-500 ring-blue-100'
+                                                                : event ===
+                                                                        'cancelled' ||
+                                                                    event ===
+                                                                        'deleted'
+                                                                  ? 'bg-rose-500 ring-rose-100'
+                                                                  : 'bg-slate-400 ring-slate-100';
 
-                                                return (
-                                                    <div
-                                                        key={log.id}
-                                                        className="group relative pl-6"
-                                                    >
-                                                        {/* Dot bullet on the timeline */}
+                                                    return (
                                                         <div
-                                                            className={`absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 border-white ${dotBg} ring-4 transition-transform group-hover:scale-125`}
-                                                        />
+                                                            key={log.id}
+                                                            className="group relative pl-6"
+                                                        >
+                                                            {/* Dot bullet on the timeline */}
+                                                            <div
+                                                                className={`absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 border-white ${dotBg} ring-4 transition-transform group-hover:scale-125`}
+                                                            />
 
-                                                        <div className="shadow-xs rounded-2xl border border-slate-200/80 bg-white p-4 transition-all hover:border-slate-300 hover:shadow-md">
-                                                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span
-                                                                        className={`inline-flex items-center rounded-lg border px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider ${badgeBg}`}
-                                                                    >
-                                                                        {
-                                                                            log.event
-                                                                        }
-                                                                    </span>
-                                                                    <span className="text-xs font-bold text-slate-800">
-                                                                        Oleh:{' '}
-                                                                        <span className="font-extrabold text-slate-900">
-                                                                            {log.user_name ||
-                                                                                'System'}
+                                                            <div className="shadow-xs rounded-2xl border border-slate-200/80 bg-white p-4 transition-all hover:border-slate-300 hover:shadow-md">
+                                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span
+                                                                            className={`inline-flex items-center rounded-lg border px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider ${badgeBg}`}
+                                                                        >
+                                                                            {
+                                                                                log.event
+                                                                            }
                                                                         </span>
+                                                                        <span className="text-xs font-bold text-slate-800">
+                                                                            Oleh:{' '}
+                                                                            <span className="font-extrabold text-slate-900">
+                                                                                {log.user_name ||
+                                                                                    'System'}
+                                                                            </span>
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className="font-mono text-xs font-medium text-slate-400">
+                                                                        {log.created_at
+                                                                            ? new Date(
+                                                                                  log.created_at,
+                                                                              ).toLocaleString(
+                                                                                  'id-ID',
+                                                                                  {
+                                                                                      dateStyle:
+                                                                                          'medium',
+                                                                                      timeStyle:
+                                                                                          'short',
+                                                                                  },
+                                                                              )
+                                                                            : '-'}
                                                                     </span>
                                                                 </div>
-                                                                <span className="font-mono text-xs font-medium text-slate-400">
-                                                                    {log.created_at
-                                                                        ? new Date(
-                                                                              log.created_at,
-                                                                          ).toLocaleString(
-                                                                              'id-ID',
-                                                                              {
-                                                                                  dateStyle:
-                                                                                      'medium',
-                                                                                  timeStyle:
-                                                                                      'short',
-                                                                              },
-                                                                          )
-                                                                        : '-'}
-                                                                </span>
-                                                            </div>
 
-                                                            <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-700">
-                                                                {
-                                                                    log.description
-                                                                }
-                                                            </p>
+                                                                <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-700">
+                                                                    {
+                                                                        log.description
+                                                                    }
+                                                                </p>
 
-                                                            {/* Detailed properties / payload snapshot if available */}
-                                                            {log.properties &&
-                                                                Object.keys(
-                                                                    log.properties,
-                                                                ).length >
-                                                                    0 && (
-                                                                    <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-[11px]">
-                                                                        <span className="mb-1.5 block font-bold uppercase tracking-wider text-slate-500">
-                                                                            Rincian
-                                                                            Nilai
-                                                                            &
-                                                                            Snapshot:
-                                                                        </span>
-                                                                        <div className="grid grid-cols-1 gap-2 font-mono text-slate-600 sm:grid-cols-2">
-                                                                            {Object.entries(
-                                                                                log.properties,
-                                                                            ).map(
-                                                                                ([
-                                                                                    k,
-                                                                                    v,
-                                                                                ]) => (
-                                                                                    <div
-                                                                                        key={
-                                                                                            k
-                                                                                        }
-                                                                                        className="flex items-center justify-between rounded border border-slate-200/60 bg-white px-2.5 py-1"
-                                                                                    >
-                                                                                        <span className="text-slate-400">
-                                                                                            {
+                                                                {/* Detailed properties / payload snapshot if available */}
+                                                                {log.properties &&
+                                                                    Object.keys(
+                                                                        log.properties,
+                                                                    ).length >
+                                                                        0 && (
+                                                                        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-[11px]">
+                                                                            <span className="mb-1.5 block font-bold uppercase tracking-wider text-slate-500">
+                                                                                Rincian
+                                                                                Nilai
+                                                                                &
+                                                                                Snapshot:
+                                                                            </span>
+                                                                            <div className="grid grid-cols-1 gap-2 font-mono text-slate-600 sm:grid-cols-2">
+                                                                                {Object.entries(
+                                                                                    log.properties,
+                                                                                ).map(
+                                                                                    ([
+                                                                                        k,
+                                                                                        v,
+                                                                                    ]) => (
+                                                                                        <div
+                                                                                            key={
                                                                                                 k
                                                                                             }
-                                                                                            :
-                                                                                        </span>
-                                                                                        <span className="font-bold text-slate-800">
-                                                                                            {typeof v ===
-                                                                                            'number'
-                                                                                                ? k.includes(
-                                                                                                      'value',
-                                                                                                  ) ||
-                                                                                                  k.includes(
-                                                                                                      'amount',
-                                                                                                  )
-                                                                                                    ? fmt(
-                                                                                                          v,
+                                                                                            className="flex items-center justify-between rounded border border-slate-200/60 bg-white px-2.5 py-1"
+                                                                                        >
+                                                                                            <span className="text-slate-400">
+                                                                                                {
+                                                                                                    k
+                                                                                                }
+
+                                                                                                :
+                                                                                            </span>
+                                                                                            <span className="font-bold text-slate-800">
+                                                                                                {typeof v ===
+                                                                                                'number'
+                                                                                                    ? k.includes(
+                                                                                                          'value',
+                                                                                                      ) ||
+                                                                                                      k.includes(
+                                                                                                          'amount',
                                                                                                       )
+                                                                                                        ? fmt(
+                                                                                                              v,
+                                                                                                          )
+                                                                                                        : String(
+                                                                                                              v,
+                                                                                                          )
                                                                                                     : String(
-                                                                                                          v,
-                                                                                                      )
-                                                                                                : String(
-                                                                                                      v ??
-                                                                                                          '-',
-                                                                                                  )}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                ),
-                                                                            )}
+                                                                                                          v ??
+                                                                                                              '-',
+                                                                                                      )}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    ),
+                                                                                )}
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                )}
+                                                                    )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
+                                                    );
+                                                },
+                                            )}
                                         </div>
                                     )}
                                 </div>
