@@ -626,6 +626,16 @@ export default function Purchases({
         appendInput('project[name]', projectName);
         appendInput('project[period]', projectPeriod);
 
+        const itemsDpp = items.reduce((s, l) => s + (l.vendorCost || 0), 0);
+        const itemsGrandTotal = items.reduce((sum, loc) => {
+            const dpp = loc.vendorCost || 0;
+            const ppn = isPPN ? dpp * 0.11 : 0;
+            return sum + Math.round(dpp + ppn);
+        }, 0);
+
+        appendInput('totalDPP', itemsDpp.toString());
+        appendInput('grandTotal', itemsGrandTotal.toString());
+
         items.forEach((item, index) => {
             appendInput(`locations[${index}][id]`, item.id.toString());
             appendInput(`locations[${index}][description]`, item.description);
@@ -1951,6 +1961,7 @@ export default function Purchases({
                                                                                                     {
                                                                                                         summary.percentage
                                                                                                     }
+
                                                                                                     %
                                                                                                     Terbayar
                                                                                                 </span>
@@ -2064,6 +2075,7 @@ export default function Purchases({
                                                                                                 .payments
                                                                                                 ?.length ||
                                                                                                 0}
+
                                                                                             )
                                                                                         </span>
                                                                                         <svg
@@ -2168,6 +2180,7 @@ export default function Purchases({
                                                                                             {
                                                                                                 po.poNumber
                                                                                             }
+
                                                                                             )
                                                                                         </span>
                                                                                         <span className="text-[10px] font-normal text-slate-500">

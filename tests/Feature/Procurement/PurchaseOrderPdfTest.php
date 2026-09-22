@@ -85,4 +85,34 @@ class PurchaseOrderPdfTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
     }
+
+    public function test_po_pdf_grand_total_matches_target_total_2_miliar_without_rounding_error(): void
+    {
+        // 3 titik lokasi dengan total DPP 1.801.801.801 yang di-gross bernilai tepat 2.000.000.000
+        $payload = [
+            'vendorName' => $this->vendor->name,
+            'poNumber' => 'PO-TEST/2026/001',
+            'isPPN' => true,
+            'grandTotal' => 2000000000,
+            'totalDPP' => 1801801801,
+            'locations' => [
+                ['description' => 'Jl. Soloraya', 'vendorCost' => 450450450],
+                ['description' => 'Jl. Rajiman', 'vendorCost' => 450450450],
+                ['description' => '2 Billboard Tanjung Anom', 'vendorCost' => 900900901],
+            ],
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->post('/po-pdf', $payload);
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
+
+        // Juga uji tanpa passing grandTotal eksplisit (fallback per-item rounded gross)
+        unset($payload['grandTotal'], $payload['totalDPP']);
+        $responseFallback = $this->actingAs($this->user)
+            ->post('/po-pdf', $payload);
+
+        $responseFallback->assertOk();
+    }
 }

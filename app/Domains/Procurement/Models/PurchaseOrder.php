@@ -95,9 +95,9 @@ class PurchaseOrder extends Model
         if ($isPpn) {
             $total = (float) $this->items()->get()->sum(function (PurchaseOrderItem $item) {
                 $itemDpp = (float) $item->quantity * (float) $item->price;
-                return round($itemDpp * 1.11, 2);
+                return round($itemDpp * 1.11);
             });
-            $ppn = round($total - $subtotal, 2);
+            $ppn = round($total - $subtotal);
         } else {
             $ppn = 0.0;
             $total = $subtotal;

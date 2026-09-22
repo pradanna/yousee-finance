@@ -33,7 +33,11 @@ export default function VendorPOTab({
         name: string;
         display_name: string;
     }>;
-    onTriggerToast?: (message: string, type?: 'success' | 'error' | 'warning' | 'info', title?: string) => void;
+    onTriggerToast?: (
+        message: string,
+        type?: 'success' | 'error' | 'warning' | 'info',
+        title?: string,
+    ) => void;
     onIssuePO: (
         locId: string | number,
         poNumber: string,
@@ -179,6 +183,16 @@ export default function VendorPOTab({
         appendInput('poNumber', poNumber);
         appendInput('isPPN', isPPN ? 'true' : 'false');
         appendInput('stream', 'true');
+
+        const itemsDpp = items.reduce((s, l) => s + (l.vendorCost || 0), 0);
+        const itemsGrandTotal = items.reduce((sum, loc) => {
+            const dpp = loc.vendorCost || 0;
+            const ppn = isPPN ? dpp * 0.11 : 0;
+            return sum + Math.round(dpp + ppn);
+        }, 0);
+
+        appendInput('totalDPP', itemsDpp.toString());
+        appendInput('grandTotal', itemsGrandTotal.toString());
 
         items.forEach((item, index) => {
             appendInput(`locations[${index}][id]`, item.id.toString());
@@ -400,19 +414,25 @@ export default function VendorPOTab({
         return purchaseOrders.reduce((sum, po) => {
             const planTerms = po.payment_plan?.terms || [];
             if (planTerms.length > 0) {
-                return sum + planTerms.reduce((tSum, t) => tSum + (t.totalPaid || 0), 0);
+                return (
+                    sum +
+                    planTerms.reduce((tSum, t) => tSum + (t.totalPaid || 0), 0)
+                );
             }
             return sum;
         }, 0);
     }, [purchaseOrders]);
 
-    const totalRemainingAll = Math.max(0, Math.round(totalPO - totalVendorPaidAll));
+    const totalRemainingAll = Math.max(
+        0,
+        Math.round(totalPO - totalVendorPaidAll),
+    );
 
     return (
         <div className="space-y-6">
             {/* Top Metric Cards */}
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+                <div className="shadow-2xs rounded-2xl border border-slate-200/80 bg-white p-4">
                     <div className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">
                         Total Titik & PO
                     </div>
@@ -427,7 +447,8 @@ export default function VendorPOTab({
                     <div className="mt-2 text-[11px] text-slate-500">
                         {locations.length - issuedCount > 0 ? (
                             <span className="font-semibold text-amber-600">
-                                Sisa {locations.length - issuedCount} titik belum terbit PO
+                                Sisa {locations.length - issuedCount} titik
+                                belum terbit PO
                             </span>
                         ) : (
                             <span className="font-semibold text-emerald-600">
@@ -437,7 +458,7 @@ export default function VendorPOTab({
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-blue-200/80 bg-blue-50/50 p-4 shadow-2xs">
+                <div className="shadow-2xs rounded-2xl border border-blue-200/80 bg-blue-50/50 p-4">
                     <div className="mb-1 text-xs font-bold uppercase tracking-wider text-blue-700">
                         Target Total PO {isPPN ? '(Inc PPN 11%)' : ''}
                     </div>
@@ -447,7 +468,14 @@ export default function VendorPOTab({
                     <div className="mt-1 text-[11px] text-blue-600/80">
                         {isPPN ? (
                             <span>
-                                DPP: <strong className="font-mono font-semibold text-blue-900">{fmt(totalVendorDPP)}</strong> | PPN: <strong className="font-mono font-semibold text-violet-700">{fmt(totalPO - totalVendorDPP)}</strong>
+                                DPP:{' '}
+                                <strong className="font-mono font-semibold text-blue-900">
+                                    {fmt(totalVendorDPP)}
+                                </strong>{' '}
+                                | PPN:{' '}
+                                <strong className="font-mono font-semibold text-violet-700">
+                                    {fmt(totalPO - totalVendorDPP)}
+                                </strong>
                             </span>
                         ) : (
                             <span>Biaya keseluruhan pengadaan vendor</span>
@@ -455,7 +483,7 @@ export default function VendorPOTab({
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-4 shadow-2xs">
+                <div className="shadow-2xs rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-4">
                     <div className="mb-1 text-xs font-bold uppercase tracking-wider text-emerald-700">
                         Realisasi Dibayar
                     </div>
@@ -467,7 +495,14 @@ export default function VendorPOTab({
                             <span>
                                 Progres:{' '}
                                 <strong className="font-bold text-emerald-800">
-                                    {Math.min(100, Math.round((totalVendorPaidAll / totalPO) * 100))}%
+                                    {Math.min(
+                                        100,
+                                        Math.round(
+                                            (totalVendorPaidAll / totalPO) *
+                                                100,
+                                        ),
+                                    )}
+                                    %
                                 </strong>{' '}
                                 dari target PO
                             </span>
@@ -477,7 +512,7 @@ export default function VendorPOTab({
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-rose-200/80 bg-rose-50/50 p-4 shadow-2xs">
+                <div className="shadow-2xs rounded-2xl border border-rose-200/80 bg-rose-50/50 p-4">
                     <div className="mb-1 text-xs font-bold uppercase tracking-wider text-rose-700">
                         Sisa Hutang Vendor
                     </div>
@@ -862,11 +897,31 @@ export default function VendorPOTab({
                                                                       term.id,
                                                               ),
                                                           );
-                                                      const targetAmount = Math.round(term.amount);
-                                                      const paidAmount = Math.round(term.totalPaid);
-                                                      const isTermPaid = term.isPaid || (targetAmount > 0 && paidAmount >= targetAmount);
-                                                      const remainingAmount = isTermPaid ? 0 : Math.max(0, Math.round(term.remaining));
-                                                      const isPartial = !isTermPaid && paidAmount > 0;
+                                                      const targetAmount =
+                                                          Math.round(
+                                                              term.amount,
+                                                          );
+                                                      const paidAmount =
+                                                          Math.round(
+                                                              term.totalPaid,
+                                                          );
+                                                      const isTermPaid =
+                                                          term.isPaid ||
+                                                          (targetAmount > 0 &&
+                                                              paidAmount >=
+                                                                  targetAmount);
+                                                      const remainingAmount =
+                                                          isTermPaid
+                                                              ? 0
+                                                              : Math.max(
+                                                                    0,
+                                                                    Math.round(
+                                                                        term.remaining,
+                                                                    ),
+                                                                );
+                                                      const isPartial =
+                                                          !isTermPaid &&
+                                                          paidAmount > 0;
 
                                                       return {
                                                           id: term.id,
@@ -875,11 +930,13 @@ export default function VendorPOTab({
                                                           targetAmount,
                                                           paidAmount,
                                                           remainingAmount,
-                                                          dueDate: term.due_date,
+                                                          dueDate:
+                                                              term.due_date,
                                                           isPaid: isTermPaid,
                                                           isPartial,
                                                           poId: parentPo?.id,
-                                                          poNumber: parentPo?.po_number,
+                                                          poNumber:
+                                                              parentPo?.po_number,
                                                       };
                                                   })
                                                 : (() => {
@@ -1009,10 +1066,11 @@ export default function VendorPOTab({
                                         })()}
 
                                         {/* Ringkasan Keuangan Vendor (Typography & Layout Diperbesar) */}
-                                        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3.5 py-2 shadow-2xs">
+                                        <div className="shadow-2xs flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3.5 py-2">
                                             <div className="pr-1">
                                                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                                    Target PO {isPPN ? '(Inc PPN)' : ''}
+                                                    Target PO{' '}
+                                                    {isPPN ? '(Inc PPN)' : ''}
                                                 </div>
                                                 <div className="font-mono text-sm font-black text-slate-900">
                                                     {fmt(vendorGrandTotal)}
@@ -1488,12 +1546,24 @@ export default function VendorPOTab({
                                                     <div className="animate-in fade-in slide-in-from-top-2 mt-3 space-y-3.5 border-t border-slate-200/80 pt-3 duration-200">
                                                         <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
                                                             <span>
-                                                                Rincian Pelaksanaan & Jatuh Tempo Pembayaran Vendor
+                                                                Rincian
+                                                                Pelaksanaan &
+                                                                Jatuh Tempo
+                                                                Pembayaran
+                                                                Vendor
                                                             </span>
                                                             <span className="font-bold text-slate-700">
-                                                                {vendorSchedule.length} Termin (
-                                                                {vendorGrandTotal > 0
-                                                                    ? Math.round((totalVendorPaid / vendorGrandTotal) * 100)
+                                                                {
+                                                                    vendorSchedule.length
+                                                                }{' '}
+                                                                Termin (
+                                                                {vendorGrandTotal >
+                                                                0
+                                                                    ? Math.round(
+                                                                          (totalVendorPaid /
+                                                                              vendorGrandTotal) *
+                                                                              100,
+                                                                      )
                                                                     : 0}
                                                                 % Realisasi)
                                                             </span>
@@ -1501,183 +1571,332 @@ export default function VendorPOTab({
 
                                                         {(() => {
                                                             // Kelompokkan jadwal termin per Nomor PO
-                                                            const poGroupsMap = new Map<string, typeof vendorSchedule>();
-                                                            vendorSchedule.forEach((term) => {
-                                                                const poKey = term.poNumber || firstPoNum || 'PO Vendor';
-                                                                if (!poGroupsMap.has(poKey)) {
-                                                                    poGroupsMap.set(poKey, []);
-                                                                }
-                                                                poGroupsMap.get(poKey)!.push(term);
-                                                            });
+                                                            const poGroupsMap =
+                                                                new Map<
+                                                                    string,
+                                                                    typeof vendorSchedule
+                                                                >();
+                                                            vendorSchedule.forEach(
+                                                                (term) => {
+                                                                    const poKey =
+                                                                        term.poNumber ||
+                                                                        firstPoNum ||
+                                                                        'PO Vendor';
+                                                                    if (
+                                                                        !poGroupsMap.has(
+                                                                            poKey,
+                                                                        )
+                                                                    ) {
+                                                                        poGroupsMap.set(
+                                                                            poKey,
+                                                                            [],
+                                                                        );
+                                                                    }
+                                                                    poGroupsMap
+                                                                        .get(
+                                                                            poKey,
+                                                                        )!
+                                                                        .push(
+                                                                            term,
+                                                                        );
+                                                                },
+                                                            );
 
-                                                            const poGroups = Array.from(poGroupsMap.entries());
+                                                            const poGroups =
+                                                                Array.from(
+                                                                    poGroupsMap.entries(),
+                                                                );
 
                                                             return (
                                                                 <div className="space-y-4">
-                                                                    {poGroups.map(([poNumberKey, termsInPo], groupIdx) => (
-                                                                        <div key={poNumberKey} className="space-y-2.5">
-                                                                            {/* Header Pemisah Dokumen PO */}
-                                                                            <div className="flex items-center gap-2">
-                                                                                <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-800 shadow-2xs">
-                                                                                    <svg
-                                                                                        className="h-3.5 w-3.5 text-blue-600"
-                                                                                        fill="none"
-                                                                                        viewBox="0 0 24 24"
-                                                                                        stroke="currentColor"
-                                                                                        strokeWidth={2}
-                                                                                    >
-                                                                                        <path
-                                                                                            strokeLinecap="round"
-                                                                                            strokeLinejoin="round"
-                                                                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                        />
-                                                                                    </svg>
-                                                                                    <span>PO: <span className="font-mono text-blue-700">{poNumberKey}</span></span>
-                                                                                    <span className="text-[10px] font-normal text-slate-400">
-                                                                                        ({termsInPo.length} Termin)
-                                                                                    </span>
-                                                                                </div>
-                                                                                <div className="h-px flex-1 bg-slate-200" />
-                                                                            </div>
-
-                                                                            {/* Grid Kartu Termin PO ini */}
-                                                                            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
-                                                                                {termsInPo.map((term, termIdx) => {
-                                                                                    // Sequential check: apakah ada termin sebelumnya dalam PO ini yang belum lunas
-                                                                                    const hasUnpaidPriorTerm = termsInPo.slice(0, termIdx).some((priorTerm) => !priorTerm.isPaid && priorTerm.remainingAmount > 0);
-                                                                                    const canPayThisTerm = !term.isPaid && term.remainingAmount > 0 && !hasUnpaidPriorTerm;
-
-                                                                                    return (
-                                                                                        <div
-                                                                                            key={term.id}
-                                                                                            className={`flex flex-col justify-between rounded-2xl border p-3 transition-all ${
-                                                                                                term.isPaid
-                                                                                                    ? 'border-emerald-200 bg-emerald-50/60'
-                                                                                                    : hasUnpaidPriorTerm
-                                                                                                      ? 'border-slate-200/60 bg-slate-50/80 opacity-70'
-                                                                                                      : term.isPartial
-                                                                                                        ? 'border-blue-200 bg-blue-50/60'
-                                                                                                        : 'shadow-2xs border-slate-200 bg-white'
-                                                                                            }`}
+                                                                    {poGroups.map(
+                                                                        (
+                                                                            [
+                                                                                poNumberKey,
+                                                                                termsInPo,
+                                                                            ],
+                                                                            groupIdx,
+                                                                        ) => (
+                                                                            <div
+                                                                                key={
+                                                                                    poNumberKey
+                                                                                }
+                                                                                className="space-y-2.5"
+                                                                            >
+                                                                                {/* Header Pemisah Dokumen PO */}
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <div className="shadow-2xs flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-800">
+                                                                                        <svg
+                                                                                            className="h-3.5 w-3.5 text-blue-600"
+                                                                                            fill="none"
+                                                                                            viewBox="0 0 24 24"
+                                                                                            stroke="currentColor"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
                                                                                         >
-                                                                                            <div className="space-y-1">
-                                                                                                <div className="flex items-center justify-between">
-                                                                                                    <span className="text-xs font-bold text-slate-900">
-                                                                                                        {term.label}
-                                                                                                        <span
-                                                                                                            className={`ml-2 rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${
-                                                                                                                term.isPaid
-                                                                                                                    ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
-                                                                                                                    : hasUnpaidPriorTerm
-                                                                                                                      ? 'border-slate-200 bg-slate-100 text-slate-500'
-                                                                                                                      : term.isPartial
-                                                                                                                        ? 'border-blue-200 bg-blue-100 text-blue-800'
-                                                                                                                        : 'border-amber-200 bg-amber-100 text-amber-800'
-                                                                                                            }`}
-                                                                                                        >
-                                                                                                            {term.isPaid
-                                                                                                                ? 'Lunas'
-                                                                                                                : hasUnpaidPriorTerm
-                                                                                                                  ? 'Terkunci (Termin Lalu Belum Lunas)'
-                                                                                                                  : term.isPartial
-                                                                                                                    ? 'Bayar Parsial'
-                                                                                                                    : 'Belum Dibayar'}
-                                                                                                        </span>
-                                                                                                    </span>
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span>
+                                                                                            PO:{' '}
+                                                                                            <span className="font-mono text-blue-700">
+                                                                                                {
+                                                                                                    poNumberKey
+                                                                                                }
+                                                                                            </span>
+                                                                                        </span>
+                                                                                        <span className="text-[10px] font-normal text-slate-400">
+                                                                                            (
+                                                                                            {
+                                                                                                termsInPo.length
+                                                                                            }{' '}
+                                                                                            Termin)
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div className="h-px flex-1 bg-slate-200" />
+                                                                                </div>
+
+                                                                                {/* Grid Kartu Termin PO ini */}
+                                                                                <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
+                                                                                    {termsInPo.map(
+                                                                                        (
+                                                                                            term,
+                                                                                            termIdx,
+                                                                                        ) => {
+                                                                                            // Sequential check: apakah ada termin sebelumnya dalam PO ini yang belum lunas
+                                                                                            const hasUnpaidPriorTerm =
+                                                                                                termsInPo
+                                                                                                    .slice(
+                                                                                                        0,
+                                                                                                        termIdx,
+                                                                                                    )
+                                                                                                    .some(
+                                                                                                        (
+                                                                                                            priorTerm,
+                                                                                                        ) =>
+                                                                                                            !priorTerm.isPaid &&
+                                                                                                            priorTerm.remainingAmount >
+                                                                                                                0,
+                                                                                                    );
+                                                                                            const canPayThisTerm =
+                                                                                                !term.isPaid &&
+                                                                                                term.remainingAmount >
+                                                                                                    0 &&
+                                                                                                !hasUnpaidPriorTerm;
+
+                                                                                            return (
+                                                                                                <div
+                                                                                                    key={
+                                                                                                        term.id
+                                                                                                    }
+                                                                                                    className={`flex flex-col justify-between rounded-2xl border p-3 transition-all ${
+                                                                                                        term.isPaid
+                                                                                                            ? 'border-emerald-200 bg-emerald-50/60'
+                                                                                                            : hasUnpaidPriorTerm
+                                                                                                              ? 'border-slate-200/60 bg-slate-50/80 opacity-70'
+                                                                                                              : term.isPartial
+                                                                                                                ? 'border-blue-200 bg-blue-50/60'
+                                                                                                                : 'shadow-2xs border-slate-200 bg-white'
+                                                                                                    }`}
+                                                                                                >
+                                                                                                    <div className="space-y-1">
+                                                                                                        <div className="flex items-center justify-between">
+                                                                                                            <span className="text-xs font-bold text-slate-900">
+                                                                                                                {
+                                                                                                                    term.label
+                                                                                                                }
+                                                                                                                <span
+                                                                                                                    className={`ml-2 rounded-md border px-1.5 py-0.5 text-[9px] font-bold ${
+                                                                                                                        term.isPaid
+                                                                                                                            ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
+                                                                                                                            : hasUnpaidPriorTerm
+                                                                                                                              ? 'border-slate-200 bg-slate-100 text-slate-500'
+                                                                                                                              : term.isPartial
+                                                                                                                                ? 'border-blue-200 bg-blue-100 text-blue-800'
+                                                                                                                                : 'border-amber-200 bg-amber-100 text-amber-800'
+                                                                                                                    }`}
+                                                                                                                >
+                                                                                                                    {term.isPaid
+                                                                                                                        ? 'Lunas'
+                                                                                                                        : hasUnpaidPriorTerm
+                                                                                                                          ? 'Terkunci (Termin Lalu Belum Lunas)'
+                                                                                                                          : term.isPartial
+                                                                                                                            ? 'Bayar Parsial'
+                                                                                                                            : 'Belum Dibayar'}
+                                                                                                                </span>
+                                                                                                            </span>
+                                                                                                        </div>
+
+                                                                                                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                                                                                                            <span>
+                                                                                                                Porsi:{' '}
+                                                                                                                <strong className="text-slate-700">
+                                                                                                                    {
+                                                                                                                        term.percent
+                                                                                                                    }
+                                                                                                                    %
+                                                                                                                </strong>
+                                                                                                            </span>
+                                                                                                            <span className="font-mono font-bold text-slate-800">
+                                                                                                                {fmt(
+                                                                                                                    term.targetAmount,
+                                                                                                                )}
+                                                                                                            </span>
+                                                                                                        </div>
+
+                                                                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                                                                                                            <svg
+                                                                                                                className="h-3.5 w-3.5 text-slate-400"
+                                                                                                                fill="none"
+                                                                                                                viewBox="0 0 24 24"
+                                                                                                                stroke="currentColor"
+                                                                                                                strokeWidth={
+                                                                                                                    2
+                                                                                                                }
+                                                                                                            >
+                                                                                                                <path
+                                                                                                                    strokeLinecap="round"
+                                                                                                                    strokeLinejoin="round"
+                                                                                                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                                                                                />
+                                                                                                            </svg>
+                                                                                                            <span>
+                                                                                                                Jatuh
+                                                                                                                Tempo:
+                                                                                                            </span>
+                                                                                                            <span className="font-mono font-semibold text-slate-700">
+                                                                                                                {formatIndoDate(
+                                                                                                                    term.dueDate,
+                                                                                                                )}
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    </div>
+
+                                                                                                    <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
+                                                                                                        <div className="text-[10px]">
+                                                                                                            {term.isPaid ? (
+                                                                                                                <span className="font-bold text-emerald-700">
+                                                                                                                    Lunas
+                                                                                                                    (
+                                                                                                                    {fmt(
+                                                                                                                        term.targetAmount,
+                                                                                                                    )}
+                                                                                                                    )
+                                                                                                                </span>
+                                                                                                            ) : (
+                                                                                                                <span className="font-mono font-bold text-rose-600">
+                                                                                                                    Sisa:{' '}
+                                                                                                                    {fmt(
+                                                                                                                        term.remainingAmount,
+                                                                                                                    )}
+                                                                                                                </span>
+                                                                                                            )}
+                                                                                                        </div>
+
+                                                                                                        {canPayThisTerm && (
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                onClick={() => {
+                                                                                                                    const currentPoNum =
+                                                                                                                        term.poNumber ||
+                                                                                                                        poNumberKey ||
+                                                                                                                        firstPoNum;
+                                                                                                                    const poGrandTotal =
+                                                                                                                        termsInPo.reduce(
+                                                                                                                            (
+                                                                                                                                sum,
+                                                                                                                                t,
+                                                                                                                            ) =>
+                                                                                                                                sum +
+                                                                                                                                t.targetAmount,
+                                                                                                                            0,
+                                                                                                                        );
+                                                                                                                    const poRemaining =
+                                                                                                                        termsInPo.reduce(
+                                                                                                                            (
+                                                                                                                                sum,
+                                                                                                                                t,
+                                                                                                                            ) =>
+                                                                                                                                sum +
+                                                                                                                                (t.isPaid
+                                                                                                                                    ? 0
+                                                                                                                                    : t.remainingAmount),
+                                                                                                                            0,
+                                                                                                                        );
+
+                                                                                                                    setSelectedVendorForPay(
+                                                                                                                        {
+                                                                                                                            vendorId:
+                                                                                                                                group.vendorId,
+                                                                                                                            vendorName:
+                                                                                                                                group.vendorName,
+                                                                                                                            poNumber:
+                                                                                                                                currentPoNum,
+                                                                                                                            poId:
+                                                                                                                                term.poId ||
+                                                                                                                                vendorPo?.id,
+                                                                                                                            totalAmount:
+                                                                                                                                Math.round(
+                                                                                                                                    poGrandTotal,
+                                                                                                                                ),
+                                                                                                                            remainingAmount:
+                                                                                                                                Math.round(
+                                                                                                                                    poRemaining,
+                                                                                                                                ),
+                                                                                                                            schedule:
+                                                                                                                                termsInPo,
+                                                                                                                            selectedTermId:
+                                                                                                                                term.id,
+                                                                                                                        },
+                                                                                                                    );
+                                                                                                                    setVPayType(
+                                                                                                                        term.remainingAmount >=
+                                                                                                                            term.targetAmount
+                                                                                                                            ? 'full'
+                                                                                                                            : 'partial',
+                                                                                                                    );
+                                                                                                                    setVPayAmountInput(
+                                                                                                                        Math.round(
+                                                                                                                            term.remainingAmount,
+                                                                                                                        ),
+                                                                                                                    );
+                                                                                                                    setVPayDateInput(
+                                                                                                                        new Date()
+                                                                                                                            .toISOString()
+                                                                                                                            .split(
+                                                                                                                                'T',
+                                                                                                                            )[0],
+                                                                                                                    );
+                                                                                                                    setVPayMethodInput(
+                                                                                                                        'Transfer Bank BCA',
+                                                                                                                    );
+                                                                                                                    setVPayRefInput(
+                                                                                                                        '',
+                                                                                                                    );
+                                                                                                                    setVPayNotesInput(
+                                                                                                                        `Pembayaran ${term.label} PO ${currentPoNum}`,
+                                                                                                                    );
+                                                                                                                }}
+                                                                                                                className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-emerald-700"
+                                                                                                            >
+                                                                                                                Bayar
+                                                                                                                Termin
+                                                                                                                Ini
+                                                                                                            </button>
+                                                                                                        )}
+                                                                                                    </div>
                                                                                                 </div>
-
-                                                                                                <div className="flex items-center justify-between text-[10px] text-slate-500">
-                                                                                                    <span>
-                                                                                                        Porsi: <strong className="text-slate-700">{term.percent}%</strong>
-                                                                                                    </span>
-                                                                                                    <span className="font-mono font-bold text-slate-800">
-                                                                                                        {fmt(term.targetAmount)}
-                                                                                                    </span>
-                                                                                                </div>
-
-                                                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                                                                                                    <svg
-                                                                                                        className="h-3.5 w-3.5 text-slate-400"
-                                                                                                        fill="none"
-                                                                                                        viewBox="0 0 24 24"
-                                                                                                        stroke="currentColor"
-                                                                                                        strokeWidth={2}
-                                                                                                    >
-                                                                                                        <path
-                                                                                                            strokeLinecap="round"
-                                                                                                            strokeLinejoin="round"
-                                                                                                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                                                                                        />
-                                                                                                    </svg>
-                                                                                                    <span>Jatuh Tempo:</span>
-                                                                                                    <span className="font-mono font-semibold text-slate-700">
-                                                                                                        {formatIndoDate(term.dueDate)}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            </div>
-
-                                                                                            <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
-                                                                                                <div className="text-[10px]">
-                                                                                                    {term.isPaid ? (
-                                                                                                        <span className="font-bold text-emerald-700">
-                                                                                                            Lunas ({fmt(term.targetAmount)})
-                                                                                                        </span>
-                                                                                                    ) : (
-                                                                                                        <span className="font-mono font-bold text-rose-600">
-                                                                                                            Sisa: {fmt(term.remainingAmount)}
-                                                                                                        </span>
-                                                                                                    )}
-                                                                                                </div>
-
-                                                                                                {canPayThisTerm && (
-                                                                                                    <button
-                                                                                                        type="button"
-                                                                                                        onClick={() => {
-                                                                                                            const currentPoNum = term.poNumber || poNumberKey || firstPoNum;
-                                                                                                            const poGrandTotal = termsInPo.reduce((sum, t) => sum + t.targetAmount, 0);
-                                                                                                            const poRemaining = termsInPo.reduce((sum, t) => sum + (t.isPaid ? 0 : t.remainingAmount), 0);
-
-                                                                                                            setSelectedVendorForPay({
-                                                                                                                vendorId: group.vendorId,
-                                                                                                                vendorName: group.vendorName,
-                                                                                                                poNumber: currentPoNum,
-                                                                                                                poId: term.poId || vendorPo?.id,
-                                                                                                                totalAmount: Math.round(poGrandTotal),
-                                                                                                                remainingAmount: Math.round(poRemaining),
-                                                                                                                schedule: termsInPo,
-                                                                                                                selectedTermId: term.id,
-                                                                                                            });
-                                                                                                            setVPayType(
-                                                                                                                term.remainingAmount >= term.targetAmount
-                                                                                                                    ? 'full'
-                                                                                                                    : 'partial',
-                                                                                                            );
-                                                                                                            setVPayAmountInput(
-                                                                                                                Math.round(term.remainingAmount),
-                                                                                                            );
-                                                                                                            setVPayDateInput(
-                                                                                                                new Date()
-                                                                                                                    .toISOString()
-                                                                                                                    .split('T')[0],
-                                                                                                            );
-                                                                                                            setVPayMethodInput('Transfer Bank BCA');
-                                                                                                            setVPayRefInput('');
-                                                                                                            setVPayNotesInput(
-                                                                                                                `Pembayaran ${term.label} PO ${currentPoNum}`,
-                                                                                                            );
-                                                                                                        }}
-                                                                                                        className="shadow-2xs flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-emerald-700"
-                                                                                                    >
-                                                                                                        Bayar Termin Ini
-                                                                                                    </button>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    );
-                                                                                })}
+                                                                                            );
+                                                                                        },
+                                                                                    )}
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                    ))}
+                                                                        ),
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })()}
@@ -1819,7 +2038,14 @@ export default function VendorPOTab({
                                     Catat Pembayaran Keluar (Vendor)
                                 </h3>
                                 <p className="mt-0.5 text-xs text-slate-500">
-                                    Vendor: <strong className="font-semibold text-slate-700">{selectedVendorForPay.vendorName}</strong> &bull; No. PO: <span className="font-mono font-bold text-blue-600">{selectedVendorForPay.poNumber}</span>
+                                    Vendor:{' '}
+                                    <strong className="font-semibold text-slate-700">
+                                        {selectedVendorForPay.vendorName}
+                                    </strong>{' '}
+                                    &bull; No. PO:{' '}
+                                    <span className="font-mono font-bold text-blue-600">
+                                        {selectedVendorForPay.poNumber}
+                                    </span>
                                 </p>
                             </div>
                             <button
@@ -1854,8 +2080,13 @@ export default function VendorPOTab({
                                     Status Pelunasan
                                 </div>
                                 <div className="mt-0.5">
-                                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold ${selectedVendorForPay.remainingAmount <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                        {selectedVendorForPay.remainingAmount <= 0 ? '✓ Lunas' : 'Belum Lunas'}
+                                    <span
+                                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold ${selectedVendorForPay.remainingAmount <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}
+                                    >
+                                        {selectedVendorForPay.remainingAmount <=
+                                        0
+                                            ? '✓ Lunas'
+                                            : 'Belum Lunas'}
                                     </span>
                                 </div>
                             </div>
@@ -1864,7 +2095,8 @@ export default function VendorPOTab({
                                     Total Termin
                                 </div>
                                 <div className="font-mono text-sm font-bold text-slate-800">
-                                    {selectedVendorForPay.schedule?.length || 0} Termin
+                                    {selectedVendorForPay.schedule?.length || 0}{' '}
+                                    Termin
                                 </div>
                             </div>
                         </div>
@@ -1882,96 +2114,156 @@ export default function VendorPOTab({
                                     </span>
                                 </div>
 
-                                {selectedVendorForPay.schedule && selectedVendorForPay.schedule.length > 0 ? (
+                                {selectedVendorForPay.schedule &&
+                                selectedVendorForPay.schedule.length > 0 ? (
                                     <div className="grid max-h-[340px] grid-cols-1 gap-2.5 overflow-y-auto pr-1">
-                                        {selectedVendorForPay.schedule.map((term, termIdx) => {
-                                            const isSelected = selectedVendorForPay.selectedTermId === term.id;
-                                            const isTermPaid = term.isPaid || term.remainingAmount <= 0;
-                                            
-                                            // Cek apakah ada termin sebelum ini dalam PO yang sama yang belum lunas
-                                            const hasUnpaidPriorTerm = selectedVendorForPay.schedule
-                                                .slice(0, termIdx)
-                                                .filter(t => !t.poNumber || !term.poNumber || t.poNumber === term.poNumber)
-                                                .some(priorTerm => !priorTerm.isPaid && priorTerm.remainingAmount > 0);
+                                        {selectedVendorForPay.schedule.map(
+                                            (term, termIdx) => {
+                                                const isSelected =
+                                                    selectedVendorForPay.selectedTermId ===
+                                                    term.id;
+                                                const isTermPaid =
+                                                    term.isPaid ||
+                                                    term.remainingAmount <= 0;
 
-                                            const isTermLocked = isTermPaid || hasUnpaidPriorTerm;
+                                                // Cek apakah ada termin sebelum ini dalam PO yang sama yang belum lunas
+                                                const hasUnpaidPriorTerm =
+                                                    selectedVendorForPay.schedule
+                                                        .slice(0, termIdx)
+                                                        .filter(
+                                                            (t) =>
+                                                                !t.poNumber ||
+                                                                !term.poNumber ||
+                                                                t.poNumber ===
+                                                                    term.poNumber,
+                                                        )
+                                                        .some(
+                                                            (priorTerm) =>
+                                                                !priorTerm.isPaid &&
+                                                                priorTerm.remainingAmount >
+                                                                    0,
+                                                        );
 
-                                            return (
-                                                <button
-                                                    key={term.id}
-                                                    type="button"
-                                                    disabled={isTermLocked}
-                                                    onClick={() => {
-                                                        if (isTermLocked) return;
-                                                        setSelectedVendorForPay({
-                                                            ...selectedVendorForPay,
-                                                            selectedTermId: term.id,
-                                                            poId: term.poId || selectedVendorForPay.poId,
-                                                            poNumber: term.poNumber || selectedVendorForPay.poNumber,
-                                                        });
-                                                        setVPayType('partial');
-                                                        setVPayAmountInput(
-                                                            term.remainingAmount > 0
-                                                                ? Math.round(term.remainingAmount)
-                                                                : Math.round(term.targetAmount),
-                                                        );
-                                                        setVPayNotesInput(
-                                                            `Pembayaran ${term.label} PO ${term.poNumber || selectedVendorForPay.poNumber}`,
-                                                        );
-                                                    }}
-                                                    className={`group relative flex flex-col justify-between rounded-2xl border p-3 text-left transition-all ${
-                                                        isTermPaid
-                                                            ? 'cursor-not-allowed border-emerald-100 bg-emerald-50/40 opacity-75'
-                                                            : hasUnpaidPriorTerm
-                                                              ? 'cursor-not-allowed border-slate-200/60 bg-slate-100/70 opacity-60'
-                                                              : isSelected
-                                                                ? 'cursor-pointer border-primary bg-primary/10 font-bold text-primary ring-2 ring-primary/20 shadow-xs'
-                                                                : 'cursor-pointer border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="text-xs font-bold text-slate-900">
-                                                                    {term.label}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-400">
-                                                                    ({term.percent}%)
-                                                                </span>
-                                                            </div>
-                                                            {term.poNumber && (
-                                                                <div className="mt-1">
-                                                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-slate-600">
-                                                                        {term.poNumber}
+                                                const isTermLocked =
+                                                    isTermPaid ||
+                                                    hasUnpaidPriorTerm;
+
+                                                return (
+                                                    <button
+                                                        key={term.id}
+                                                        type="button"
+                                                        disabled={isTermLocked}
+                                                        onClick={() => {
+                                                            if (isTermLocked)
+                                                                return;
+                                                            setSelectedVendorForPay(
+                                                                {
+                                                                    ...selectedVendorForPay,
+                                                                    selectedTermId:
+                                                                        term.id,
+                                                                    poId:
+                                                                        term.poId ||
+                                                                        selectedVendorForPay.poId,
+                                                                    poNumber:
+                                                                        term.poNumber ||
+                                                                        selectedVendorForPay.poNumber,
+                                                                },
+                                                            );
+                                                            setVPayType(
+                                                                'partial',
+                                                            );
+                                                            setVPayAmountInput(
+                                                                term.remainingAmount >
+                                                                    0
+                                                                    ? Math.round(
+                                                                          term.remainingAmount,
+                                                                      )
+                                                                    : Math.round(
+                                                                          term.targetAmount,
+                                                                      ),
+                                                            );
+                                                            setVPayNotesInput(
+                                                                `Pembayaran ${term.label} PO ${term.poNumber || selectedVendorForPay.poNumber}`,
+                                                            );
+                                                        }}
+                                                        className={`group relative flex flex-col justify-between rounded-2xl border p-3 text-left transition-all ${
+                                                            isTermPaid
+                                                                ? 'cursor-not-allowed border-emerald-100 bg-emerald-50/40 opacity-75'
+                                                                : hasUnpaidPriorTerm
+                                                                  ? 'cursor-not-allowed border-slate-200/60 bg-slate-100/70 opacity-60'
+                                                                  : isSelected
+                                                                    ? 'bg-primary/10 ring-primary/20 shadow-xs cursor-pointer border-primary font-bold text-primary ring-2'
+                                                                    : 'cursor-pointer border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-xs font-bold text-slate-900">
+                                                                        {
+                                                                            term.label
+                                                                        }
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-400">
+                                                                        (
+                                                                        {
+                                                                            term.percent
+                                                                        }
+                                                                        %)
                                                                     </span>
                                                                 </div>
-                                                            )}
+                                                                {term.poNumber && (
+                                                                    <div className="mt-1">
+                                                                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-slate-600">
+                                                                            {
+                                                                                term.poNumber
+                                                                            }
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="flex-shrink-0">
+                                                                {isTermPaid ? (
+                                                                    <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
+                                                                        ✓ Lunas
+                                                                    </span>
+                                                                ) : hasUnpaidPriorTerm ? (
+                                                                    <span className="inline-flex items-center rounded-md bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
+                                                                        Terkunci
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="font-mono text-xs font-black text-rose-600">
+                                                                        {fmt(
+                                                                            term.remainingAmount,
+                                                                        )}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
 
-                                                        <div className="flex-shrink-0">
-                                                            {isTermPaid ? (
-                                                                <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
-                                                                    ✓ Lunas
-                                                                </span>
-                                                            ) : hasUnpaidPriorTerm ? (
-                                                                <span className="inline-flex items-center rounded-md bg-slate-200 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
-                                                                    Terkunci
-                                                                </span>
-                                                            ) : (
-                                                                <span className="font-mono text-xs font-black text-rose-600">
-                                                                    {fmt(term.remainingAmount)}
-                                                                </span>
-                                                            )}
+                                                        <div className="mt-2.5 flex items-center justify-between border-t border-slate-100/80 pt-2 text-[10px] text-slate-500">
+                                                            <span>
+                                                                Target:{' '}
+                                                                <strong className="font-mono font-semibold text-slate-700">
+                                                                    {fmt(
+                                                                        term.targetAmount,
+                                                                    )}
+                                                                </strong>
+                                                            </span>
+                                                            <span>
+                                                                Jatuh Tempo:{' '}
+                                                                <strong className="font-mono text-slate-700">
+                                                                    {formatIndoDate(
+                                                                        term.dueDate,
+                                                                    )}
+                                                                </strong>
+                                                            </span>
                                                         </div>
-                                                    </div>
-
-                                                    <div className="mt-2.5 flex items-center justify-between border-t border-slate-100/80 pt-2 text-[10px] text-slate-500">
-                                                        <span>Target: <strong className="font-mono font-semibold text-slate-700">{fmt(term.targetAmount)}</strong></span>
-                                                        <span>Jatuh Tempo: <strong className="font-mono text-slate-700">{formatIndoDate(term.dueDate)}</strong></span>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
+                                                    </button>
+                                                );
+                                            },
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
@@ -1992,25 +2284,35 @@ export default function VendorPOTab({
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                const currentTerm = selectedVendorForPay.schedule.find(
-                                                    (t) => t.id === selectedVendorForPay.selectedTermId,
-                                                ) || selectedVendorForPay.schedule.find((t) => !t.isPaid);
+                                                const currentTerm =
+                                                    selectedVendorForPay.schedule.find(
+                                                        (t) =>
+                                                            t.id ===
+                                                            selectedVendorForPay.selectedTermId,
+                                                    ) ||
+                                                    selectedVendorForPay.schedule.find(
+                                                        (t) => !t.isPaid,
+                                                    );
 
-                                                const fullTermAmount = currentTerm
-                                                    ? currentTerm.remainingAmount > 0
-                                                        ? currentTerm.remainingAmount
-                                                        : currentTerm.targetAmount
-                                                    : selectedVendorForPay.remainingAmount;
+                                                const fullTermAmount =
+                                                    currentTerm
+                                                        ? currentTerm.remainingAmount >
+                                                          0
+                                                            ? currentTerm.remainingAmount
+                                                            : currentTerm.targetAmount
+                                                        : selectedVendorForPay.remainingAmount;
 
                                                 setVPayType('full');
-                                                setVPayAmountInput(Math.round(fullTermAmount));
+                                                setVPayAmountInput(
+                                                    Math.round(fullTermAmount),
+                                                );
                                                 setVPayNotesInput(
                                                     `Pelunasan ${currentTerm?.label || 'Termin'} PO ${selectedVendorForPay.poNumber}`,
                                                 );
                                             }}
                                             className={`cursor-pointer rounded-2xl border p-2.5 text-left transition-all ${
                                                 vPayType === 'full'
-                                                    ? 'border-primary bg-primary/10 font-bold text-primary ring-2 ring-primary/20'
+                                                    ? 'bg-primary/10 ring-primary/20 border-primary font-bold text-primary ring-2'
                                                     : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                                             }`}
                                         >
@@ -2030,7 +2332,7 @@ export default function VendorPOTab({
                                             }}
                                             className={`cursor-pointer rounded-2xl border p-2.5 text-left transition-all ${
                                                 vPayType === 'partial'
-                                                    ? 'border-primary bg-primary/10 font-bold text-primary ring-2 ring-primary/20'
+                                                    ? 'bg-primary/10 ring-primary/20 border-primary font-bold text-primary ring-2'
                                                     : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                                             }`}
                                         >
@@ -2062,46 +2364,88 @@ export default function VendorPOTab({
                                             type="text"
                                             value={
                                                 vPayAmountInput
-                                                    ? new Intl.NumberFormat('id-ID').format(vPayAmountInput)
+                                                    ? new Intl.NumberFormat(
+                                                          'id-ID',
+                                                      ).format(vPayAmountInput)
                                                     : ''
                                             }
                                             readOnly={vPayType === 'full'}
                                             onChange={(e) => {
-                                                const raw = e.target.value.replace(/\D/g, '');
-                                                const parsed = raw ? parseInt(raw, 10) : 0;
+                                                const raw =
+                                                    e.target.value.replace(
+                                                        /\D/g,
+                                                        '',
+                                                    );
+                                                const parsed = raw
+                                                    ? parseInt(raw, 10)
+                                                    : 0;
                                                 setVPayAmountInput(parsed);
                                             }}
                                             placeholder="0"
-                                            className={`w-full rounded-xl border py-2.5 pr-3.5 pl-10 font-mono text-sm font-bold transition-all focus:outline-none ${
-                                                (() => {
-                                                    const curTerm = selectedVendorForPay.schedule.find(
-                                                        (t) => t.id === selectedVendorForPay.selectedTermId,
-                                                    ) || selectedVendorForPay.schedule.find((t) => !t.isPaid);
-                                                    const maxPayable = curTerm ? curTerm.remainingAmount : selectedVendorForPay.remainingAmount;
-                                                    const isOver = vPayAmountInput > maxPayable && maxPayable > 0;
-                                                    return isOver
-                                                        ? 'border-rose-400 bg-rose-50 text-rose-800 focus:border-rose-500 focus:ring-2 focus:ring-rose-200'
-                                                        : vPayType === 'full'
-                                                          ? 'border-slate-300 bg-slate-100 text-slate-700'
-                                                          : 'border-primary/40 bg-white text-slate-900 focus:border-primary focus:ring-2 focus:ring-primary/20';
-                                                })()
-                                            }`}
+                                            className={`w-full rounded-xl border py-2.5 pl-10 pr-3.5 font-mono text-sm font-bold transition-all focus:outline-none ${(() => {
+                                                const curTerm =
+                                                    selectedVendorForPay.schedule.find(
+                                                        (t) =>
+                                                            t.id ===
+                                                            selectedVendorForPay.selectedTermId,
+                                                    ) ||
+                                                    selectedVendorForPay.schedule.find(
+                                                        (t) => !t.isPaid,
+                                                    );
+                                                const maxPayable = curTerm
+                                                    ? curTerm.remainingAmount
+                                                    : selectedVendorForPay.remainingAmount;
+                                                const isOver =
+                                                    vPayAmountInput >
+                                                        maxPayable &&
+                                                    maxPayable > 0;
+                                                return isOver
+                                                    ? 'border-rose-400 bg-rose-50 text-rose-800 focus:border-rose-500 focus:ring-2 focus:ring-rose-200'
+                                                    : vPayType === 'full'
+                                                      ? 'border-slate-300 bg-slate-100 text-slate-700'
+                                                      : 'border-primary/40 focus:ring-primary/20 bg-white text-slate-900 focus:border-primary focus:ring-2';
+                                            })()}`}
                                         />
                                     </div>
 
                                     {/* Alert Validasi Kelebihan Bayar */}
                                     {(() => {
-                                        const curTerm = selectedVendorForPay.schedule.find(
-                                            (t) => t.id === selectedVendorForPay.selectedTermId,
-                                        ) || selectedVendorForPay.schedule.find((t) => !t.isPaid);
-                                        const maxPayable = curTerm ? curTerm.remainingAmount : selectedVendorForPay.remainingAmount;
-                                        if (vPayAmountInput > maxPayable && maxPayable > 0) {
+                                        const curTerm =
+                                            selectedVendorForPay.schedule.find(
+                                                (t) =>
+                                                    t.id ===
+                                                    selectedVendorForPay.selectedTermId,
+                                            ) ||
+                                            selectedVendorForPay.schedule.find(
+                                                (t) => !t.isPaid,
+                                            );
+                                        const maxPayable = curTerm
+                                            ? curTerm.remainingAmount
+                                            : selectedVendorForPay.remainingAmount;
+                                        if (
+                                            vPayAmountInput > maxPayable &&
+                                            maxPayable > 0
+                                        ) {
                                             return (
                                                 <div className="flex items-center gap-1.5 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700">
-                                                    <svg className="h-3.5 w-3.5 flex-shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                    <svg
+                                                        className="h-3.5 w-3.5 flex-shrink-0 text-rose-500"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke="currentColor"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                                        />
                                                     </svg>
-                                                    <span>Nominal melebihi sisa tagihan termin ({fmt(maxPayable)}).</span>
+                                                    <span>
+                                                        Nominal melebihi sisa
+                                                        tagihan termin (
+                                                        {fmt(maxPayable)}).
+                                                    </span>
                                                 </div>
                                             );
                                         }
@@ -2118,7 +2462,9 @@ export default function VendorPOTab({
                                         <div className="relative flex items-center">
                                             <div className="shadow-2xs flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs font-semibold text-slate-800 transition-all hover:border-primary">
                                                 <span>
-                                                    {formatIndoDate(vPayDateInput)}
+                                                    {formatIndoDate(
+                                                        vPayDateInput,
+                                                    )}
                                                 </span>
                                                 <svg
                                                     className="h-3.5 w-3.5 text-slate-400"
@@ -2138,7 +2484,9 @@ export default function VendorPOTab({
                                                 type="date"
                                                 value={vPayDateInput}
                                                 onChange={(e) =>
-                                                    setVPayDateInput(e.target.value)
+                                                    setVPayDateInput(
+                                                        e.target.value,
+                                                    )
                                                 }
                                                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                                             />
@@ -2154,12 +2502,15 @@ export default function VendorPOTab({
                                             onChange={(e) =>
                                                 setVPayAccountId(e.target.value)
                                             }
-                                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                            className="focus:ring-primary/20 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 transition-all focus:border-primary focus:outline-none focus:ring-2"
                                         >
                                             {cashBankAccounts &&
                                             cashBankAccounts.length > 0 ? (
                                                 cashBankAccounts.map((acc) => (
-                                                    <option key={acc.id} value={acc.id}>
+                                                    <option
+                                                        key={acc.id}
+                                                        value={acc.id}
+                                                    >
                                                         {acc.display_name ||
                                                             `${acc.code} - ${acc.name}`}
                                                     </option>
@@ -2185,7 +2536,7 @@ export default function VendorPOTab({
                                             setVPayRefInput(e.target.value)
                                         }
                                         placeholder="Contoh: TRX-99234 / BCA ke Vendor"
-                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                        className="focus:ring-primary/20 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 transition-all focus:border-primary focus:outline-none focus:ring-2"
                                     />
                                 </div>
                             </div>
@@ -2201,11 +2552,22 @@ export default function VendorPOTab({
                                 Batal
                             </button>
                             {(() => {
-                                const curTerm = selectedVendorForPay.schedule.find(
-                                    (t) => t.id === selectedVendorForPay.selectedTermId,
-                                ) || selectedVendorForPay.schedule.find((t) => !t.isPaid);
-                                const maxPayable = curTerm ? curTerm.remainingAmount : selectedVendorForPay.remainingAmount;
-                                const isInvalidAmount = vPayAmountInput <= 0 || (maxPayable > 0 && vPayAmountInput > maxPayable);
+                                const curTerm =
+                                    selectedVendorForPay.schedule.find(
+                                        (t) =>
+                                            t.id ===
+                                            selectedVendorForPay.selectedTermId,
+                                    ) ||
+                                    selectedVendorForPay.schedule.find(
+                                        (t) => !t.isPaid,
+                                    );
+                                const maxPayable = curTerm
+                                    ? curTerm.remainingAmount
+                                    : selectedVendorForPay.remainingAmount;
+                                const isInvalidAmount =
+                                    vPayAmountInput <= 0 ||
+                                    (maxPayable > 0 &&
+                                        vPayAmountInput > maxPayable);
 
                                 return (
                                     <button
@@ -2213,7 +2575,8 @@ export default function VendorPOTab({
                                         disabled={isInvalidAmount}
                                         onClick={() => {
                                             if (isInvalidAmount) return;
-                                            const poId = selectedVendorForPay.poId;
+                                            const poId =
+                                                selectedVendorForPay.poId;
                                             const termId =
                                                 selectedVendorForPay.selectedTermId ||
                                                 selectedVendorForPay.schedule.find(
@@ -2226,9 +2589,10 @@ export default function VendorPOTab({
                                                         String(a.id) ===
                                                         String(vPayAccountId),
                                                 );
-                                            const derivedMethod = selectedAccount
-                                                ? selectedAccount.name
-                                                : 'Transfer Bank BCA';
+                                            const derivedMethod =
+                                                selectedAccount
+                                                    ? selectedAccount.name
+                                                    : 'Transfer Bank BCA';
 
                                             // Jika termin dan PO terdaftar di database, kirim via endpoint backend
                                             if (
@@ -2237,10 +2601,19 @@ export default function VendorPOTab({
                                                 !termId.startsWith('vterm-')
                                             ) {
                                                 // Pastikan hash atau URL tetap di tab vendors
-                                                if (typeof window !== 'undefined') {
-                                                    const currentUrl = new URL(window.location.href);
+                                                if (
+                                                    typeof window !==
+                                                    'undefined'
+                                                ) {
+                                                    const currentUrl = new URL(
+                                                        window.location.href,
+                                                    );
                                                     currentUrl.hash = 'vendors';
-                                                    window.history.replaceState(null, '', currentUrl.toString());
+                                                    window.history.replaceState(
+                                                        null,
+                                                        '',
+                                                        currentUrl.toString(),
+                                                    );
                                                 }
 
                                                 router.post(
@@ -2252,18 +2625,23 @@ export default function VendorPOTab({
                                                             new Date()
                                                                 .toISOString()
                                                                 .split('T')[0],
-                                                        payment_method: derivedMethod,
+                                                        payment_method:
+                                                            derivedMethod,
                                                         account_id:
                                                             vPayAccountId ||
-                                                            (cashBankAccounts[0]?.id
+                                                            (cashBankAccounts[0]
+                                                                ?.id
                                                                 ? String(
                                                                       cashBankAccounts[0]
                                                                           .id,
                                                                   )
                                                                 : null),
                                                         payment_ref:
-                                                            vPayRefInput || null,
-                                                        notes: vPayNotesInput || null,
+                                                            vPayRefInput ||
+                                                            null,
+                                                        notes:
+                                                            vPayNotesInput ||
+                                                            null,
                                                     },
                                                     {
                                                         preserveScroll: true,
@@ -2272,19 +2650,26 @@ export default function VendorPOTab({
                                                             setSelectedVendorForPay(
                                                                 null,
                                                             );
-                                                            if (onTriggerToast) {
+                                                            if (
+                                                                onTriggerToast
+                                                            ) {
                                                                 onTriggerToast(
                                                                     `Pembayaran vendor ${selectedVendorForPay.vendorName} (${selectedVendorForPay.poNumber}) sebesar ${fmt(vPayAmountInput)} berhasil dicatat.`,
                                                                     'success',
                                                                     'Pembayaran Berhasil',
                                                                 );
                                                             }
-                                                            if (selectedVendorForPay.vendorId) {
-                                                                const vId = selectedVendorForPay.vendorId;
-                                                                setExpandedVendorTop(prev => ({
-                                                                    ...prev,
-                                                                    [vId]: true,
-                                                                }));
+                                                            if (
+                                                                selectedVendorForPay.vendorId
+                                                            ) {
+                                                                const vId =
+                                                                    selectedVendorForPay.vendorId;
+                                                                setExpandedVendorTop(
+                                                                    (prev) => ({
+                                                                        ...prev,
+                                                                        [vId]: true,
+                                                                    }),
+                                                                );
                                                             }
                                                         },
                                                     },
@@ -2293,34 +2678,43 @@ export default function VendorPOTab({
                                             }
 
                                             // Fallback simpan lokal jika belum ada DB record
-                                            const newRecord: VendorPaymentRecord = {
-                                                id: `vpay-${Date.now()}`,
-                                                poNumber: selectedVendorForPay.poNumber,
-                                                vendorName:
-                                                    selectedVendorForPay.vendorName,
-                                                amount: vPayAmountInput,
-                                                paidAt:
-                                                    vPayDateInput ||
-                                                    new Date().toISOString(),
-                                                paymentMethod: derivedMethod,
-                                                paymentRef: vPayRefInput || undefined,
-                                                notes: vPayNotesInput || undefined,
-                                            };
+                                            const newRecord: VendorPaymentRecord =
+                                                {
+                                                    id: `vpay-${Date.now()}`,
+                                                    poNumber:
+                                                        selectedVendorForPay.poNumber,
+                                                    vendorName:
+                                                        selectedVendorForPay.vendorName,
+                                                    amount: vPayAmountInput,
+                                                    paidAt:
+                                                        vPayDateInput ||
+                                                        new Date().toISOString(),
+                                                    paymentMethod:
+                                                        derivedMethod,
+                                                    paymentRef:
+                                                        vPayRefInput ||
+                                                        undefined,
+                                                    notes:
+                                                        vPayNotesInput ||
+                                                        undefined,
+                                                };
 
                                             const updatedVendorPayments = [
-                                                ...(project.vendorPayments || []),
+                                                ...(project.vendorPayments ||
+                                                    []),
                                                 newRecord,
                                             ];
                                             onUpdateProject({
                                                 ...project,
-                                                vendorPayments: updatedVendorPayments,
+                                                vendorPayments:
+                                                    updatedVendorPayments,
                                             });
                                             setSelectedVendorForPay(null);
                                         }}
                                         className={`shadow-xs rounded-xl px-5 py-2.5 text-xs font-bold transition-all ${
                                             isInvalidAmount
                                                 ? 'cursor-not-allowed bg-slate-300 text-slate-500 opacity-60'
-                                                : 'cursor-pointer bg-primary text-white shadow-neon-primary hover:bg-primary/90'
+                                                : 'hover:bg-primary/90 cursor-pointer bg-primary text-white shadow-neon-primary'
                                         }`}
                                     >
                                         Simpan Pembayaran Vendor

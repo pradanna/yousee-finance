@@ -17,9 +17,13 @@ class PurchaseOrderPdfController extends Controller
         $po = null;
 
         if ($poNumber) {
-            $po = PurchaseOrder::with(['vendor', 'project.client', 'items.projectLocation', 'paymentPlan.terms'])
-                ->where('po_number', $poNumber)
-                ->first();
+            try {
+                $po = PurchaseOrder::with(['vendor', 'project.client', 'items.projectLocation', 'paymentPlan.terms'])
+                    ->where('po_number', $poNumber)
+                    ->first();
+            } catch (\Throwable $e) {
+                $po = null;
+            }
         }
 
         $project = $request->input('project', []);
@@ -40,10 +44,14 @@ class PurchaseOrderPdfController extends Controller
             $vendorAddress = $vendorAddress ?: ($po->vendor->address ?? '-');
             $vendorPhone = $vendorPhone ?: ($po->vendor->phone ?? '-');
         } else if ($vendorName) {
-            $vendorObj = Vendor::where('name', $vendorName)->first();
-            if ($vendorObj) {
-                $vendorAddress = $vendorAddress ?: ($vendorObj->address ?? '-');
-                $vendorPhone = $vendorPhone ?: ($vendorObj->phone ?? '-');
+            try {
+                $vendorObj = Vendor::where('name', $vendorName)->first();
+                if ($vendorObj) {
+                    $vendorAddress = $vendorAddress ?: ($vendorObj->address ?? '-');
+                    $vendorPhone = $vendorPhone ?: ($vendorObj->phone ?? '-');
+                }
+            } catch (\Throwable $e) {
+                // Ignore DB error if running statelessly
             }
         }
 
@@ -76,8 +84,38 @@ class PurchaseOrderPdfController extends Controller
         foreach ($locations as $item) {
             $totalDPP += (float) ($item['vendorCost'] ?? 0);
         }
-        $totalPPN = $isPPN ? round($totalDPP * 0.11, 2) : 0.0;
-        $grandTotal = $totalDPP + $totalPPN;
+
+        if ($isPPN) {
+            if ($po && (float) $po->total > 0) {
+                $grandTotal = (float) $po->total;
+                $totalDPP = (float) $po->subtotal ?: $totalDPP;
+                $totalPPN = (float) $po->ppn ?: max(0, round($grandTotal - $totalDPP));
+            } elseif ($request->filled('grandTotal')) {
+                $grandTotal = (float) $request->input('grandTotal');
+                if ($request->filled('totalDPP')) {
+                    $totalDPP = (float) $request->input('totalDPP');
+                }
+                $totalPPN = max(0, round($grandTotal - $totalDPP));
+            } else {
+                $grandTotal = 0;
+                foreach ($locations as $item) {
+                    $cost = (float) ($item['vendorCost'] ?? 0);
+                    $grandTotal += round($cost * 1.11);
+                }
+                $totalPPN = max(0, round($grandTotal - $totalDPP));
+            }
+        } else {
+            if ($po && (float) $po->total > 0) {
+                $grandTotal = (float) $po->total;
+                $totalDPP = (float) $po->subtotal ?: $grandTotal;
+            } elseif ($request->filled('grandTotal')) {
+                $grandTotal = (float) $request->input('grandTotal');
+                $totalDPP = $request->filled('totalDPP') ? (float) $request->input('totalDPP') : $grandTotal;
+            } else {
+                $grandTotal = $totalDPP;
+            }
+            $totalPPN = 0.0;
+        }
 
         $qrData = route('po.pdf') . '?poNumber=' . urlencode($poNumber);
         $qrCodeSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(100)->errorCorrection('M')->generate($qrData);
