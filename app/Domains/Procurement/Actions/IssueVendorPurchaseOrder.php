@@ -165,20 +165,24 @@ class IssueVendorPurchaseOrder
                 );
             }
 
+            $roundedTotal = round((float) $po->total);
+            $roundedSubtotal = round((float) $po->subtotal);
+            $roundedPpn = round((float) $po->ppn);
+
             // Catat ke Audit Log PO
             \App\Domains\Shared\Models\AuditLog::create([
                 'auditable_type' => PurchaseOrder::class,
                 'auditable_id'   => $po->id,
                 'event'          => 'created',
                 'user_id'        => auth()->id(),
-                'description'    => "Menerbitkan Purchase Order [{$po->po_number}] kepada Vendor \"{$vendor->name}\" sebesar Rp " . number_format((float) $po->total, 0, ',', '.') . " untuk proyek [{$project->code}]",
+                'description'    => "Menerbitkan Purchase Order [{$po->po_number}] kepada Vendor \"{$vendor->name}\" sebesar Rp " . number_format($roundedTotal, 0, ',', '.') . " untuk proyek [{$project->code}]",
                 'properties'     => [
                     'po_number'    => $po->po_number,
                     'vendor_name'  => $vendor->name,
                     'project_code' => $project->code,
-                    'total'        => (float) $po->total,
-                    'subtotal'     => (float) $po->subtotal,
-                    'ppn'          => (float) $po->ppn,
+                    'total'        => $roundedTotal,
+                    'subtotal'     => $roundedSubtotal,
+                    'ppn'          => $roundedPpn,
                     'location_count' => count($locationIds),
                 ],
             ]);
@@ -189,11 +193,11 @@ class IssueVendorPurchaseOrder
                 'auditable_id'   => $project->id,
                 'event'          => 'po_issued',
                 'user_id'        => auth()->id(),
-                'description'    => "Penerbitan PO Vendor [{$po->po_number}] ({$vendor->name}) senilai Rp " . number_format((float) $po->total, 0, ',', '.') . " untuk " . count($locationIds) . " titik lokasi",
+                'description'    => "Penerbitan PO Vendor [{$po->po_number}] ({$vendor->name}) senilai Rp " . number_format($roundedTotal, 0, ',', '.') . " untuk " . count($locationIds) . " titik lokasi",
                 'properties'     => [
                     'po_number'    => $po->po_number,
                     'vendor_name'  => $vendor->name,
-                    'total'        => (float) $po->total,
+                    'total'        => $roundedTotal,
                 ],
             ]);
 

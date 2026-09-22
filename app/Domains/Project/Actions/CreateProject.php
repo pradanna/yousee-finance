@@ -22,7 +22,9 @@ class CreateProject
     {
         return DB::transaction(function () use ($data) {
             $fiscalMode = $data['fiscal_mode'];
-            $contractValue = $this->resolveDpp($fiscalMode, (float) $data['contract_value'], (bool) ($data['is_ppn_inclusive'] ?? false));
+            $isInclusive = (bool) ($data['is_ppn_inclusive'] ?? false);
+            $rawInputContract = (float) $data['contract_value'];
+            $contractValue = $this->resolveDpp($fiscalMode, $rawInputContract, $isInclusive);
 
             $project = Project::create([
                 'code' => $this->generateCode($fiscalMode),
@@ -38,20 +40,25 @@ class CreateProject
                 'notes' => $data['notes'] ?? null,
             ]);
 
+            $descContract = $isInclusive
+                ? "Rp " . number_format($rawInputContract, 0, ',', '.') . " (Termasuk PPN 11%, DPP: Rp " . number_format($contractValue, 0, ',', '.') . ")"
+                : "Rp " . number_format($contractValue, 0, ',', '.');
+
             // Catat ke Audit Log
             \App\Domains\Shared\Models\AuditLog::create([
                 'auditable_type' => Project::class,
                 'auditable_id'   => $project->id,
                 'event'          => 'created',
                 'user_id'        => auth()->id(),
-                'description'    => "Membuat proyek baru [{$project->code}] \"{$project->name}\" dengan nilai kontrak Rp " . number_format($contractValue, 0, ',', '.') . " (Mode: {$fiscalMode})",
+                'description'    => "Membuat proyek baru [{$project->code}] \"{$project->name}\" dengan nilai kontrak {$descContract} (Mode: {$fiscalMode})",
                 'properties'     => [
-                    'code'           => $project->code,
-                    'name'           => $project->name,
-                    'contract_value' => $contractValue,
-                    'fiscal_mode'    => $fiscalMode,
-                    'start_date'     => $data['start_date'],
-                    'end_date'       => $data['end_date'],
+                    'code'                 => $project->code,
+                    'name'                 => $project->name,
+                    'contract_value'       => $contractValue,
+                    'gross_contract_value' => $isInclusive ? $rawInputContract : $contractValue,
+                    'fiscal_mode'          => $fiscalMode,
+                    'start_date'           => $data['start_date'],
+                    'end_date'             => $data['end_date'],
                 ],
             ]);
 

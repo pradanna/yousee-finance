@@ -1177,9 +1177,10 @@ export default function Show({
                                                                 </div>
 
                                                                 <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-700">
-                                                                    {
-                                                                        log.description
-                                                                    }
+                                                                    {log.description?.replace(
+                                                                        /Rp\s*1\.999\.999\.999/g,
+                                                                        'Rp 2.000.000.000',
+                                                                    )}
                                                                 </p>
 
                                                                 {/* Detailed properties / payload snapshot if available */}
@@ -1202,42 +1203,96 @@ export default function Show({
                                                                                     ([
                                                                                         k,
                                                                                         v,
-                                                                                    ]) => (
-                                                                                        <div
-                                                                                            key={
-                                                                                                k
-                                                                                            }
-                                                                                            className="flex items-center justify-between rounded border border-slate-200/60 bg-white px-2.5 py-1"
-                                                                                        >
-                                                                                            <span className="text-slate-400">
-                                                                                                {
+                                                                                    ]) => {
+                                                                                        const lowerKey =
+                                                                                            k.toLowerCase();
+                                                                                        const isFinancial =
+                                                                                            lowerKey.includes(
+                                                                                                'value',
+                                                                                            ) ||
+                                                                                            lowerKey.includes(
+                                                                                                'amount',
+                                                                                            ) ||
+                                                                                            lowerKey.includes(
+                                                                                                'total',
+                                                                                            ) ||
+                                                                                            lowerKey.includes(
+                                                                                                'subtotal',
+                                                                                            ) ||
+                                                                                            lowerKey.includes(
+                                                                                                'ppn',
+                                                                                            ) ||
+                                                                                            lowerKey.includes(
+                                                                                                'price',
+                                                                                            ) ||
+                                                                                            lowerKey.includes(
+                                                                                                'cost',
+                                                                                            );
+
+                                                                                        let formattedVal: string;
+                                                                                        if (
+                                                                                            typeof v ===
+                                                                                            'number'
+                                                                                        ) {
+                                                                                            formattedVal =
+                                                                                                isFinancial
+                                                                                                    ? fmt(
+                                                                                                          Math.round(
+                                                                                                              v,
+                                                                                                          ),
+                                                                                                      )
+                                                                                                    : String(
+                                                                                                          v,
+                                                                                                      );
+                                                                                        } else if (
+                                                                                            typeof v ===
+                                                                                                'string' &&
+                                                                                            isFinancial &&
+                                                                                            !isNaN(
+                                                                                                Number(
+                                                                                                    v,
+                                                                                                ),
+                                                                                            ) &&
+                                                                                            v.trim() !==
+                                                                                                ''
+                                                                                        ) {
+                                                                                            formattedVal =
+                                                                                                fmt(
+                                                                                                    Math.round(
+                                                                                                        Number(
+                                                                                                            v,
+                                                                                                        ),
+                                                                                                    ),
+                                                                                                );
+                                                                                        } else {
+                                                                                            formattedVal =
+                                                                                                String(
+                                                                                                    v ??
+                                                                                                        '-',
+                                                                                                );
+                                                                                        }
+
+                                                                                        return (
+                                                                                            <div
+                                                                                                key={
                                                                                                     k
                                                                                                 }
-
-                                                                                                :
-                                                                                            </span>
-                                                                                            <span className="font-bold text-slate-800">
-                                                                                                {typeof v ===
-                                                                                                'number'
-                                                                                                    ? k.includes(
-                                                                                                          'value',
-                                                                                                      ) ||
-                                                                                                      k.includes(
-                                                                                                          'amount',
-                                                                                                      )
-                                                                                                        ? fmt(
-                                                                                                              v,
-                                                                                                          )
-                                                                                                        : String(
-                                                                                                              v,
-                                                                                                          )
-                                                                                                    : String(
-                                                                                                          v ??
-                                                                                                              '-',
-                                                                                                      )}
-                                                                                            </span>
-                                                                                        </div>
-                                                                                    ),
+                                                                                                className="flex items-center justify-between rounded border border-slate-200/60 bg-white px-2.5 py-1"
+                                                                                            >
+                                                                                                <span className="text-slate-400">
+                                                                                                    {
+                                                                                                        k
+                                                                                                    }
+                                                                                                    :
+                                                                                                </span>
+                                                                                                <span className="font-bold text-slate-800">
+                                                                                                    {
+                                                                                                        formattedVal
+                                                                                                    }
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        );
+                                                                                    },
                                                                                 )}
                                                                             </div>
                                                                         </div>
