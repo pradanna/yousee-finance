@@ -42,6 +42,7 @@ interface SalesOption {
 interface VendorOption {
     id: string;
     name: string;
+    npwp?: string | null;
 }
 
 interface ProjectsPageProps {
