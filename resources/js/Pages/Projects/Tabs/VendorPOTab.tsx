@@ -855,22 +855,53 @@ export default function VendorPOTab({
                                                 {unissuedItems.length} Titik)
                                             </button>
                                         ) : (
-                                            <span className="flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-100 px-3 py-1.5 text-[10px] font-bold text-emerald-700">
-                                                <svg
-                                                    className="h-3 w-3"
-                                                    fill="none"
-                                                    viewBox="0 0 24 24"
-                                                    stroke="currentColor"
-                                                    strokeWidth={2.5}
-                                                >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        d="M5 13l4 4L19 7"
-                                                    />
-                                                </svg>
-                                                Semua PO Terbit
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-100 px-3 py-1.5 text-[10px] font-bold text-emerald-700">
+                                                    <svg
+                                                        className="h-3 w-3"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke="currentColor"
+                                                        strokeWidth={2.5}
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            d="M5 13l4 4L19 7"
+                                                        />
+                                                    </svg>
+                                                    Semua PO Terbit
+                                                </span>
+                                                {isCollectivePO && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            handleDownloadPO(
+                                                                group.vendorName,
+                                                                firstPoNum,
+                                                                issuedItems,
+                                                            )
+                                                        }
+                                                        className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-violet-700"
+                                                        title="Buka Dokumen PO Kolektif PDF"
+                                                    >
+                                                        <svg
+                                                            className="h-3.5 w-3.5"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                            strokeWidth={2}
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                            />
+                                                        </svg>
+                                                        Buka PO Kolektif ({issuedItems.length} Titik)
+                                                    </button>
+                                                )}
+                                            </div>
                                         )}
 
                                         {/* Dynamic Vendor TOP Schedule & Due Dates calculation */}
@@ -1100,6 +1131,68 @@ export default function VendorPOTab({
 
                                 {/* Daftar Titik PO Under Vendor */}
                                 <div className="space-y-3 bg-slate-50/40 p-3.5">
+                                    {/* Banner PO Kolektif jika semua titik lokasi tergabung dalam 1 PO */}
+                                    {isCollectivePO && (
+                                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-200/80 bg-violet-50/80 px-4 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white shadow-xs">
+                                                    <svg
+                                                        className="h-4 w-4"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke="currentColor"
+                                                        strokeWidth={2}
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                                                        />
+                                                    </svg>
+                                                </div>
+                                                <div>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="rounded-md bg-violet-200/80 px-2 py-0.5 font-mono text-xs font-black text-violet-900">
+                                                            {firstPoNum}
+                                                        </span>
+                                                        <span className="rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-800">
+                                                            PO Kolektif &bull; {issuedItems.length} Titik Lokasi
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-0.5 text-[11px] text-violet-700">
+                                                        Seluruh {issuedItems.length} titik lokasi di bawah tergabung dalam 1 dokumen PO kolektif utuh senilai target PO {fmt(vendorGrandTotal)}.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    handleDownloadPO(
+                                                        group.vendorName,
+                                                        firstPoNum,
+                                                        issuedItems,
+                                                    )
+                                                }
+                                                className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-violet-600 px-3.5 py-2 text-xs font-bold text-white transition-all hover:bg-violet-700"
+                                                title="Buka Dokumen PO Kolektif PDF (Semua Titik)"
+                                            >
+                                                <svg
+                                                    className="h-3.5 w-3.5"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                    strokeWidth={2}
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                    />
+                                                </svg>
+                                                Buka PO Kolektif (PDF)
+                                            </button>
+                                        </div>
+                                    )}
                                     {group.items.map((loc, idx) => {
                                         const dppTotal = loc.vendorCost;
                                         const ppnTotal = isPPN
@@ -1178,6 +1271,11 @@ export default function VendorPOTab({
                                                                             loc.poNumber
                                                                         }
                                                                     </span>
+                                                                    {group.items.filter((it) => it.poNumber === loc.poNumber).length > 1 && (
+                                                                        <span className="rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold text-violet-700">
+                                                                            PO Kolektif
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1208,34 +1306,63 @@ export default function VendorPOTab({
                                                         </button>
                                                     ) : (
                                                         <div className="flex flex-shrink-0 items-center gap-1.5">
-                                                            <button
-                                                                onClick={() =>
-                                                                    handleDownloadPO(
-                                                                        group.vendorName,
-                                                                        loc.poNumber,
-                                                                        [loc],
-                                                                    )
-                                                                }
-                                                                className="shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-blue-700"
-                                                                title="Buka Dokumen PO PDF"
-                                                            >
-                                                                <svg
-                                                                    className="h-3.5 w-3.5"
-                                                                    fill="none"
-                                                                    viewBox="0 0 24 24"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth={
-                                                                        2
-                                                                    }
-                                                                >
-                                                                    <path
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                    />
-                                                                </svg>
-                                                                Buka PO PDF
-                                                            </button>
+                                                            {(() => {
+                                                                const poLocations = loc.poNumber
+                                                                    ? group.items.filter(
+                                                                          (item) =>
+                                                                              item.poNumber ===
+                                                                              loc.poNumber,
+                                                                      )
+                                                                    : [loc];
+                                                                const isPartCollective =
+                                                                    poLocations.length >
+                                                                    1;
+                                                                return (
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            handleDownloadPO(
+                                                                                group.vendorName,
+                                                                                loc.poNumber,
+                                                                                poLocations.length >
+                                                                                    0
+                                                                                    ? poLocations
+                                                                                    : [
+                                                                                          loc,
+                                                                                      ],
+                                                                            )
+                                                                        }
+                                                                        className={`shadow-2xs flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-white transition-all ${
+                                                                            isPartCollective
+                                                                                ? 'bg-violet-600 hover:bg-violet-700'
+                                                                                : 'bg-blue-600 hover:bg-blue-700'
+                                                                        }`}
+                                                                        title={
+                                                                            isPartCollective
+                                                                                ? `Buka Dokumen PO Kolektif PDF (${poLocations.length} Titik Lokasi)`
+                                                                                : 'Buka Dokumen PO PDF'
+                                                                        }
+                                                                    >
+                                                                        <svg
+                                                                            className="h-3.5 w-3.5"
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                            />
+                                                                        </svg>
+                                                                        {isPartCollective
+                                                                            ? 'Buka PO Kolektif PDF'
+                                                                            : 'Buka PO PDF'}
+                                                                    </button>
+                                                                );
+                                                            })()}
                                                             <button
                                                                 onClick={() => {
                                                                     setEditingLoc(

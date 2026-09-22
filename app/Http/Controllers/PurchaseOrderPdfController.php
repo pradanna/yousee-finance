@@ -60,7 +60,7 @@ class PurchaseOrderPdfController extends Controller
         $vendorPhone = $vendorPhone ?: '-';
 
         $locations = $request->input('locations', []);
-        if ($po && empty($locations)) {
+        if ($po && $po->items->isNotEmpty() && ($po->items->count() > count($locations) || empty($locations))) {
             $locations = $po->items->map(function ($item) {
                 return [
                     'id'          => $item->id,
@@ -86,16 +86,30 @@ class PurchaseOrderPdfController extends Controller
         }
 
         if ($isPPN) {
-            if ($po && (float) $po->total > 0) {
-                $grandTotal = (float) $po->total;
-                $totalDPP = (float) $po->subtotal ?: $totalDPP;
-                $totalPPN = (float) $po->ppn ?: max(0, round($grandTotal - $totalDPP));
-            } elseif ($request->filled('grandTotal')) {
+            if ($request->filled('grandTotal')) {
                 $grandTotal = (float) $request->input('grandTotal');
                 if ($request->filled('totalDPP')) {
                     $totalDPP = (float) $request->input('totalDPP');
                 }
                 $totalPPN = max(0, round($grandTotal - $totalDPP));
+            } elseif ($po && (float) $po->total > 0) {
+                $calculatedTarget = 0;
+                foreach ($locations as $item) {
+                    $cost = (float) ($item['vendorCost'] ?? 0);
+                    $calculatedTarget += round($cost * 1.11);
+                }
+                if ($calculatedTarget > 0 && abs((float) $po->total - $calculatedTarget) == 1) {
+                    $grandTotal = (float) $calculatedTarget;
+                    try {
+                        $po->recalculateTotal();
+                    } catch (\Throwable $e) {
+                        // Ignore DB write errors if running statelessly
+                    }
+                } else {
+                    $grandTotal = (float) $po->total;
+                }
+                $totalDPP = (float) $po->subtotal ?: $totalDPP;
+                $totalPPN = (float) $po->ppn ?: max(0, round($grandTotal - $totalDPP));
             } else {
                 $grandTotal = 0;
                 foreach ($locations as $item) {

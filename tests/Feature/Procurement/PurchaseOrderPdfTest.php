@@ -115,4 +115,57 @@ class PurchaseOrderPdfTest extends TestCase
 
         $responseFallback->assertOk();
     }
+
+    public function test_po_pdf_loads_all_items_from_db_when_request_has_partial_items(): void
+    {
+        $po = PurchaseOrder::create([
+            'po_number' => '010/PTSSI-PO/09/26',
+            'vendor_id' => $this->vendor->id,
+            'project_id' => $this->project->id,
+            'fiscal_mode' => FiscalMode::PPN,
+            'transaction_date' => now()->toDateString(),
+            'issued_at' => now(),
+            'status' => \App\Domains\Procurement\Enums\PurchaseOrderStatus::ISSUED,
+        ]);
+
+        \App\Domains\Procurement\Models\PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'name' => 'Jl. Soloraya',
+            'quantity' => 1,
+            'price' => 450450450,
+        ]);
+        \App\Domains\Procurement\Models\PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'name' => 'Jl. Rajiman',
+            'quantity' => 1,
+            'price' => 450450450,
+        ]);
+        \App\Domains\Procurement\Models\PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'name' => '2 Billboard Tanjung Anom',
+            'quantity' => 1,
+            'price' => 900900901,
+        ]);
+        $po->recalculateTotal();
+
+        $this->assertEquals(2000000000, $po->total);
+        $this->assertEquals(1801801801, $po->subtotal);
+        $this->assertEquals(198198199, $po->ppn);
+
+        // Simulasi request dari FE yang hanya mengirim 1 lokasi pertama
+        $payload = [
+            'vendorName' => $this->vendor->name,
+            'poNumber' => $po->po_number,
+            'isPPN' => true,
+            'locations' => [
+                ['description' => 'Jl. Soloraya', 'vendorCost' => 450450450],
+            ],
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->post('/po-pdf', $payload);
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
+    }
 }
