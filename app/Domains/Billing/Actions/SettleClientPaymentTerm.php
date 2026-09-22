@@ -64,6 +64,9 @@ class SettleClientPaymentTerm
             $invoice = $plan?->payable;
 
             if ($invoice instanceof Invoice) {
+                $clientName = $invoice->client?->name ?? 'Client';
+                $invNumber = $invoice->invoice_number ?? 'Invoice';
+
                 // Cek apakah seluruh termin pada invoice sudah lunas
                 $allTermsPaid = $plan->terms()->where('status', '!=', PaymentTermStatus::PAID->value)->doesntExist();
 
@@ -145,9 +148,6 @@ class SettleClientPaymentTerm
                         ];
                     }
 
-                    $clientName = $invoice->client?->name ?? 'Client';
-                    $invNumber = $invoice->invoice_number ?? 'Invoice';
-
                     (new PostJournalEntry())->execute(
                         headerData: [
                             'fiscal_mode'      => $invoice->fiscal_mode,
@@ -161,8 +161,6 @@ class SettleClientPaymentTerm
                 }
 
                 // Catat ke Audit Log Invoice
-                $clientName = $invoice->client?->name ?? 'Client';
-                $invNumber = $invoice->invoice_number ?? 'Invoice';
                 \App\Domains\Shared\Models\AuditLog::create([
                     'auditable_type' => Invoice::class,
                     'auditable_id'   => $invoice->id,

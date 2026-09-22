@@ -124,12 +124,20 @@ export default function Purchases({
                     notes: plan?.notes || undefined,
                 };
 
+                const normalizeRoundingNoise = (val: number): number => {
+                    const raw = Math.round(val);
+                    const nearThousand = Math.round(raw / 1000) * 1000;
+                    return Math.abs(nearThousand - raw) <= 1 ? nearThousand : raw;
+                };
+
                 if (plan?.scheme === 'dp') {
                     terms = {
                         type: 'dp',
                         notes: plan.notes || undefined,
                         dpPercent: termsList[0]?.percent || 50,
-                        dpAmount: termsList[0]?.amount,
+                        dpAmount: termsList[0]?.amount
+                            ? normalizeRoundingNoise(Number(termsList[0].amount))
+                            : undefined,
                         dpDueDate: termsList[0]?.due_date,
                         pelunasanDueDate: termsList[1]?.due_date,
                     };
@@ -139,7 +147,7 @@ export default function Purchases({
                         notes: plan.notes || undefined,
                         installments: termsList.map((t) => ({
                             percent: t.percent,
-                            amount: t.amount,
+                            amount: normalizeRoundingNoise(Number(t.amount)),
                             note: t.label,
                             dueDate: t.due_date,
                         })),
@@ -177,7 +185,7 @@ export default function Purchases({
                     vendorName: po.vendor?.name || 'Vendor',
                     paymentTerms: terms,
                     issuedAt: po.issued_at || po.transaction_date || '',
-                    totalAmount: Number(po.total || 0),
+                    totalAmount: normalizeRoundingNoise(Number(po.total || 0)),
                     notes: po.notes,
                     payments: pmtList,
                     payment_plan: plan,

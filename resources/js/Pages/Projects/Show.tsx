@@ -284,22 +284,30 @@ export default function Show({
                 : []
             ).map((po: DbPurchaseOrder): PurchaseOrderWithPlan => {
                 const plan = po.payment_plan ?? null;
+                const rawTotal = Math.round(Number(po.total) || 0);
+                const nearThousand = Math.round(rawTotal / 1000) * 1000;
+                const normalizedPoTotal =
+                    Math.abs(nearThousand - rawTotal) <= 1 ? nearThousand : rawTotal;
+
                 return {
                     id: po.id,
                     po_number: po.po_number,
                     vendor_id: po.vendor_id,
                     vendor_name: po.vendor?.name ?? '-',
-                    total: Number(po.total) || 0,
+                    total: normalizedPoTotal,
                     payment_plan: plan
                         ? {
                               id: plan.id,
                               scheme: (plan.scheme as PaymentScheme) || 'full',
-                              total_amount: Number(plan.total_amount) || 0,
+                              total_amount: normalizedPoTotal,
                               notes: plan.notes ?? null,
                               terms: (plan.terms ?? []).map(
                                   (
                                       term: DbPaymentTerm,
                                   ): VendorPaymentPlanTerm => {
+                                      const rawAmt = Math.round(Number(term.amount) || 0);
+                                      const nearK = Math.round(rawAmt / 1000) * 1000;
+                                      const normAmt = Math.abs(nearK - rawAmt) <= 1 ? nearK : rawAmt;
                                       const settlements = (
                                           term.settlements ?? []
                                       ).map((s) => ({
@@ -314,8 +322,7 @@ export default function Show({
                                           (sum, s) => sum + s.amount,
                                           0,
                                       );
-                                      const termAmount =
-                                          Number(term.amount) || 0;
+                                      const termAmount = normAmt;
                                       const isPaid =
                                           term.status === 'paid' ||
                                           (termAmount > 0 &&

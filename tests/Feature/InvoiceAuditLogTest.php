@@ -28,6 +28,7 @@ class InvoiceAuditLogTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(\Database\Seeders\ChartOfAccountSeeder::class);
 
         $this->user = User::factory()->create();
         $this->actingAs($this->user);
@@ -115,6 +116,15 @@ class InvoiceAuditLogTest extends TestCase
             'auditable_id'   => $this->project->id,
             'event'          => 'client_payment_settled',
             'user_id'        => $this->user->id,
+        ]);
+
+        $this->assertDatabaseHas('journal_entries', [
+            'project_id' => $this->project->id,
+            'description' => "Penerimaan Pembayaran Piutang - {$this->client->name} ({$issuedInvoice->invoice_number}) [{$term->label}]",
+        ]);
+
+        $this->assertDatabaseHas('journal_entry_items', [
+            'memo' => "Penerimaan Kas/Bank untuk {$issuedInvoice->invoice_number} - {$term->label}",
         ]);
     }
 }
