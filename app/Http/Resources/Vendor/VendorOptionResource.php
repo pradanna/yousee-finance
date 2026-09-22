@@ -21,6 +21,7 @@ class VendorOptionResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'name' => (string) $this->name,
+            'npwp' => $this->npwp ? (string) $this->npwp : null,
         ];
     }
 }
