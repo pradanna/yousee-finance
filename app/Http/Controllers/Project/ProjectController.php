@@ -64,7 +64,7 @@ class ProjectController extends Controller
         $projects = $query->orderByDesc('created_at')->paginate(10)->withQueryString();
         $clients = Client::active()->orderBy('name')->get(['id', 'name']);
         $sales = Sales::orderBy('name')->get(['id', 'name']);
-        $vendors = Vendor::active()->orderBy('name')->get(['id', 'name']);
+        $vendors = Vendor::active()->orderBy('name')->get(['id', 'name', 'npwp']);
 
         // Riwayat Audit Log seluruh project
         $auditLogs = \App\Domains\Shared\Models\AuditLog::with('user:id,name')

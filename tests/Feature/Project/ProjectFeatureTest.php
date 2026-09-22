@@ -55,6 +55,7 @@ class ProjectFeatureTest extends TestCase
 
         $this->vendor = Vendor::create([
             'name' => 'Vendor Billboard Jaya',
+            'npwp' => '01.234.567.8-901.000',
             'phone' => '081122334455',
             'email' => 'vendor@test.com',
         ]);
@@ -111,6 +112,7 @@ class ProjectFeatureTest extends TestCase
             ->component('Projects/Show')
             ->where('project.name', 'Kampanye Billboard Semarang')
             ->has('project.locations', 1)
+            ->where('vendors.0.npwp', '01.234.567.8-901.000')
         );
     }
 
