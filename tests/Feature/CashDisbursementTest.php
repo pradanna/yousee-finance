@@ -129,4 +129,41 @@ class CashDisbursementTest extends TestCase
             'description' => 'Beli kertas HVS',
         ]);
     }
+
+    public function test_cash_out_index_includes_sales_commissions_across_start_dates(): void
+    {
+        $sales = \App\Domains\Sales\Models\Sales::create([
+            'name' => 'Maya Kartika',
+            'email' => 'maya@yousee.com',
+            'commission_rate' => 2.5,
+        ]);
+
+        $client = \App\Domains\Client\Models\Client::create([
+            'name' => 'PT Paragon Technology',
+        ]);
+
+        $createProject = new \App\Domains\Project\Actions\CreateProject();
+        $project = $createProject->execute([
+            'name' => 'Iklan Beauty RUN Wardah',
+            'client_id' => $client->id,
+            'sales_id' => $sales->id,
+            'fiscal_mode' => FiscalMode::PPN->value,
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+            'contract_value' => 4504504505,
+            'target_qty' => 4,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/cash-out?fiscal_mode=ppn&month=9&year=2026');
+
+        $response->assertOk();
+        $response->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) =>
+            $page->component('CashOut')
+                ->has('commissions', 1)
+                ->where('commissions.0.projectName', 'Iklan Beauty RUN Wardah')
+                ->where('commissions.0.salesName', 'Maya Kartika')
+                ->where('commissions.0.commissionAmount', 112612613)
+        );
+    }
 }

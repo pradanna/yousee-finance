@@ -214,11 +214,11 @@ class CashOutController extends Controller
             }
         }
 
-        // Ambil data komisi & bonus sales
+        // Ambil data komisi & bonus sales (default 'all' agar proyek beda bulan periode tetap tampil)
         $salesCommissionAction = app(\App\Domains\Accounting\Actions\GetSalesCommissionList::class);
         $commissionData = $salesCommissionAction->execute([
-            'month'       => $month,
-            'year'        => $year,
+            'month'       => $request->query('commission_month', 'all'),
+            'year'        => $request->query('commission_year', 'all'),
             'search'      => $search,
             'fiscal_mode' => $fiscalMode,
             'status'      => $request->query('commission_status', 'all'),
