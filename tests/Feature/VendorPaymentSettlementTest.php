@@ -222,7 +222,10 @@ class VendorPaymentSettlementTest extends TestCase
 
         $client = Client::create(['name' => 'PT Client Empat']);
         $sales = Sales::create(['name' => 'Sales PIC 4', 'email' => 'sales4@yousee.com']);
-        $vendor = Vendor::create(['name' => 'PT Vendor Mega']);
+        $vendor = Vendor::create([
+            'name' => 'PT Vendor Mega',
+            'npwp' => '01.234.567.8-901.000',
+        ]);
         $project = Project::create([
             'client_id' => $client->id,
             'sales_id' => $sales->id,

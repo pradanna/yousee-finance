@@ -91,11 +91,21 @@ class PurchaseOrder extends Model
         $isPpn = $this->fiscal_mode instanceof FiscalMode
             ? $this->fiscal_mode === FiscalMode::PPN
             : $this->fiscal_mode === FiscalMode::PPN->value;
-        $ppn = $isPpn ? round($subtotal * 0.11, 2) : 0.0;
+
+        if ($isPpn) {
+            $total = (float) $this->items()->get()->sum(function (PurchaseOrderItem $item) {
+                $itemDpp = (float) $item->quantity * (float) $item->price;
+                return round($itemDpp * 1.11, 2);
+            });
+            $ppn = round($total - $subtotal, 2);
+        } else {
+            $ppn = 0.0;
+            $total = $subtotal;
+        }
 
         $this->subtotal = $subtotal;
         $this->ppn = $ppn;
-        $this->total = $subtotal + $ppn;
+        $this->total = $total;
         $this->saveQuietly();
     }
 }

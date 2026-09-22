@@ -340,7 +340,11 @@ export default function VendorPOTab({
     };
 
     const totalVendorDPP = locations.reduce((s, l) => s + l.vendorCost, 0);
-    const totalPO = isPPN ? totalVendorDPP * 1.11 : totalVendorDPP;
+    const totalPO = locations.reduce((sum, loc) => {
+        const dpp = loc.vendorCost;
+        const ppn = isPPN ? dpp * 0.11 : 0;
+        return sum + Math.round(dpp + ppn);
+    }, 0);
     const issuedCount = locations.filter((l) => l.poIssued).length;
 
     const [poFilterScheme, setPoFilterScheme] = useState<
@@ -443,7 +447,7 @@ export default function VendorPOTab({
                     <div className="mt-1 text-[11px] text-blue-600/80">
                         {isPPN ? (
                             <span>
-                                DPP: <strong className="font-mono font-semibold text-blue-900">{fmt(totalVendorDPP)}</strong> | PPN: <strong className="font-mono font-semibold text-violet-700">{fmt(totalVendorDPP * 0.11)}</strong>
+                                DPP: <strong className="font-mono font-semibold text-blue-900">{fmt(totalVendorDPP)}</strong> | PPN: <strong className="font-mono font-semibold text-violet-700">{fmt(totalPO - totalVendorDPP)}</strong>
                             </span>
                         ) : (
                             <span>Biaya keseluruhan pengadaan vendor</span>
@@ -585,8 +589,17 @@ export default function VendorPOTab({
                             (s, l) => s + l.vendorCost,
                             0,
                         );
-                        const vendorPpn = isPPN ? vendorDpp * 0.11 : 0;
-                        const vendorGrandTotal = vendorDpp + vendorPpn;
+                        const vendorGrandTotal = group.items.reduce(
+                            (sum, loc) => {
+                                const dpp = loc.vendorCost;
+                                const ppn = isPPN ? dpp * 0.11 : 0;
+                                return sum + Math.round(dpp + ppn);
+                            },
+                            0,
+                        );
+                        const vendorPpn = isPPN
+                            ? Math.max(0, vendorGrandTotal - vendorDpp)
+                            : 0;
                         const unissuedItems = group.items.filter(
                             (l) => !l.poIssued,
                         );

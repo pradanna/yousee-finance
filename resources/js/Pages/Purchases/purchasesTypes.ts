@@ -207,7 +207,7 @@ export interface PurchaseProject {
 
 export interface PurchasesPageProps {
     projects?: PurchaseProject[];
-    vendors?: Array<{ id: number; name: string }>;
+    vendors?: Array<{ id: number | string; name: string; npwp?: string | null }>;
     cashBankAccounts?: Array<{
         id: string | number;
         code: string;

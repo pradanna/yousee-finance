@@ -114,7 +114,7 @@ class ProjectController extends Controller
 
         $clients = Client::active()->orderBy('name')->get(['id', 'name']);
         $sales = Sales::orderBy('name')->get(['id', 'name', 'commission_rate']);
-        $vendors = Vendor::active()->orderBy('name')->get(['id', 'name']);
+        $vendors = Vendor::active()->orderBy('name')->get(['id', 'name', 'npwp']);
 
         $cashBankAccounts = \App\Domains\Accounting\Models\ChartOfAccount::where('is_active', true)
             ->where('code', 'like', '111%')

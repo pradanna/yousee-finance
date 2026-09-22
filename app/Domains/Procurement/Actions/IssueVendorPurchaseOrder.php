@@ -31,6 +31,14 @@ class IssueVendorPurchaseOrder
     public function execute(Project $project, Vendor $vendor, array $locationIds, string $transactionDate, array $extraData = []): PurchaseOrder
     {
         return DB::transaction(function () use ($project, $vendor, $locationIds, $transactionDate, $extraData) {
+            $isProjectPpn = $project->fiscal_mode instanceof FiscalMode
+                ? $project->fiscal_mode === FiscalMode::PPN
+                : $project->fiscal_mode === FiscalMode::PPN->value;
+
+            if ($isProjectPpn && ! $vendor->isPkp()) {
+                throw new \DomainException("Vendor '{$vendor->name}' berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN. Silakan pilih vendor berstatus PKP atau alihkan transaksi ke proyek Mode Non-PPN.");
+            }
+
             $locations = ProjectLocation::whereIn('id', $locationIds)
                 ->lockForUpdate()
                 ->get();

@@ -52,4 +52,12 @@ class Vendor extends Model
     {
         return $this->hasMany(PurchaseOrder::class);
     }
+
+    /**
+     * Cek apakah vendor berstatus Pengusaha Kena Pajak (PKP).
+     */
+    public function isPkp(): bool
+    {
+        return ! empty($this->npwp) && trim((string) $this->npwp) !== '';
+    }
 }

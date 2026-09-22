@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { BillboardLocation, fmt, PurchaseOrderWithPlan } from '../projectTypes';
 
-interface VendorOption {
+export interface VendorOption {
     id: string;
     name: string;
+    npwp?: string | null;
 }
+
+const isVendorPkp = (v: VendorOption): boolean =>
+    Boolean(v.npwp && v.npwp.trim().length > 0);
 
 export default function LocationsTab({
     locations,
@@ -150,6 +154,14 @@ export default function LocationsTab({
             errs.description = 'Deskripsi wajib diisi.';
         if (!form.size.trim()) errs.size = 'Ukuran wajib diisi.';
         if (!form.vendorCost) errs.vendorCost = 'Biaya titik wajib diisi.';
+
+        if (isPPN && selectedVendorId) {
+            const selectedVendor = vendors.find((v) => v.id === selectedVendorId);
+            if (selectedVendor && !isVendorPkp(selectedVendor)) {
+                errs.vendorId = `Vendor "${selectedVendor.name}" berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN.`;
+            }
+        }
+
         if (Object.keys(errs).length > 0) {
             setErrors(errs);
             return;
@@ -655,12 +667,35 @@ export default function LocationsTab({
                                     <option value="">
                                         -- Pilih Vendor Mitra --
                                     </option>
-                                    {vendors.map((v) => (
-                                        <option key={v.id} value={v.id}>
-                                            {v.name}
-                                        </option>
-                                    ))}
+                                    {vendors.map((v) => {
+                                        const isPkp = isVendorPkp(v);
+                                        const isDisabled = isPPN && !isPkp;
+                                        return (
+                                            <option
+                                                key={v.id}
+                                                value={v.id}
+                                                disabled={isDisabled}
+                                                className={
+                                                    isDisabled
+                                                        ? 'bg-slate-100 font-normal text-slate-400'
+                                                        : ''
+                                                }
+                                            >
+                                                {v.name}
+                                                {isPPN && !isPkp
+                                                    ? ' (Non-PKP - Dilarang di Mode PPN)'
+                                                    : ''}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
+                                {isPPN && (
+                                    <p className="text-[11px] font-medium text-blue-700">
+                                        ℹ️ <strong>Mode PPN:</strong> Hanya
+                                        vendor berstatus PKP (memiliki NPWP)
+                                        yang diizinkan.
+                                    </p>
+                                )}
                                 {errors.vendorId && (
                                     <span className="block text-[10px] font-bold text-rose-500">
                                         {errors.vendorId}

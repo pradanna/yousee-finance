@@ -168,7 +168,7 @@ interface ShowProjectProps {
         name: string;
         commission_rate?: number | string;
     }>;
-    vendors?: Array<{ id: string; name: string }>;
+    vendors?: Array<{ id: string; name: string; npwp?: string | null }>;
     cashBankAccounts?: Array<{
         id: string | number;
         code: string;
@@ -976,6 +976,16 @@ export default function Show({
                                                 onSuccess: () => {
                                                     router.reload();
                                                 },
+                                                onError: (errors) => {
+                                                    const firstErr =
+                                                        Object.values(errors)[0] ||
+                                                        'Gagal menerbitkan PO vendor.';
+                                                    triggerToast(
+                                                        String(firstErr),
+                                                        'error',
+                                                        'Penerbitan PO Ditolak',
+                                                    );
+                                                },
                                             },
                                         );
                                     }}
@@ -1026,6 +1036,16 @@ export default function Show({
                                                 preserveScroll: true,
                                                 onSuccess: () => {
                                                     router.reload();
+                                                },
+                                                onError: (errors) => {
+                                                    const firstErr =
+                                                        Object.values(errors)[0] ||
+                                                        'Gagal menerbitkan PO vendor.';
+                                                    triggerToast(
+                                                        String(firstErr),
+                                                        'error',
+                                                        'Penerbitan PO Ditolak',
+                                                    );
                                                 },
                                             },
                                         );

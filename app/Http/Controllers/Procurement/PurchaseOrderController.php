@@ -66,7 +66,7 @@ class PurchaseOrderController extends Controller
                 'display_name' => "{$acc->code} - {$acc->name}",
             ]);
 
-        $vendors = Vendor::query()->orderBy('name')->get(['id', 'name']);
+        $vendors = Vendor::query()->orderBy('name')->get(['id', 'name', 'npwp']);
 
         // Riwayat Audit Log seluruh Purchase Order & Pembayaran Vendor
         $auditLogs = \App\Domains\Shared\Models\AuditLog::with('user:id,name')

@@ -256,9 +256,12 @@ export function calcFinancials(
     // In PPN Mode, check if purchaseOrders exist or treat vendorCost as DPP
     let totalDppVendor = rawVendorSum;
     let totalPO = isPPN
-        ? Math.round(rawVendorSum * (1 + PPN_RATE))
+        ? locations.reduce(
+              (s, l) => s + Math.round(l.vendorCost * (1 + PPN_RATE)),
+              0,
+          )
         : rawVendorSum;
-    let ppnMasukan = isPPN ? Math.round(rawVendorSum * PPN_RATE) : 0;
+    let ppnMasukan = isPPN ? totalPO - totalDppVendor : 0;
 
     if (project.purchaseOrders && project.purchaseOrders.length > 0) {
         const poSum = project.purchaseOrders.reduce(

@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Procurement;
 
+use App\Domains\Project\Models\Project;
+use App\Domains\Shared\Enums\FiscalMode;
+use App\Domains\Vendor\Models\Vendor;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreVendorPurchaseOrderRequest extends FormRequest
 {
@@ -39,5 +43,32 @@ class StoreVendorPurchaseOrderRequest extends FormRequest
             'term_due_dates'    => ['nullable', 'array'],
             'term_due_dates.*'  => ['date'],
         ];
+    }
+
+    /**
+     * Konfigurasi validator tambahan untuk invariant Mode PPN.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $project = $this->route('project');
+            $vendorId = $this->input('vendor_id');
+
+            if ($project instanceof Project && $vendorId) {
+                $isProjectPpn = $project->fiscal_mode instanceof FiscalMode
+                    ? $project->fiscal_mode === FiscalMode::PPN
+                    : $project->fiscal_mode === FiscalMode::PPN->value;
+
+                if ($isProjectPpn) {
+                    $vendor = Vendor::find($vendorId);
+                    if ($vendor && ! $vendor->isPkp()) {
+                        $validator->errors()->add(
+                            'vendor_id',
+                            "Vendor '{$vendor->name}' berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN. Silakan pilih vendor berstatus PKP atau alihkan transaksi ke proyek Mode Non-PPN."
+                        );
+                    }
+                }
+            }
+        });
     }
 }

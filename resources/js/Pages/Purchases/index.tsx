@@ -457,6 +457,23 @@ export default function Purchases({
     const handleConfirmIssuePO = (data: IssuePOModalSubmitData) => {
         if (!poFormVendor || !activeProject) return;
 
+        if (isPPN) {
+            const vendorObj = vendors.find(
+                (v) => String(v.id) === String(poFormVendor.id),
+            );
+            const isPkp = Boolean(
+                vendorObj?.npwp && vendorObj.npwp.trim().length > 0,
+            );
+            if (!isPkp) {
+                triggerToast(
+                    `Vendor "${poFormVendor.name}" berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN. Silakan pilih vendor PKP atau gunakan proyek Mode Non-PPN.`,
+                    'error',
+                    'Penerbitan PO Ditolak',
+                );
+                return;
+            }
+        }
+
         const locationIds = poFormVendor.locs.map((l) => l.id);
 
         router.post(
