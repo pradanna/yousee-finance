@@ -79,8 +79,9 @@ class PurchaseOrderPdfController extends Controller
         $totalPPN = $isPPN ? round($totalDPP * 0.11, 2) : 0.0;
         $grandTotal = $totalDPP + $totalPPN;
 
-        $qrData = route('po.pdf') . "?poNumber=" . urlencode($poNumber);
-        $qrCodeBase64 = base64_encode(\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(100)->errorCorrection('M')->generate($qrData));
+        $qrData = route('po.pdf') . '?poNumber=' . urlencode($poNumber);
+        $qrCodeSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(100)->errorCorrection('M')->generate($qrData);
+        $qrCodeBase64 = base64_encode($qrCodeSvg);
 
         $lighting = $request->input('locations.0.lighting', $request->input('lighting', 'Berlampu'));
         
