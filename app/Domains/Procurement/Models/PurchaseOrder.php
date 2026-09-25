@@ -55,6 +55,21 @@ class PurchaseOrder extends Model
         ];
     }
 
+    public static function boot(): void
+    {
+        parent::boot();
+
+        static::saving(function (PurchaseOrder $po) {
+            if (! empty($po->transaction_date) && ! empty($po->fiscal_mode)) {
+                $date = \Carbon\Carbon::parse($po->transaction_date);
+                $modeVal = $po->fiscal_mode instanceof FiscalMode ? $po->fiscal_mode->value : (string) $po->fiscal_mode;
+                if (\App\Domains\Accounting\Models\ClosingPeriod::isClosed($date->month, $date->year, $modeVal)) {
+                    throw new \DomainException("Periode akuntansi {$date->month}-{$date->year} untuk Mode {$modeVal} sudah ditutup. Tidak dapat membuat atau mengubah PO.");
+                }
+            }
+        });
+    }
+
     public function vendor(): BelongsTo
     {
         return $this->belongsTo(Vendor::class);

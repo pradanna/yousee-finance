@@ -74,9 +74,16 @@ Route::middleware('auth')->group(function () {
         'projects/{project}/invoice/payment-terms/{paymentTerm}/settle',
         [\App\Http\Controllers\Billing\ProjectInvoiceController::class, 'settlePaymentTerm'],
     )->name('projects.invoice.payment-terms.settle');
+    Route::put('/payment-settlements/{paymentSettlement}', [\App\Http\Controllers\Billing\PaymentSettlementController::class, 'update'])->name('payment-settlements.update');
+    Route::delete('/payment-settlements/{paymentSettlement}', [\App\Http\Controllers\Billing\PaymentSettlementController::class, 'destroy'])->name('payment-settlements.destroy');
 
     // Transaksi
     Route::get('/purchases', [\App\Http\Controllers\Procurement\PurchaseOrderController::class, 'index'])->name('purchases');
+    Route::get('/cash-in', [\App\Http\Controllers\Accounting\CashInController::class, 'index'])->name('cash-in');
+    Route::get('/cash-in-export', [\App\Http\Controllers\Accounting\CashInController::class, 'exportCsv'])->name('cash-in.export');
+    Route::post('/cash-in', [\App\Http\Controllers\Accounting\CashInController::class, 'store'])->name('cash-in.store');
+    Route::post('/cash-in/{cashInTransaction}/void', [\App\Http\Controllers\Accounting\CashInController::class, 'void'])->name('cash-in.void');
+
     Route::get('/cash-out', [\App\Http\Controllers\Accounting\CashOutController::class, 'index'])->name('cash-out');
     Route::get('/cash-out-export', [\App\Http\Controllers\Accounting\CashOutController::class, 'exportCsv'])->name('cash-out.export');
     Route::post('/cash-out', [\App\Http\Controllers\Accounting\CashOutController::class, 'store'])->name('cash-out.store');

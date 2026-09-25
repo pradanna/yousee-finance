@@ -1208,6 +1208,7 @@ export default function SalesTransactions({
         appendInput('amount', String(amountVal));
         appendInput('forPaymentOf', paymentDesc);
         appendInput('date', dateVal);
+        appendInput('isPPN', isPPN ? 'true' : 'false');
         appendInput('stream', 'true');
 
         document.body.appendChild(form);

@@ -248,15 +248,34 @@
             </td>
             <td>
                 <div class="signature-title">Diperiksa Oleh (Finance/Akunting):</div>
-                <div class="signature-box"></div>
-                <div class="signature-name">( ........................................ )</div>
+                @php
+                    $checkerName = $verifierName ?? 'Indung Sukma';
+                    $isSukmaChecker = stripos($checkerName, 'sukma') !== false;
+                @endphp
+                <div class="signature-box" style="text-align: center;">
+                    @if($isSukmaChecker)
+                        <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 48px; width: auto; margin: 0 auto; display: block;">
+                    @endif
+                </div>
+                <div class="signature-name">( {{ $checkerName }} )</div>
                 <div style="font-size: 7.5px; color: #64748b;">Tanggal: ....................</div>
             </td>
             <td>
                 <div class="signature-title">Disetujui Oleh (Pimpinan/Owner):</div>
-                <div class="signature-box"></div>
-                <div class="signature-name">( ........................................ )</div>
-                <div style="font-size: 7.5px; color: #64748b;">Tanggal: ....................</div>
+                @php
+                    $ownerName = $approverName ?? 'Yosua Eka S';
+                    $isJosuaOwner = stripos($ownerName, 'josua') !== false || stripos($ownerName, 'yosua') !== false;
+                    $isSukmaOwner = stripos($ownerName, 'sukma') !== false;
+                @endphp
+                <div class="signature-box" style="text-align: center;">
+                    @if($isJosuaOwner)
+                        <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 48px; width: auto; margin: 0 auto; display: block;">
+                    @elseif($isSukmaOwner)
+                        <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 48px; width: auto; margin: 0 auto; display: block;">
+                    @endif
+                </div>
+                <div class="signature-name">( {{ $ownerName }} )</div>
+                <div style="font-size: 7.5px; color: #64748b;">Tanggal: {{ date('d/m/Y') }}</div>
             </td>
         </tr>
     </table>

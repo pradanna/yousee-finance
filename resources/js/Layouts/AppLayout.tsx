@@ -51,6 +51,7 @@ interface AppLayoutProps {
         | 'debt-receivable'
         | 'invoice-po'
         | 'purchases'
+        | 'cash-in'
         | 'cash-out'
         | 'sales-transactions'
         | 'coa'

@@ -14,6 +14,7 @@ import CashflowMetricsCards from './CashflowReport/Components/CashflowMetricsCar
 import CashflowBankAccountsTab from './CashflowReport/Tabs/CashflowBankAccountsTab';
 import CashflowPsakTab from './CashflowReport/Tabs/CashflowPsakTab';
 import CashflowRegistryTab from './CashflowReport/Tabs/CashflowRegistryTab';
+import { exportCashflowExcel } from './CashflowReport/utils/exportCashflowExcel';
 
 export default function CashflowReport({
     initialCashflowData,
@@ -101,6 +102,26 @@ export default function CashflowReport({
         document.body.appendChild(form);
         form.submit();
         document.body.removeChild(form);
+    };
+
+    // State Loading Export Excel
+    const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+    // Handle Excel (.xlsx) Export
+    const handleExportExcel = async () => {
+        try {
+            setIsExportingExcel(true);
+            await exportCashflowExcel(
+                initialCashflowData,
+                isPPN ? 'PPN' : 'Non-PPN',
+                'PT YouSee Indonesia',
+            );
+        } catch (err) {
+            console.error('Failed to export cashflow excel:', err);
+            alert('Gagal mengekspor file Excel. Silakan coba kembali.');
+        } finally {
+            setIsExportingExcel(false);
+        }
     };
 
     // Handle CSV Export
@@ -200,11 +221,22 @@ export default function CashflowReport({
                         {/* Export Buttons */}
                         <div className="flex items-center gap-2">
                             <ExcelButton
-                                onClick={handleExportCsv}
-                                title="Unduh data arus kas ke format CSV / Excel"
+                                onClick={handleExportExcel}
+                                isLoading={isExportingExcel}
+                                loadingText="Menyiapkan Excel..."
+                                title="Unduh data arus kas ke format Excel (.xlsx) dengan 3 sheet terformat rapi"
                             >
-                                CSV / Excel
+                                Ekspor Excel (.xlsx)
                             </ExcelButton>
+
+                            <button
+                                type="button"
+                                onClick={handleExportCsv}
+                                title="Unduh data mentah ke format CSV"
+                                className="shadow-2xs inline-flex cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                            >
+                                CSV
+                            </button>
 
                             <PrintButton
                                 onClick={handleExportPdf}

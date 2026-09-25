@@ -32,7 +32,7 @@ class DebtReceivableController extends Controller
             'project:id,code,name,sales_id',
             'project.sales:id,name',
             'sales:id,name',
-            'paymentPlan.terms.settlements',
+            'paymentPlan.terms.settlements.journalEntry.items.account',
         ])
             ->where('status', '!=', InvoiceStatus::DRAFT); // Piutang diakui saat status Issued / Paid
 
@@ -49,7 +49,7 @@ class DebtReceivableController extends Controller
         $poQuery = PurchaseOrder::with([
             'vendor:id,name,phone,email',
             'project:id,code,name',
-            'paymentPlan.terms.settlements',
+            'paymentPlan.terms.settlements.journalEntry.items.account',
         ])
             ->where('status', '!=', PurchaseOrderStatus::DRAFT); // Hutang diakui saat PO Issued / Paid
 
@@ -75,6 +75,24 @@ class DebtReceivableController extends Controller
                 $tPaid = (float) $t->settlements->sum('amount');
                 $paidAmount += $tPaid;
 
+                $settlements = $t->settlements->map(function ($s) {
+                    $cashItem = $s->journalEntry?->items->first(function ($item) {
+                        return str_starts_with($item->account?->code ?? '', '111');
+                    });
+
+                    return [
+                        'id'             => $s->id,
+                        'amount'         => (float) $s->amount,
+                        'paid_at'        => $s->paid_at ? $s->paid_at->format('Y-m-d') : null,
+                        'payment_method' => $s->payment_method,
+                        'payment_ref'    => $s->payment_ref,
+                        'notes'          => $s->notes,
+                        'account_id'     => $cashItem?->account_id,
+                        'account_name'   => $cashItem?->account?->name,
+                        'account_code'   => $cashItem?->account?->code,
+                    ];
+                })->values();
+
                 $milestones[] = [
                     'id'                => $t->id,
                     'sort_order'        => $t->sort_order,
@@ -85,6 +103,7 @@ class DebtReceivableController extends Controller
                     'due_date'          => $t->due_date ? $t->due_date->format('Y-m-d') : null,
                     'status'            => $t->status->value,
                     'notes'             => $t->notes,
+                    'settlements'       => $settlements,
                 ];
             }
 
@@ -101,6 +120,7 @@ class DebtReceivableController extends Controller
                     'due_date'          => $inv->due_date ? $inv->due_date->format('Y-m-d') : null,
                     'status'            => $inv->status === InvoiceStatus::PAID ? 'paid' : 'unpaid',
                     'notes'             => $inv->notes,
+                    'settlements'       => [],
                 ];
             }
 
@@ -161,6 +181,24 @@ class DebtReceivableController extends Controller
                 $tPaid = (float) $t->settlements->sum('amount');
                 $paidAmount += $tPaid;
 
+                $settlements = $t->settlements->map(function ($s) {
+                    $cashItem = $s->journalEntry?->items->first(function ($item) {
+                        return str_starts_with($item->account?->code ?? '', '111');
+                    });
+
+                    return [
+                        'id'             => $s->id,
+                        'amount'         => (float) $s->amount,
+                        'paid_at'        => $s->paid_at ? $s->paid_at->format('Y-m-d') : null,
+                        'payment_method' => $s->payment_method,
+                        'payment_ref'    => $s->payment_ref,
+                        'notes'          => $s->notes,
+                        'account_id'     => $cashItem?->account_id,
+                        'account_name'   => $cashItem?->account?->name,
+                        'account_code'   => $cashItem?->account?->code,
+                    ];
+                })->values();
+
                 $milestones[] = [
                     'id'                => $t->id,
                     'sort_order'        => $t->sort_order,
@@ -171,6 +209,7 @@ class DebtReceivableController extends Controller
                     'due_date'          => $t->due_date ? $t->due_date->format('Y-m-d') : null,
                     'status'            => $t->status->value,
                     'notes'             => $t->notes,
+                    'settlements'       => $settlements,
                 ];
             }
 
@@ -186,6 +225,7 @@ class DebtReceivableController extends Controller
                     'due_date'          => $po->issued_at ? $po->issued_at->format('Y-m-d') : null,
                     'status'            => $po->status === PurchaseOrderStatus::PAID ? 'paid' : 'unpaid',
                     'notes'             => $po->notes,
+                    'settlements'       => [],
                 ];
             }
 

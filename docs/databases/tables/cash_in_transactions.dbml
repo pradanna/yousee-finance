@@ -1,0 +1,23 @@
+Table cash_in_transactions {
+  id varchar(36) [pk, note: 'UUID Primary Key']
+  transaction_number varchar(50) [unique, not null, note: 'Nomor Transaksi Penerimaan, format IN-YYYYMM-XXXX']
+  fiscal_mode varchar(20) [not null, note: 'ppn atau non-ppn']
+  deposit_account_id varchar(36) [not null, ref: > chart_of_accounts.id, note: 'Akun Kas/Bank yang menerima dana (Leaf Node)']
+  source_account_id varchar(36) [not null, ref: > chart_of_accounts.id, note: 'Akun sumber dana / lawan kredit (Modal/Hutang/Pendapatan - Leaf Node)']
+  project_id varchar(36) [null, ref: > projects.id, note: 'Project analytical tagging (opsional)']
+  amount decimal(15,2) [not null, note: 'Nominal pemasukan kas']
+  transaction_date date [not null, note: 'Tanggal transaksi kas masuk']
+  payer varchar(255) [null, note: 'Nama penyetor / sumber dana (e.g. Owner, Investor, Bank)']
+  description text [not null, note: 'Keterangan pemasukan kas']
+  attachment_path varchar(255) [null, note: 'Path file bukti transfer / nota (opsional)']
+  attachment_name varchar(255) [null, note: 'Nama file asli bukti transfer / nota']
+  status varchar(20) [not null, default: 'active', note: 'Status transaksi: active / voided']
+  voided_at timestamp [null, note: 'Waktu pembatalan transaksi']
+  voided_by varchar(36) [null, ref: > users.id, note: 'User yang membatalkan transaksi']
+  void_reason text [null, note: 'Alasan pembatalan transaksi']
+  created_by varchar(36) [not null, ref: > users.id, note: 'User pembuat transaksi']
+  created_at timestamp [null]
+  updated_at timestamp [null]
+
+  Note: 'Tabel transaksi penerimaan kas non-invoice (Direct Cash Inflow, modal owner, pinjaman, bunga bank, dll.)'
+}

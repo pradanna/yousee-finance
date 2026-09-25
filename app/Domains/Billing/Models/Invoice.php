@@ -57,6 +57,8 @@ class Invoice extends Model
         ];
     }
 
+    public static bool $allowSystemMutation = false;
+
     public static function boot(): void
     {
         parent::boot();
@@ -74,7 +76,7 @@ class Invoice extends Model
                 if ($oldStatus === InvoiceStatus::DRAFT->value && $newStatus === InvoiceStatus::PAID->value) {
                     throw new \DomainException("Status Invoice harus melalui 'issued' sebelum menjadi 'paid'.");
                 }
-                if ($oldStatus === InvoiceStatus::PAID->value && $newStatus !== InvoiceStatus::PAID->value) {
+                if (! static::$allowSystemMutation && $oldStatus === InvoiceStatus::PAID->value && $newStatus !== InvoiceStatus::PAID->value) {
                     throw new \DomainException("Status Invoice yang sudah 'paid' tidak bisa diubah kembali.");
                 }
             }

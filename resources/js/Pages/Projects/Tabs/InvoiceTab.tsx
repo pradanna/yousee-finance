@@ -84,7 +84,8 @@ export default function InvoiceTab({
         appendInput('clientSubName', 'Attn: Finance & Procurement');
         appendInput(
             'invoiceNumber',
-            project.invoiceNumber || 'INV-06/2026/001',
+            project.invoiceNumber ||
+                (isPPN ? 'INV-SSI-202606-001' : 'INV-202606-001'),
         );
         appendInput('invoiceDate', new Date().toLocaleDateString('id-ID'));
         appendInput('isPPN', isPPN ? 'true' : 'false');
@@ -193,6 +194,7 @@ export default function InvoiceTab({
         appendInput('amount', String(paidAmount));
         appendInput('forPaymentOf', paymentDesc);
         appendInput('date', dateVal);
+        appendInput('isPPN', isPPN ? 'true' : 'false');
         appendInput('stream', 'true');
 
         document.body.appendChild(form);
@@ -228,7 +230,10 @@ export default function InvoiceTab({
                     </div>
                     <div className="font-mono text-sm font-bold text-blue-900">
                         {project.invoiceIssued
-                            ? project.invoiceNumber || 'INV-PPN-2026/001'
+                            ? project.invoiceNumber ||
+                              (isPPN
+                                  ? 'INV-SSI-202609-001'
+                                  : 'INV-202609-001')
                             : 'Belum Diterbitkan'}
                     </div>
                 </div>

@@ -240,7 +240,7 @@
         .signature-title {
             font-size: 9px;
             color: #334155;
-            margin-bottom: 60px;
+            margin-bottom: 5px;
         }
 
         .signature-name {
@@ -262,7 +262,7 @@
         <tr>
             <td style="width: 55%; vertical-align: top;">
                 <img src="{{ public_path('images/logo-yousee2.png') }}" alt="Yousee Indonesia" style="height: 38px; width: auto; margin-bottom: 4px;">
-                <div class="company-title">Yousee Indonesia - PT SS Indonesia</div>
+                <div class="company-title">Yousee Indonesia - {{ $isPPN ? 'PT Sukma Setiawan Indonesia' : 'PT SS Indonesia' }}</div>
                 <div class="company-address">
                     <strong>Marketing Office :</strong> Jl. Pengadegan Timur III No.2 RT06 RW02 Pancoran - Jakarta Selatan<br>
                     <strong>Head Office :</strong> Jl Yos Sudarso - Tanjung Anom No 19B, Kel Kwarasan, Kec Grogol, Kab Sukoharjo, Jawa Tengah 57522<br>
@@ -440,6 +440,21 @@
     <div class="signature-section">
         <div class="signature-box">
             <div class="signature-title">Approved By</div>
+            @php
+                $isJosua = isset($directorName) && (stripos($directorName, 'josua') !== false || stripos($directorName, 'yosua') !== false);
+                $isSukma = isset($directorName) && stripos($directorName, 'sukma') !== false;
+            @endphp
+            @if($isJosua)
+                <div style="height: 55px; margin-bottom: 5px;">
+                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 55px; width: auto; margin: 0 auto; display: block;">
+                </div>
+            @elseif($isSukma)
+                <div style="height: 55px; margin-bottom: 5px;">
+                    <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 55px; width: auto; margin: 0 auto; display: block;">
+                </div>
+            @else
+                <div style="height: 55px; margin-bottom: 5px;"></div>
+            @endif
             <div class="signature-name">{{ $directorName }}</div>
             <div class="signature-role">{{ $directorTitle }}</div>
         </div>

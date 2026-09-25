@@ -63,6 +63,8 @@ class InvoiceAuditLogTest extends TestCase
         $issueAction = new IssueClientInvoice();
         $issuedInvoice = $issueAction->execute($this->project);
 
+        $this->assertMatchesRegularExpression('/^INV-SSI-\d{6}-\d{3}$/', $issuedInvoice->invoice_number);
+
         $this->assertDatabaseHas('audit_logs', [
             'auditable_type' => Invoice::class,
             'auditable_id'   => $issuedInvoice->id,
@@ -76,6 +78,38 @@ class InvoiceAuditLogTest extends TestCase
             'event'          => 'invoice_issued',
             'user_id'        => $this->user->id,
         ]);
+    }
+
+    public function test_issuing_non_ppn_invoice_generates_correct_number_format(): void
+    {
+        $createProject = new CreateProject();
+        $nonPpnProject = $createProject->execute([
+            'name' => 'Proyek Non PPN',
+            'client_id' => $this->client->id,
+            'fiscal_mode' => FiscalMode::NON_PPN->value,
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-12-31',
+            'contract_value' => 100000000,
+            'target_qty' => 1,
+        ]);
+
+        $createInvoice = new CreateClientInvoice();
+        $invoice = $createInvoice->execute($nonPpnProject);
+
+        $generateTerms = new \App\Domains\Billing\Actions\GeneratePaymentTerms();
+        $generateTerms->execute(
+            $invoice,
+            \App\Domains\Billing\Enums\PaymentScheme::FULL,
+            [100.0],
+            ['2026-10-10']
+        );
+
+        $issueAction = new IssueClientInvoice();
+        $issuedInvoice = $issueAction->execute($nonPpnProject);
+
+        $this->assertMatchesRegularExpression('/^INV-\d{6}-\d{3}$/', $issuedInvoice->invoice_number);
+        $this->assertStringNotContainsString('SSI', $issuedInvoice->invoice_number);
+        $this->assertStringNotContainsString('NP', $issuedInvoice->invoice_number);
     }
 
     public function test_settling_client_payment_records_audit_log(): void

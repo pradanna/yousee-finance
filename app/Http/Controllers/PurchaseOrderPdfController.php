@@ -144,22 +144,24 @@ class PurchaseOrderPdfController extends Controller
             $topNotes = $po->paymentPlan->notes ?: ($scheme === 'full' ? 'Full Payment' : "Termin ({$termsCount} Tahap)");
         }
         $topNotes = $topNotes ?: 'Lunas setelah visual terpasang';
+        $authorizedName = $request->input('authorizedName', $request->input('directorName', 'Yosua Eka S'));
 
         $pdf = Pdf::loadView('pdf.purchase_order', [
-            'project'       => $project,
-            'vendorName'    => $vendorName,
-            'vendorAddress' => $vendorAddress,
-            'vendorPhone'   => $vendorPhone,
-            'locations'     => $locations,
-            'isPPN'         => $isPPN,
-            'poNumber'      => $poNumber, 
-            'poDate'        => $poDate,
-            'totalDPP'      => $totalDPP,
-            'totalPPN'      => $totalPPN,
-            'grandTotal'    => $grandTotal,
-            'lighting'      => $lighting,
-            'topNotes'      => $topNotes,
-            'qrCodeBase64'  => $qrCodeBase64,
+            'project'        => $project,
+            'vendorName'     => $vendorName,
+            'vendorAddress'  => $vendorAddress,
+            'vendorPhone'    => $vendorPhone,
+            'locations'      => $locations,
+            'isPPN'          => $isPPN,
+            'poNumber'       => $poNumber, 
+            'poDate'         => $poDate,
+            'totalDPP'       => $totalDPP,
+            'totalPPN'       => $totalPPN,
+            'grandTotal'     => $grandTotal,
+            'lighting'       => $lighting,
+            'topNotes'       => $topNotes,
+            'qrCodeBase64'   => $qrCodeBase64,
+            'authorizedName' => $authorizedName,
         ]);
 
         $pdf->setPaper('a4', 'portrait');

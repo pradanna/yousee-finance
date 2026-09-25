@@ -407,7 +407,24 @@
         <div class="signature-col">
             <div class="signature-title">Disetujui Oleh (Authorized)</div>
             <div class="signature-company">Yousee Indonesia</div>
-            <div class="signature-name">Manajemen Keuangan</div>
+            @php
+                $poSignee = $authorizedName ?? 'Yosua Eka S';
+                $isJosuaPo = stripos($poSignee, 'josua') !== false || stripos($poSignee, 'yosua') !== false;
+                $isSukmaPo = stripos($poSignee, 'sukma') !== false;
+            @endphp
+            @if($isJosuaPo)
+                <div style="height: 50px; margin-top: 5px;">
+                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                </div>
+                <div class="signature-name" style="margin-top: 5px;">{{ $poSignee }}</div>
+            @elseif($isSukmaPo)
+                <div style="height: 50px; margin-top: 5px;">
+                    <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                </div>
+                <div class="signature-name" style="margin-top: 5px;">{{ $poSignee }}</div>
+            @else
+                <div class="signature-name">{{ $poSignee }}</div>
+            @endif
         </div>
         <div class="clear"></div>
     </div>

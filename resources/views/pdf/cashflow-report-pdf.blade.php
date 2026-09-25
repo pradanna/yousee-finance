@@ -170,7 +170,13 @@
             font-weight: bold;
             color: #475569;
             font-size: 8px;
-            margin-bottom: 40px;
+            margin-bottom: 4px;
+        }
+
+        .signature-space {
+            height: 36px;
+            margin-bottom: 4px;
+            text-align: center;
         }
 
         .signature-name {
@@ -436,17 +442,34 @@
         <tr>
             <td class="signature-cell">
                 <div class="signature-title">Disiapkan oleh (Finance):</div>
+                @php
+                    $isJosuaPrep = stripos($printedBy ?? '', 'josua') !== false || stripos($printedBy ?? '', 'yosua') !== false;
+                    $isSukmaPrep = stripos($printedBy ?? '', 'sukma') !== false;
+                @endphp
+                <div class="signature-space">
+                    @if($isJosuaPrep)
+                        <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 36px; width: auto; margin: 0 auto; display: block;">
+                    @elseif($isSukmaPrep)
+                        <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 36px; width: auto; margin: 0 auto; display: block;">
+                    @endif
+                </div>
                 <div class="signature-name">{{ $printedBy }}</div>
                 <div style="font-size: 7.5px; color: #64748b; margin-top: 2px;">Staff Keuangan</div>
             </td>
             <td class="signature-cell">
                 <div class="signature-title">Diperiksa oleh (Accounting):</div>
+                <div class="signature-space">
+                    <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 36px; width: auto; margin: 0 auto; display: block;">
+                </div>
                 <div class="signature-name">Indung Sukma</div>
                 <div style="font-size: 7.5px; color: #64748b; margin-top: 2px;">Accounting Supervisor</div>
             </td>
             <td class="signature-cell">
                 <div class="signature-title">Disetujui oleh (Pimpinan):</div>
-                <div class="signature-name">Direktur Utama</div>
+                <div class="signature-space">
+                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 36px; width: auto; margin: 0 auto; display: block;">
+                </div>
+                <div class="signature-name">Yosua Eka Setiawan</div>
                 <div style="font-size: 7.5px; color: #64748b; margin-top: 2px;">Pimpinan / Owner</div>
             </td>
         </tr>

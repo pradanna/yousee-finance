@@ -1,4 +1,9 @@
 import SelectInput from '@/Components/Form/SelectInput';
+import {
+    EditPaymentSettlementModal,
+    EditPaymentSettlementSubmitData,
+    EditableSettlementItem,
+} from '@/Components/Modal/EditPaymentSettlementModal';
 import { RecordInvoicePaymentModal } from '@/Components/Modal/RecordInvoicePaymentModal';
 import { RecordPaymentModal } from '@/Components/Modal/RecordPaymentModal';
 import EmptyState from '@/Components/Table/EmptyState';
@@ -14,6 +19,18 @@ import React, { useMemo, useState } from 'react';
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Interfaces
 // ─────────────────────────────────────────────────────────────────────────────
+export interface PaymentSettlementItem {
+    id: string;
+    amount: number;
+    paid_at: string | null;
+    payment_method: string;
+    payment_ref?: string | null;
+    notes?: string | null;
+    account_id?: string | null;
+    account_name?: string | null;
+    account_code?: string | null;
+}
+
 export interface MilestoneItem {
     id: string;
     sort_order: number;
@@ -24,6 +41,7 @@ export interface MilestoneItem {
     due_date: string | null;
     status: string;
     notes?: string | null;
+    settlements?: PaymentSettlementItem[];
 }
 
 export interface ReceivableRecord {
@@ -171,6 +189,25 @@ export default function DebtReceivable() {
         isOpen: false,
         item: null,
     });
+
+    // Modal Koreksi / Edit Settlement Pembayaran
+    const [editSettlementModal, setEditSettlementModal] = useState<{
+        isOpen: boolean;
+        settlement: PaymentSettlementItem | null;
+        milestone: MilestoneItem | null;
+        documentNumber: string;
+        partnerName: string;
+        maxAllowedAmount: number;
+    }>({
+        isOpen: false,
+        settlement: null,
+        milestone: null,
+        documentNumber: '',
+        partnerName: '',
+        maxAllowedAmount: 0,
+    });
+    const [isSubmittingEditSettlement, setIsSubmittingEditSettlement] =
+        useState(false);
 
     const [isSubmittingPayable, setIsSubmittingPayable] = useState(false);
     const [isSubmittingReceivable, setIsSubmittingReceivable] = useState(false);
@@ -333,6 +370,94 @@ export default function DebtReceivable() {
                 },
             },
         );
+    };
+
+    // Handler Koreksi / Edit Pembayaran Settlement
+    const handleSaveEditSettlement = (
+        data: EditPaymentSettlementSubmitData,
+    ) => {
+        const s = editSettlementModal.settlement;
+        if (!s) return;
+
+        setIsSubmittingEditSettlement(true);
+        router.put(
+            `/payment-settlements/${s.id}`,
+            {
+                amount: data.amount,
+                paid_at: data.paid_at,
+                payment_method: data.payment_method,
+                account_id: data.account_id || null,
+                payment_ref: data.payment_ref || null,
+                notes: data.notes || null,
+                reason: data.reason || null,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setEditSettlementModal({
+                        isOpen: false,
+                        settlement: null,
+                        milestone: null,
+                        documentNumber: '',
+                        partnerName: '',
+                        maxAllowedAmount: 0,
+                    });
+                    setTermsModal(null);
+                    triggerToast(
+                        'Data riwayat pembayaran dan jurnal buku besar berhasil diperbarui!',
+                        'success',
+                        'Pembayaran Diperbarui',
+                    );
+                },
+                onError: (errors) => {
+                    const firstError =
+                        Object.values(errors)[0] ||
+                        'Gagal memperbarui data pembayaran.';
+                    triggerToast(
+                        String(firstError),
+                        'error',
+                        'Koreksi Gagal',
+                    );
+                },
+                onFinish: () => setIsSubmittingEditSettlement(false),
+            },
+        );
+    };
+
+    // Handler Hapus Pembayaran Settlement
+    const handleDeleteSettlement = (
+        settlement: PaymentSettlementItem,
+        termLabel: string,
+    ) => {
+        if (
+            !window.confirm(
+                `Apakah Anda yakin ingin membatalkan & menghapus pembayaran ${fmt(settlement.amount)} untuk ${termLabel}?\n\nJurnal kas/bank akuntansi terkait akan dihapus/dibatalkan otomatis.`,
+            )
+        ) {
+            return;
+        }
+
+        router.delete(`/payment-settlements/${settlement.id}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setTermsModal(null);
+                triggerToast(
+                    'Riwayat pembayaran berhasil dihapus dan jurnal akuntansi telah dibatalkan.',
+                    'success',
+                    'Pembayaran Dihapus',
+                );
+            },
+            onError: (errors) => {
+                const firstError =
+                    Object.values(errors)[0] ||
+                    'Gagal menghapus pembayaran.';
+                triggerToast(
+                    String(firstError),
+                    'error',
+                    'Hapus Gagal',
+                );
+            },
+        });
     };
 
     // Sinkronisasi data saat mode fiskal berubah
@@ -1447,18 +1572,18 @@ export default function DebtReceivable() {
                 </div>
             </div>
 
-            {/* MODAL: DETAIL TERMIN (MILESTONE) */}
+            {/* MODAL: DETAIL TERMIN (MILESTONE) & RIWAYAT PEMBAYARAN */}
             {termsModal && termsModal.isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div
                         className="backdrop-blur-xs absolute inset-0 bg-slate-950/60"
                         onClick={() => setTermsModal(null)}
                     />
-                    <div className="animate-fade-in relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
+                    <div className="animate-fade-in relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
                         <div className="flex items-center justify-between bg-slate-900 px-6 py-4 text-white">
                             <div>
                                 <h3 className="text-sm font-bold">
-                                    Detail Skema & Syarat Pembayaran
+                                    Detail Termin & Riwayat Pembayaran
                                 </h3>
                                 <p className="mt-0.5 text-xs font-medium text-slate-400">
                                     {'invoice_number' in termsModal.item
@@ -1474,68 +1599,230 @@ export default function DebtReceivable() {
                             </button>
                         </div>
 
-                        <div className="space-y-4 p-6 text-slate-800">
-                            <div className="space-y-1">
-                                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Skema Pembayaran
-                                </span>
-                                <div className="inline-block rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold uppercase text-slate-800">
-                                    {termsModal.item.scheme}
+                        <div className="space-y-4 overflow-y-auto p-6 text-slate-800">
+                            <div className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-slate-50/80 p-3 text-xs">
+                                <div>
+                                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Skema Pembayaran
+                                    </span>
+                                    <span className="font-bold uppercase text-slate-800">
+                                        {termsModal.item.scheme}
+                                    </span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Total Tagihan
+                                    </span>
+                                    <span className="font-mono text-xs font-bold text-slate-900">
+                                        {fmt(termsModal.item.total_amount)}
+                                    </span>
                                 </div>
                             </div>
 
                             <div className="space-y-2">
                                 <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Rincian Termin Pembayaran:
+                                    Rincian Termin & Riwayat Pembayaran:
                                 </span>
 
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     {termsModal.item.milestones.map(
                                         (milestone, idx) => {
                                             const isMilestonePaid =
                                                 milestone.status === 'paid' ||
                                                 milestone.remaining_amount <= 0;
+                                            const settlements =
+                                                milestone.settlements || [];
+                                            const documentNumber =
+                                                'invoice_number' in
+                                                termsModal.item
+                                                    ? termsModal.item
+                                                          .invoice_number
+                                                    : termsModal.item.po_number;
+                                            const partnerName =
+                                                'invoice_number' in
+                                                termsModal.item
+                                                    ? termsModal.item
+                                                          .client_name
+                                                    : termsModal.item
+                                                          .vendor_name;
 
                                             return (
                                                 <div
                                                     key={milestone.id || idx}
-                                                    className={`space-y-1.5 rounded-xl border p-3.5 text-xs font-semibold transition-all ${
+                                                    className={`space-y-3 rounded-2xl border p-4 text-xs transition-all ${
                                                         isMilestonePaid
-                                                            ? 'border-emerald-200 bg-emerald-50/60 text-emerald-950'
-                                                            : 'border-slate-200/80 bg-slate-50 text-slate-800'
+                                                            ? 'border-emerald-200/80 bg-emerald-50/30 text-emerald-950'
+                                                            : 'border-slate-200/80 bg-slate-50/70 text-slate-800'
                                                     }`}
                                                 >
                                                     <div className="flex items-center justify-between">
-                                                        <span className="font-bold">
-                                                            {milestone.label}
-                                                        </span>
-                                                        <span className="font-mono font-bold text-slate-900">
-                                                            {fmt(
-                                                                milestone.amount,
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between text-[11px]">
-                                                        <span className="text-slate-500">
-                                                            Jatuh Tempo:{' '}
-                                                            {formatDateIndo(
-                                                                milestone.due_date,
-                                                            )}
-                                                        </span>
-                                                        <span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-slate-900">
+                                                                {milestone.label}
+                                                            </span>
                                                             {isMilestonePaid ? (
                                                                 <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                                                                     ✓ Lunas
                                                                 </span>
                                                             ) : (
-                                                                <span className="rounded-full border border-slate-300 bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                                                                <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
                                                                     Sisa:{' '}
                                                                     {fmt(
                                                                         milestone.remaining_amount,
                                                                     )}
                                                                 </span>
                                                             )}
-                                                        </span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="font-mono text-xs font-bold text-slate-900">
+                                                                {fmt(
+                                                                    milestone.amount,
+                                                                )}
+                                                            </span>
+                                                            <span className="block text-[10px] text-slate-500">
+                                                                Jatuh Tempo:{' '}
+                                                                {formatDateIndo(
+                                                                    milestone.due_date,
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Riwayat Mutasi Pembayaran */}
+                                                    <div className="rounded-xl border border-slate-200/60 bg-white p-3 shadow-xs">
+                                                        <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-1.5">
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                                                Riwayat Mutasi Pembayaran (
+                                                                {settlements.length}
+                                                                )
+                                                            </span>
+                                                            <span className="text-[11px] font-bold text-slate-700">
+                                                                Total Terbayar:{' '}
+                                                                <span className="font-mono text-emerald-600">
+                                                                    {fmt(
+                                                                        milestone.paid_amount,
+                                                                    )}
+                                                                </span>
+                                                            </span>
+                                                        </div>
+
+                                                        {settlements.length === 0 ? (
+                                                            <p className="py-2 text-center text-[11px] italic text-slate-400">
+                                                                Belum ada transaksi pembayaran yang tercatat untuk termin ini.
+                                                            </p>
+                                                        ) : (
+                                                            <div className="space-y-2">
+                                                                {settlements.map((s) => {
+                                                                    const otherTotal = settlements
+                                                                        .filter((item) => item.id !== s.id)
+                                                                        .reduce((sum, item) => sum + item.amount, 0);
+                                                                    const maxAllowed = Math.max(0, milestone.amount - otherTotal);
+
+                                                                    return (
+                                                                        <div
+                                                                            key={s.id}
+                                                                            className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-2.5 sm:flex-row sm:items-center sm:justify-between"
+                                                                        >
+                                                                            <div className="space-y-0.5">
+                                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                                    <span className="font-mono text-xs font-bold text-slate-900">
+                                                                                        {fmt(s.amount)}
+                                                                                    </span>
+                                                                                    <span className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                                                                        {s.payment_method}
+                                                                                    </span>
+                                                                                    {s.account_code && (
+                                                                                        <span className="rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+                                                                                            {s.account_code} - {s.account_name}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex flex-wrap items-center gap-x-3 text-[10px] text-slate-500">
+                                                                                    <span>
+                                                                                        Tanggal:{' '}
+                                                                                        <strong className="text-slate-700">
+                                                                                            {formatDateIndo(s.paid_at)}
+                                                                                        </strong>
+                                                                                    </span>
+                                                                                    {s.payment_ref && (
+                                                                                        <span>
+                                                                                            Ref:{' '}
+                                                                                            <strong className="text-slate-700">
+                                                                                                {s.payment_ref}
+                                                                                            </strong>
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {s.notes && (
+                                                                                        <span>
+                                                                                            Catatan: <em>{s.notes}</em>
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex items-center gap-1.5 self-end sm:self-center">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setEditSettlementModal({
+                                                                                            isOpen: true,
+                                                                                            settlement: s,
+                                                                                            milestone,
+                                                                                            documentNumber,
+                                                                                            partnerName,
+                                                                                            maxAllowedAmount: maxAllowed,
+                                                                                        });
+                                                                                    }}
+                                                                                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-700 shadow-xs transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
+                                                                                    title="Koreksi / Edit data pembayaran ini"
+                                                                                >
+                                                                                    <svg
+                                                                                        className="h-3 w-3"
+                                                                                        fill="none"
+                                                                                        viewBox="0 0 24 24"
+                                                                                        stroke="currentColor"
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            strokeWidth={2}
+                                                                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    Edit
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() =>
+                                                                                        handleDeleteSettlement(
+                                                                                            s,
+                                                                                            milestone.label,
+                                                                                        )
+                                                                                    }
+                                                                                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 shadow-xs transition-colors hover:border-rose-300 hover:bg-rose-100 hover:text-rose-900"
+                                                                                    title="Hapus pembayaran ini"
+                                                                                >
+                                                                                    <svg
+                                                                                        className="h-3 w-3"
+                                                                                        fill="none"
+                                                                                        viewBox="0 0 24 24"
+                                                                                        stroke="currentColor"
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            strokeWidth={2}
+                                                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    Hapus
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             );
@@ -1555,6 +1842,33 @@ export default function DebtReceivable() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Modal Koreksi / Edit Pembayaran */}
+            {editSettlementModal.isOpen && editSettlementModal.settlement && (
+                <EditPaymentSettlementModal
+                    isOpen={editSettlementModal.isOpen}
+                    isLoading={isSubmittingEditSettlement}
+                    settlement={editSettlementModal.settlement}
+                    termLabel={editSettlementModal.milestone?.label || 'Termin'}
+                    documentNumber={editSettlementModal.documentNumber}
+                    partnerName={editSettlementModal.partnerName}
+                    maxAllowedAmount={editSettlementModal.maxAllowedAmount}
+                    cashBankAccounts={paymentAccounts.map((acc) => ({
+                        id: acc.id,
+                        code: acc.code,
+                        name: acc.name,
+                        display_name: `${acc.code} - ${acc.name}`,
+                    }))}
+                    onClose={() =>
+                        setEditSettlementModal((prev) => ({
+                            ...prev,
+                            isOpen: false,
+                            settlement: null,
+                        }))
+                    }
+                    onSubmit={handleSaveEditSettlement}
+                />
             )}
 
             {/* Modal Pembayaran Hutang Vendor */}

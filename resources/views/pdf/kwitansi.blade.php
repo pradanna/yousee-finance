@@ -306,14 +306,29 @@
                     <div class="bank-info">
                         Pembayaran melalui Rek:<br>
                         <strong>{{ $bankAccountName }}</strong><br>
-                        <strong>Mandiri - {{ $bankAccountNumber }}</strong><br>
+                        <strong>{{ $bankShortName ?? 'Mandiri' }} - {{ $bankAccountNumber }}</strong><br>
                         <strong>{{ $bankName }}</strong>
                     </div>
                 </td>
 
                 <!-- Right Side: Signature -->
-                <td style="width: 45%; text-align: center;">
-                    <div class="signature-container">
+                <td style="width: 45%; text-align: center; vertical-align: bottom;">
+                    <div class="signature-container" style="padding-top: 5px;">
+                        @php
+                            $isJosuaKwitansi = isset($directorName) && (stripos($directorName, 'josua') !== false || stripos($directorName, 'yosua') !== false);
+                            $isSukmaKwitansi = isset($directorName) && stripos($directorName, 'sukma') !== false;
+                        @endphp
+                        @if($isJosuaKwitansi)
+                            <div style="height: 50px; margin-bottom: 5px;">
+                                <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                            </div>
+                        @elseif($isSukmaKwitansi)
+                            <div style="height: 50px; margin-bottom: 5px;">
+                                <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                            </div>
+                        @else
+                            <div style="height: 50px; margin-bottom: 5px;"></div>
+                        @endif
                         <div class="signature-name">{{ $directorName }}</div>
                         <div class="signature-title">{{ $directorTitle }}</div>
                     </div>

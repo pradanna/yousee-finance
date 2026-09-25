@@ -88,10 +88,23 @@ class ClientInvoicePdfController extends Controller
             : ($invoice ? $invoice->fiscal_mode->value === 'ppn' : false);
 
         $dpAmount = (float) $request->input('dpAmount', 0);
-        $bankAccountName = $request->input('bankAccountName', 'Yosua Eka Setiawan');
-        $bankName = $request->input('bankName', 'BCA');
-        $bankAccountNumber = $request->input('bankAccountNumber', '1530509423');
-        $bankBranch = $request->input('bankBranch', 'BCA Cabang Singosaren Surakarta');
+
+        if ($isPPN) {
+            $defaultBankAccountName = 'PT Sukma Setiawan Indonesia';
+            $defaultBankName = 'Bank Mandiri';
+            $defaultBankAccountNumber = '138-00-2010633-7';
+            $defaultBankBranch = 'Cabang Solo Baru';
+        } else {
+            $defaultBankAccountName = 'Yosua Eka Setiawan';
+            $defaultBankName = 'BCA';
+            $defaultBankAccountNumber = '1530509423';
+            $defaultBankBranch = 'BCA Cabang Singosaren Surakarta';
+        }
+
+        $bankAccountName = $request->filled('bankAccountName') ? $request->input('bankAccountName') : $defaultBankAccountName;
+        $bankName = $request->filled('bankName') ? $request->input('bankName') : $defaultBankName;
+        $bankAccountNumber = $request->filled('bankAccountNumber') ? $request->input('bankAccountNumber') : $defaultBankAccountNumber;
+        $bankBranch = $request->filled('bankBranch') ? $request->input('bankBranch') : $defaultBankBranch;
         $notes = $request->input('notes', [
             'Perawatan Selama Kontrak (Visual sobek, kerusakan media, dsb)',
             'Free cetak & pasang visual 1 kali',
@@ -128,7 +141,8 @@ class ClientInvoicePdfController extends Controller
             }
             $grandTotal = max(0, round($totalBeforeDp - $dpAmount));
         }
-        $invoiceNumber = $invoiceNumber ?: ($invoice?->invoice_number ?? 'INV-' . date('m/y') . '/001');
+        $defaultPrefix = $isPPN ? 'INV-SSI' : 'INV';
+        $invoiceNumber = $invoiceNumber ?: ($invoice?->invoice_number ?? $defaultPrefix . '-' . date('Ym') . '-001');
 
         $pdf = Pdf::loadView('pdf.client_invoice', [
             'project'              => $project,

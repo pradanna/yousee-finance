@@ -11,7 +11,7 @@ export default function InvoicePoList() {
         fiscalMode === 'ppn'
             ? [
                   {
-                      id: 'INV-PPN-001',
+                      id: 'INV-SSI-202606-001',
                       client: 'PT. Gojek Tokopedia',
                       date: '2026-06-25',
                       due: '2026-07-02',
@@ -21,7 +21,7 @@ export default function InvoicePoList() {
                       status: 'paid',
                   },
                   {
-                      id: 'INV-PPN-002',
+                      id: 'INV-SSI-202606-002',
                       client: 'Traveloka Corp',
                       date: '2026-06-22',
                       due: '2026-06-29',
@@ -31,7 +31,7 @@ export default function InvoicePoList() {
                       status: 'issued',
                   },
                   {
-                      id: 'INV-PPN-003',
+                      id: 'INV-SSI-202606-003',
                       client: 'Shopee Indonesia',
                       date: '2026-06-12',
                       due: '2026-06-19',
@@ -43,7 +43,7 @@ export default function InvoicePoList() {
               ]
             : [
                   {
-                      id: 'INV-NP-001',
+                      id: 'INV-202606-001',
                       client: 'Shopee Indonesia',
                       date: '2026-06-25',
                       due: '2026-07-02',
@@ -53,7 +53,7 @@ export default function InvoicePoList() {
                       status: 'paid',
                   },
                   {
-                      id: 'INV-NP-002',
+                      id: 'INV-202606-002',
                       client: 'PT. Citra Digital',
                       date: '2026-06-22',
                       due: '2026-06-29',
@@ -63,7 +63,7 @@ export default function InvoicePoList() {
                       status: 'issued',
                   },
                   {
-                      id: 'INV-NP-003',
+                      id: 'INV-202606-003',
                       client: 'PT. Gojek Tokopedia',
                       date: '2026-06-18',
                       due: '2026-06-25',

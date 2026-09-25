@@ -383,9 +383,10 @@ class ProjectTransactionSeeder extends Seeder
                 $invPpn = $isPpn ? round($invDpp * 0.11, 2) : 0.0;
                 $invTotal = $invDpp + $invPpn;
 
+                $invPrefix = $isPpn ? 'INV-SSI' : 'INV';
                 $invNumber = $tmpl['invoice_status'] === InvoiceStatus::DRAFT
                     ? null
-                    : sprintf('INV-%s-%d%02d-%03d', $codeTag, $year, $month, $globalInvSeq++);
+                    : sprintf('%s-%d%02d-%03d', $invPrefix, $year, $month, $globalInvSeq++);
                 $invDate = (clone $startDate)->addDays(5);
 
                 $invoice = Invoice::create([

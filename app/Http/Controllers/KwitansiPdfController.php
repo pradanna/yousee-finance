@@ -35,13 +35,48 @@ class KwitansiPdfController extends Controller
         }
 
         $city = $request->input('city', 'Sukoharjo');
-        $bankAccountName = $request->input('bankAccountName', 'PT Sukma Setiawan Indonesia');
-        $bankName = $request->input('bankName', 'Bank Mandiri Cabang Solo Baru');
-        $bankAccountNumber = $request->input('bankAccountNumber', '138 00 2010633 7');
-        $directorName = $request->input('directorName', 'Indung Sukma');
-        $directorTitle = $request->input('directorTitle', 'Director Finance');
 
-        $companyName = 'PT SUKMA SETIAWAN INDONESIA';
+        $isPPN = false;
+        if ($request->has('isPPN')) {
+            $isPPN = filter_var($request->input('isPPN'), FILTER_VALIDATE_BOOLEAN);
+        } else {
+            $cleanInvNumber = str_replace('KW-', '', (string) $receiptNumber);
+            $invoice = \App\Domains\Billing\Models\Invoice::where('invoice_number', $cleanInvNumber)
+                ->orWhere('invoice_number', $request->input('invoiceNumber'))
+                ->first();
+            if ($invoice) {
+                $isPPN = $invoice->fiscal_mode->value === 'ppn';
+            } elseif (str_contains((string) $receiptNumber, 'INV-SSI') || str_contains((string) $receiptNumber, '-SSI') || str_contains((string) $receiptNumber, 'PPN')) {
+                $isPPN = true;
+            }
+        }
+
+        if ($isPPN) {
+            $defaultBankAccountName = 'PT Sukma Setiawan Indonesia';
+            $defaultBankName = 'Bank Mandiri Cabang Solo Baru';
+            $defaultBankShortName = 'Mandiri';
+            $defaultBankAccountNumber = '138-00-2010633-7';
+            $defaultDirectorName = 'Indung Sukma';
+            $defaultDirectorTitle = 'Director Finance';
+            $defaultCompanyName = 'PT SUKMA SETIAWAN INDONESIA';
+        } else {
+            $defaultBankAccountName = 'Yosua Eka Setiawan';
+            $defaultBankName = 'BCA Cabang Singosaren Surakarta';
+            $defaultBankShortName = 'BCA';
+            $defaultBankAccountNumber = '1530509423';
+            $defaultDirectorName = 'Yosua Eka S';
+            $defaultDirectorTitle = 'Direktur';
+            $defaultCompanyName = 'YOUSEE INDONESIA';
+        }
+
+        $bankAccountName = $request->filled('bankAccountName') ? $request->input('bankAccountName') : $defaultBankAccountName;
+        $bankName = $request->filled('bankName') ? $request->input('bankName') : $defaultBankName;
+        $bankShortName = $request->filled('bankShortName') ? $request->input('bankShortName') : $defaultBankShortName;
+        $bankAccountNumber = $request->filled('bankAccountNumber') ? $request->input('bankAccountNumber') : $defaultBankAccountNumber;
+        $directorName = $request->filled('directorName') ? $request->input('directorName') : $defaultDirectorName;
+        $directorTitle = $request->filled('directorTitle') ? $request->input('directorTitle') : $defaultDirectorTitle;
+        $companyName = $request->filled('companyName') ? $request->input('companyName') : $defaultCompanyName;
+
         $brandName = 'YOUSEE INDONESIA ADVERTISING AGENCY';
         $companyAddress = 'Jl Yos Sudarso No 19B - Tanjung Anom Kel Kwarasan, Kec Grogol, Kab Sukoharjo, Jawa Tengah 57522';
         $companyContact = 'Phone : +62 813 9370 0771 | Email : official@yousee-indonesia | web : www.yousee-indonesia.com';
@@ -60,8 +95,10 @@ class KwitansiPdfController extends Controller
             'forPaymentOf' => $forPaymentOf,
             'city' => $city,
             'dateFormatted' => $dateFormatted,
+            'isPPN' => $isPPN,
             'bankAccountName' => $bankAccountName,
             'bankName' => $bankName,
+            'bankShortName' => $bankShortName,
             'bankAccountNumber' => $bankAccountNumber,
             'directorName' => $directorName,
             'directorTitle' => $directorTitle,

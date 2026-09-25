@@ -10,6 +10,7 @@ use App\Domains\Accounting\Models\ChartOfAccount;
 use App\Domains\Billing\Enums\PaymentTermStatus;
 use App\Domains\Billing\Models\PaymentSettlement;
 use App\Domains\Billing\Models\PaymentTerm;
+use App\Domains\Procurement\Enums\PurchaseOrderStatus;
 use App\Domains\Procurement\Models\PurchaseOrder;
 use Illuminate\Support\Facades\DB;
 
@@ -54,10 +55,16 @@ class SettleVendorPaymentTerm
 
             $term->update(['status' => $newStatus]);
 
-            // Otomatis bentuk Jurnal Akuntansi Pelunasan Hutang Vendor
-            // (Dr) Hutang Dagang Vendor (`default_payable`) = (Cr) Kas / Bank (`account_id`)
             $plan = $term->paymentPlan;
             $po = $plan?->payable;
+
+            // Jika seluruh termin di payment plan sudah lunas, tandai PO sebagai PAID
+            if ($po instanceof PurchaseOrder) {
+                $allTermsPaid = $plan ? $plan->terms()->where('status', '!=', PaymentTermStatus::PAID->value)->doesntExist() : false;
+                if ($allTermsPaid && $po->status !== PurchaseOrderStatus::PAID) {
+                    $po->update(['status' => PurchaseOrderStatus::PAID]);
+                }
+            }
 
             if ($po instanceof PurchaseOrder) {
                 $payableAccountId = AccountingSetting::getAccountId('default_payable');

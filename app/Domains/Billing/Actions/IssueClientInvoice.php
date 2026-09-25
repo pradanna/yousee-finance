@@ -144,16 +144,17 @@ class IssueClientInvoice
     private function generateInvoiceNumber(FiscalMode|string $fiscalMode): string
     {
         $mode = $fiscalMode instanceof FiscalMode ? $fiscalMode : FiscalMode::from($fiscalMode);
-        $tag = $mode === FiscalMode::PPN ? 'INV' : 'INV-NP';
+        $prefix = $mode === FiscalMode::PPN ? 'INV-SSI' : 'INV';
         $now = now();
+        $yearMonth = $now->format('Ym');
+        $pattern = "{$prefix}-{$yearMonth}-%";
 
-        $sequence = Invoice::whereNotNull('invoice_number')
-            ->whereBetween('updated_at', [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()])
+        $sequence = Invoice::where('invoice_number', 'like', $pattern)
             ->lockForUpdate()
             ->count() + 1;
 
         $seq = str_pad((string) $sequence, 3, '0', STR_PAD_LEFT);
 
-        return "{$tag}-{$now->format('m')}/{$now->format('y')}/{$seq}";
+        return "{$prefix}-{$yearMonth}-{$seq}";
     }
 }

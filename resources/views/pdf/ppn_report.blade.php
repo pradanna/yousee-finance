@@ -335,14 +335,33 @@
         <tr>
             <td>
                 <div>Dibuat oleh,</div>
-                <div class="sig-space"></div>
-                <div class="sig-name">Tax & Accounting Officer</div>
-                <div class="sig-title">PT. Sukma Setiawan</div>
+                @php
+                    $officerName = $makerName ?? 'Indung Sukma';
+                    $isSukmaOfficer = stripos($officerName, 'sukma') !== false;
+                @endphp
+                <div class="sig-space" style="text-align: center;">
+                    @if($isSukmaOfficer)
+                        <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                    @endif
+                </div>
+                <div class="sig-name">{{ $officerName }}</div>
+                <div class="sig-title">Tax & Accounting Officer</div>
             </td>
             <td>
                 <div>Disetujui oleh,</div>
-                <div class="sig-space"></div>
-                <div class="sig-name">Yosua Eka Setiawan</div>
+                @php
+                    $approver = $approverName ?? 'Yosua Eka Setiawan';
+                    $isJosuaReport = stripos($approver, 'josua') !== false || stripos($approver, 'yosua') !== false;
+                    $isSukmaReport = stripos($approver, 'sukma') !== false;
+                @endphp
+                <div class="sig-space" style="text-align: center;">
+                    @if($isJosuaReport)
+                        <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                    @elseif($isSukmaReport)
+                        <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                    @endif
+                </div>
+                <div class="sig-name">{{ $approver }}</div>
                 <div class="sig-title">Direktur Utama</div>
             </td>
         </tr>

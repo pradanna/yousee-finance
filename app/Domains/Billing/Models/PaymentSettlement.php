@@ -33,4 +33,14 @@ class PaymentSettlement extends Model
     {
         return $this->belongsTo(PaymentTerm::class);
     }
+
+    public function journalEntry(): \Illuminate\Database\Eloquent\Relations\MorphOne
+    {
+        return $this->morphOne(\App\Domains\Accounting\Models\JournalEntry::class, 'source');
+    }
+
+    public function auditLogs(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domains\Shared\Models\AuditLog::class, 'auditable');
+    }
 }

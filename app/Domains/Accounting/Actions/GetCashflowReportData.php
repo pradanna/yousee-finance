@@ -175,13 +175,15 @@ class GetCashflowReportData
                 }
             }
 
-            // Jika sumber berasal dari CashTransaction (Kas Keluar), ambil rincian asli
+            // Jika sumber berasal dari CashTransaction (Kas Keluar) atau CashInTransaction (Kas Masuk), ambil rincian asli
             $cleanDescription = $journal->description ?: 'Mutasi Kas ' . $item->account?->name;
             if ($journal->source instanceof \App\Domains\Accounting\Models\CashTransaction) {
                 $cleanDescription = $journal->source->description ?: $cleanDescription;
-            } elseif (! empty($journal->description) && preg_match('/Pengeluaran Kas \[[^\]]+\]:\s*(.+)/', $journal->description, $descMatches)) {
+            } elseif ($journal->source instanceof \App\Domains\Accounting\Models\CashInTransaction) {
+                $cleanDescription = $journal->source->description ?: $cleanDescription;
+            } elseif (! empty($journal->description) && preg_match('/(?:Pengeluaran|Penerimaan) Kas \[[^\]]+\]:\s*(.+)/', $journal->description, $descMatches)) {
                 $cleanDescription = trim($descMatches[1]);
-                if (preg_match('/^(.+)\s*\(Penerima:\s*.+\)$/', $cleanDescription, $cleanMatches)) {
+                if (preg_match('/^(.+)\s*\((?:Penerima|Penyetor):\s*.+\)$/', $cleanDescription, $cleanMatches)) {
                     $cleanDescription = trim($cleanMatches[1]);
                 }
             }
@@ -407,7 +409,11 @@ class GetCashflowReportData
             return $journal->source->recipient;
         }
 
-        if (! empty($journal->description) && preg_match('/\(Penerima:\s*([^\)]+)\)/', $journal->description, $matches)) {
+        if ($journal->source instanceof \App\Domains\Accounting\Models\CashInTransaction && ! empty($journal->source->payer)) {
+            return $journal->source->payer;
+        }
+
+        if (! empty($journal->description) && preg_match('/\((?:Penerima|Penyetor):\s*([^\)]+)\)/', $journal->description, $matches)) {
             return trim($matches[1]);
         }
 
