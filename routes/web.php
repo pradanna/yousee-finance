@@ -132,6 +132,12 @@ Route::middleware('auth')->group(function () {
     Route::match(['get', 'post'], '/kwitansi-pdf', [\App\Http\Controllers\KwitansiPdfController::class, 'generatePdf'])->name('kwitansi.pdf');
     Route::match(['get', 'post'], '/ppn-pdf', [\App\Http\Controllers\PpnReportPdfController::class, 'generatePdf'])->name('ppn.pdf');
     Route::match(['get', 'post'], '/cash-out-pdf', [\App\Http\Controllers\CashOutPdfController::class, 'generatePdf'])->name('cash-out.pdf');
+
+    // Manajemen Pengguna & Akun (Pimpinan)
+    Route::resource('users', \App\Http\Controllers\Identity\UserController::class)
+        ->only(['index', 'store', 'update', 'destroy']);
+    Route::post('users/{user}/status', [\App\Http\Controllers\Identity\UserController::class, 'toggleStatus'])
+        ->name('users.toggle-status');
 });
 
 require __DIR__.'/auth.php';

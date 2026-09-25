@@ -35,7 +35,7 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // Assign permissions to roles
-        $rolePimpinan->syncPermissions(Permission::whereIn('name', ['unlock-closing-period', 'approve-po'])->get());
+        $rolePimpinan->syncPermissions(Permission::whereIn('name', ['unlock-closing-period', 'approve-po', 'manage-users'])->get());
         $roleAdmin->syncPermissions(Permission::where('name', 'manage-users')->get());
         $roleAkuntan->syncPermissions(Permission::where('name', 'create-invoice')->get());
     }

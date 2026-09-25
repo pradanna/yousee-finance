@@ -20,7 +20,8 @@ interface SidebarProps {
         | 'closing-periods'
         | 'journal'
         | 'ppn'
-        | 'cashflow';
+        | 'cashflow'
+        | 'users';
     isCollapsed?: boolean;
     mobileOpen?: boolean;
     onMobileClose?: () => void;
@@ -411,11 +412,42 @@ export default function Sidebar({
                 },
             ],
         },
+        {
+            sectionTitle: 'PENGATURAN & AKSES',
+            roles: ['pimpinan'],
+            items: [
+                {
+                    id: 'users',
+                    label: 'Kelola User',
+                    href: '/users',
+                    roles: ['pimpinan'],
+                    icon: (
+                        <svg
+                            className="h-5 w-5 shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                            />
+                        </svg>
+                    ),
+                },
+            ],
+        },
     ];
 
     const visibleSections = sections
         .map((section) => {
-            if (userRoles.length > 0 && section.roles && !section.roles.some((r) => userRoles.includes(r))) {
+            if (
+                userRoles.length > 0 &&
+                section.roles &&
+                !section.roles.some((r) => userRoles.includes(r))
+            ) {
                 return null;
             }
             const visibleItems = section.items.filter((item) => {
@@ -432,14 +464,14 @@ export default function Sidebar({
             {/* Mobile Backdrop Overlay */}
             {mobileOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs transition-opacity lg:hidden"
+                    className="backdrop-blur-xs fixed inset-0 z-40 bg-slate-900/60 transition-opacity lg:hidden"
                     onClick={onMobileClose}
                     aria-hidden="true"
                 />
             )}
 
             <aside
-                className={`fixed bottom-0 top-0 z-50 flex min-h-screen flex-col justify-between overflow-y-auto border-r border-slate-200/80 bg-white text-slate-700 shadow-2xl transition-all duration-300 lg:z-40 lg:shadow-xs ${
+                className={`lg:shadow-xs fixed bottom-0 top-0 z-50 flex min-h-screen flex-col justify-between overflow-y-auto border-r border-slate-200/80 bg-white text-slate-700 shadow-2xl transition-all duration-300 lg:z-40 ${
                     mobileOpen ? 'left-0' : '-left-full lg:left-0'
                 } ${isCollapsed ? 'w-72 lg:w-20' : 'w-72'}`}
             >
@@ -506,7 +538,9 @@ export default function Sidebar({
                                 {section.sectionTitle && (
                                     <div
                                         className={`px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 ${
-                                            isCollapsed ? 'block lg:hidden' : 'block'
+                                            isCollapsed
+                                                ? 'block lg:hidden'
+                                                : 'block'
                                         }`}
                                     >
                                         {section.sectionTitle}
@@ -521,7 +555,8 @@ export default function Sidebar({
                                                 id={`sidebar-link-${item.id}`}
                                                 href={item.href}
                                                 onClick={() =>
-                                                    onMobileClose && onMobileClose()
+                                                    onMobileClose &&
+                                                    onMobileClose()
                                                 }
                                                 title={
                                                     isCollapsed

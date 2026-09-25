@@ -1,3 +1,4 @@
+import AccountModal from '@/Components/UI/AccountModal';
 import Modal from '@/Components/UI/Modal';
 import { PageProps } from '@/types';
 import { router, usePage } from '@inertiajs/react';
@@ -30,6 +31,7 @@ export default function Header({
     const { auth } = usePage<PageProps>().props;
     const user = auth?.user;
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
     const profileRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -282,7 +284,7 @@ export default function Header({
                     </button>
 
                     {isProfileOpen && (
-                        <div className="absolute right-0 top-full z-50 mt-2 w-56 animate-in fade-in zoom-in-95 rounded-2xl border border-slate-100 bg-white p-2 shadow-xl ring-1 ring-black/5 duration-150">
+                        <div className="animate-in fade-in zoom-in-95 absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border border-slate-100 bg-white p-2 shadow-xl ring-1 ring-black/5 duration-150">
                             <div className="border-b border-slate-100 px-3 py-2.5">
                                 <p className="truncate text-xs font-bold text-slate-900">
                                     {user?.name || 'User'}
@@ -294,7 +296,30 @@ export default function Header({
                                     {getRoleLabel(user?.roles)}
                                 </span>
                             </div>
-                            <div className="pt-1">
+                            <div className="space-y-0.5 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsProfileOpen(false);
+                                        setIsAccountModalOpen(true);
+                                    }}
+                                    className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                                >
+                                    <svg
+                                        className="h-4 w-4 text-slate-400"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={2}
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                        />
+                                    </svg>
+                                    Pengaturan Akun
+                                </button>
                                 <button
                                     type="button"
                                     onClick={handleLogout}
@@ -396,6 +421,13 @@ export default function Header({
                     </div>
                 </div>
             </Modal>
+
+            {/* Modal Pengaturan Akun & Ganti Password */}
+            <AccountModal
+                show={isAccountModalOpen}
+                onClose={() => setIsAccountModalOpen(false)}
+                user={user}
+            />
         </header>
     );
 }

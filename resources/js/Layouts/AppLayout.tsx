@@ -59,16 +59,17 @@ interface AppLayoutProps {
         | 'closing-periods'
         | 'journal'
         | 'ppn'
-        | 'cashflow';
-    title: string;
-    breadcrumbs: Array<{ label: string; href?: string }>;
+        | 'cashflow'
+        | 'users';
+    title?: string;
+    breadcrumbs?: Array<{ label: string; href?: string }>;
 }
 
 export default function AppLayout({
     children,
     activePage,
-    title,
-    breadcrumbs,
+    title = 'Yousee Finance',
+    breadcrumbs = [],
 }: AppLayoutProps) {
     const [fiscalMode, setFiscalMode] = useState<'ppn' | 'non-ppn'>(() => {
         if (typeof window === 'undefined') return 'ppn';
@@ -139,7 +140,7 @@ export default function AppLayout({
 
                 {/* Main Content Area */}
                 <div
-                    className={`flex min-w-0 flex-1 flex-col transition-all duration-300 pl-0 ${
+                    className={`flex min-w-0 flex-1 flex-col pl-0 transition-all duration-300 ${
                         isCollapsed ? 'lg:pl-20' : 'lg:pl-72'
                     }`}
                 >

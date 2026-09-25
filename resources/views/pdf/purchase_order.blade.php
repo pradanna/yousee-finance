@@ -228,7 +228,7 @@
         .signature-company {
             font-weight: bold;
             font-size: 10px;
-            margin-bottom: 60px;
+            margin-bottom: 5px;
         }
 
         .signature-name {
@@ -401,6 +401,7 @@
         <div class="signature-col">
             <div class="signature-title">Pihak Vendor</div>
             <div class="signature-company">{{ $vendorName }}</div>
+            <div style="height: 55px; margin-bottom: 5px;"></div>
             <div class="signature-name">( ........................................ )</div>
         </div>
 
@@ -413,16 +414,17 @@
                 $isSukmaPo = stripos($poSignee, 'sukma') !== false;
             @endphp
             @if($isJosuaPo)
-                <div style="height: 50px; margin-top: 5px;">
-                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                <div style="height: 55px; margin-bottom: 5px;">
+                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 55px; width: auto; display: block;">
                 </div>
-                <div class="signature-name" style="margin-top: 5px;">{{ $poSignee }}</div>
+                <div class="signature-name">{{ $poSignee }}</div>
             @elseif($isSukmaPo)
-                <div style="height: 50px; margin-top: 5px;">
-                    <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                <div style="height: 55px; margin-bottom: 5px;">
+                    <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 55px; width: auto; display: block;">
                 </div>
-                <div class="signature-name" style="margin-top: 5px;">{{ $poSignee }}</div>
+                <div class="signature-name">{{ $poSignee }}</div>
             @else
+                <div style="height: 55px; margin-bottom: 5px;"></div>
                 <div class="signature-name">{{ $poSignee }}</div>
             @endif
         </div>
