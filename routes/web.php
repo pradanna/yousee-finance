@@ -9,10 +9,6 @@ Route::redirect('/', '/dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', function () {
-        $user = auth()->user();
-        if ($user && $user->hasRole('staff')) {
-            return redirect()->route('projects');
-        }
         return redirect()->route('overview');
     })->name('dashboard');
 
@@ -125,6 +121,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/cashflow', [\App\Http\Controllers\Accounting\CashflowReportController::class, 'index'])->name('cashflow');
     Route::match(['get', 'post'], '/cashflow-pdf', [\App\Http\Controllers\Accounting\CashflowReportController::class, 'exportPdf'])->name('cashflow.pdf');
+
+    Route::get('/projection', [\App\Http\Controllers\Accounting\FinancialProjectionController::class, 'index'])->name('projection');
 
     // PDF Reports
     Route::match(['get', 'post'], '/po-pdf', [\App\Http\Controllers\PurchaseOrderPdfController::class, 'generatePdf'])->name('po.pdf');

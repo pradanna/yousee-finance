@@ -33,12 +33,11 @@ class UserManagementTest extends TestCase
         $response->assertInertia(fn ($page) => $page->component('Users'));
     }
 
-    public function test_staff_cannot_view_users_list(): void
+    public function test_user_without_permission_cannot_view_users_list(): void
     {
-        $staff = User::factory()->create(['status' => UserStatus::ACTIVE]);
-        $staff->assignRole(UserRole::STAFF->value);
+        $unauthorized = User::factory()->create(['status' => UserStatus::ACTIVE]);
 
-        $response = $this->actingAs($staff)->get(route('users.index'));
+        $response = $this->actingAs($unauthorized)->get(route('users.index'));
 
         $response->assertForbidden();
     }
@@ -53,7 +52,7 @@ class UserManagementTest extends TestCase
             'email' => 'budi@yousee.test',
             'password' => 'secret12345',
             'password_confirmation' => 'secret12345',
-            'role' => 'akuntan',
+            'role' => 'admin',
             'status' => 'active',
         ]);
 
@@ -65,7 +64,7 @@ class UserManagementTest extends TestCase
 
         $newUser = User::where('email', 'budi@yousee.test')->first();
         $this->assertNotNull($newUser);
-        $this->assertTrue($newUser->hasRole('akuntan'));
+        $this->assertTrue($newUser->hasRole('admin'));
         $this->assertTrue(Hash::check('secret12345', $newUser->password));
     }
 
@@ -79,12 +78,12 @@ class UserManagementTest extends TestCase
             'email' => 'old@yousee.test',
             'status' => UserStatus::ACTIVE,
         ]);
-        $targetUser->assignRole(UserRole::STAFF->value);
+        $targetUser->assignRole(UserRole::ADMIN->value);
 
         $response = $this->actingAs($pimpinan)->put(route('users.update', $targetUser), [
             'name' => 'New Name',
             'email' => 'new@yousee.test',
-            'role' => 'akuntan',
+            'role' => 'pimpinan',
             'status' => 'inactive',
         ]);
 
@@ -97,7 +96,7 @@ class UserManagementTest extends TestCase
         ]);
 
         $targetUser->refresh();
-        $this->assertTrue($targetUser->hasRole('akuntan'));
+        $this->assertTrue($targetUser->hasRole('pimpinan'));
     }
 
     public function test_user_cannot_delete_themselves(): void
@@ -116,13 +115,13 @@ class UserManagementTest extends TestCase
         $pimpinan = User::factory()->create(['status' => UserStatus::ACTIVE]);
         $pimpinan->assignRole(UserRole::PIMPINAN->value);
 
-        $staff = User::factory()->create(['status' => UserStatus::ACTIVE]);
-        $staff->assignRole(UserRole::STAFF->value);
+        $admin = User::factory()->create(['status' => UserStatus::ACTIVE]);
+        $admin->assignRole(UserRole::ADMIN->value);
 
-        $response = $this->actingAs($pimpinan)->delete(route('users.destroy', $staff));
+        $response = $this->actingAs($pimpinan)->delete(route('users.destroy', $admin));
 
         $response->assertRedirect();
-        $this->assertDatabaseMissing('users', ['id' => $staff->id]);
+        $this->assertDatabaseMissing('users', ['id' => $admin->id]);
     }
 
     public function test_pimpinan_can_toggle_user_status(): void
@@ -130,15 +129,15 @@ class UserManagementTest extends TestCase
         $pimpinan = User::factory()->create(['status' => UserStatus::ACTIVE]);
         $pimpinan->assignRole(UserRole::PIMPINAN->value);
 
-        $staff = User::factory()->create(['status' => UserStatus::ACTIVE]);
-        $staff->assignRole(UserRole::STAFF->value);
+        $admin = User::factory()->create(['status' => UserStatus::ACTIVE]);
+        $admin->assignRole(UserRole::ADMIN->value);
 
-        $response = $this->actingAs($pimpinan)->post(route('users.toggle-status', $staff), [
+        $response = $this->actingAs($pimpinan)->post(route('users.toggle-status', $admin), [
             'status' => 'inactive',
         ]);
 
         $response->assertRedirect();
-        $staff->refresh();
-        $this->assertEquals(UserStatus::INACTIVE, $staff->status);
+        $admin->refresh();
+        $this->assertEquals(UserStatus::INACTIVE, $admin->status);
     }
 }

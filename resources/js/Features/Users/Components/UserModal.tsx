@@ -18,8 +18,6 @@ interface UserModalProps {
 const ROLE_OPTIONS: SelectOption[] = [
     { value: 'pimpinan', label: 'Pimpinan / Owner' },
     { value: 'admin', label: 'Administrator' },
-    { value: 'akuntan', label: 'Akuntan / Finance' },
-    { value: 'staff', label: 'Staff Operasional' },
 ];
 
 const STATUS_OPTIONS: SelectOption[] = [
@@ -36,7 +34,7 @@ export default function UserModal({ show, onClose, user }: UserModalProps) {
         useForm<UserFormData>({
             name: '',
             email: '',
-            role: 'staff',
+            role: 'admin',
             status: 'active',
             password: '',
             password_confirmation: '',
@@ -47,7 +45,7 @@ export default function UserModal({ show, onClose, user }: UserModalProps) {
             setData({
                 name: user.name,
                 email: user.email,
-                role: user.role || 'staff',
+                role: user.role || 'admin',
                 status: user.status || 'active',
                 password: '',
                 password_confirmation: '',
@@ -56,7 +54,7 @@ export default function UserModal({ show, onClose, user }: UserModalProps) {
             setData({
                 name: '',
                 email: '',
-                role: 'staff',
+                role: 'admin',
                 status: 'active',
                 password: '',
                 password_confirmation: '',

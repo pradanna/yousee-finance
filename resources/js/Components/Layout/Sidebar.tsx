@@ -21,6 +21,7 @@ interface SidebarProps {
         | 'journal'
         | 'ppn'
         | 'cashflow'
+        | 'projection'
         | 'users';
     isCollapsed?: boolean;
     mobileOpen?: boolean;
@@ -49,14 +50,9 @@ export default function Sidebar({
 }: SidebarProps) {
     const { auth } = usePage<PageProps>().props;
     const userRoles = auth?.user?.roles || [];
-    const isStaffOnly =
-        userRoles.includes('staff') &&
-        !userRoles.includes('admin') &&
-        !userRoles.includes('pimpinan') &&
-        !userRoles.includes('akuntan');
     const sections: NavSection[] = [
         {
-            roles: ['admin', 'pimpinan', 'akuntan'],
+            roles: ['admin', 'pimpinan'],
             items: [
                 {
                     id: 'overview',
@@ -82,7 +78,7 @@ export default function Sidebar({
         },
         {
             sectionTitle: 'DATA MASTER',
-            roles: ['admin', 'pimpinan', 'akuntan'],
+            roles: ['admin', 'pimpinan'],
             items: [
                 {
                     id: 'vendors',
@@ -170,50 +166,10 @@ export default function Sidebar({
                     ),
                 },
                 {
-                    id: 'purchases',
-                    label: 'Pembelian (PO)',
-                    href: '/purchases',
-                    icon: (
-                        <svg
-                            className="h-5 w-5 shrink-0"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-                            />
-                        </svg>
-                    ),
-                },
-                {
-                    id: 'sales-transactions',
-                    label: 'Penjualan (Invoice)',
-                    href: '/sales-transactions',
-                    icon: (
-                        <svg
-                            className="h-5 w-5 shrink-0"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                            />
-                        </svg>
-                    ),
-                },
-                {
                     id: 'cash-in',
                     label: 'Penerimaan Kas',
                     href: '/cash-in',
-                    roles: ['admin', 'pimpinan', 'akuntan'],
+                    roles: ['admin', 'pimpinan'],
                     icon: (
                         <svg
                             className="h-5 w-5 shrink-0"
@@ -234,7 +190,7 @@ export default function Sidebar({
                     id: 'cash-out',
                     label: 'Pengeluaran Kas',
                     href: '/cash-out',
-                    roles: ['admin', 'pimpinan', 'akuntan'],
+                    roles: ['admin', 'pimpinan'],
                     icon: (
                         <svg
                             className="h-5 w-5 shrink-0"
@@ -255,7 +211,7 @@ export default function Sidebar({
                     id: 'debt-receivable',
                     label: 'Hutang Piutang',
                     href: '/debt-receivable',
-                    roles: ['admin', 'pimpinan', 'akuntan'],
+                    roles: ['admin', 'pimpinan'],
                     icon: (
                         <svg
                             className="h-5 w-5 shrink-0"
@@ -276,7 +232,7 @@ export default function Sidebar({
         },
         {
             sectionTitle: 'AKUNTANSI',
-            roles: ['admin', 'pimpinan', 'akuntan'],
+            roles: ['admin', 'pimpinan'],
             items: [
                 {
                     id: 'coa',
@@ -300,7 +256,7 @@ export default function Sidebar({
                 },
                 {
                     id: 'accounting-settings',
-                    label: 'Pengaturan Akun',
+                    label: 'Pengaturan Akun COA',
                     href: '/accounting/settings',
                     icon: (
                         <svg
@@ -348,7 +304,7 @@ export default function Sidebar({
         },
         {
             sectionTitle: 'LAPORAN',
-            roles: ['admin', 'pimpinan', 'akuntan'],
+            roles: ['admin', 'pimpinan'],
             items: [
                 {
                     id: 'journal',
@@ -410,17 +366,37 @@ export default function Sidebar({
                         </svg>
                     ),
                 },
+                {
+                    id: 'projection',
+                    label: 'Proyeksi Keuangan',
+                    href: '/projection',
+                    icon: (
+                        <svg
+                            className="h-5 w-5 shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941"
+                            />
+                        </svg>
+                    ),
+                },
             ],
         },
         {
             sectionTitle: 'PENGATURAN & AKSES',
-            roles: ['pimpinan'],
+            roles: ['admin', 'pimpinan'],
             items: [
                 {
                     id: 'users',
                     label: 'Kelola User',
                     href: '/users',
-                    roles: ['pimpinan'],
+                    roles: ['admin', 'pimpinan'],
                     icon: (
                         <svg
                             className="h-5 w-5 shrink-0"
@@ -479,7 +455,7 @@ export default function Sidebar({
                 <div>
                     <div className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-100 bg-white px-4">
                         <Link
-                            href={isStaffOnly ? '/projects' : '/overview'}
+                            href="/overview"
                             className="flex w-full items-center justify-center gap-3 overflow-hidden"
                             onClick={() => onMobileClose && onMobileClose()}
                         >

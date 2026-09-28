@@ -839,8 +839,11 @@ export default function Projects({
                 (statusFilter === 'completed' && p.status === 'Completed') ||
                 (statusFilter === 'cancelled' && p.status === 'Cancelled') ||
                 (statusFilter === 'pending_po' &&
+                    p.status === 'Active' &&
                     p.locations.some((l) => !l.poIssued)) ||
-                (statusFilter === 'no_invoice' && !p.invoiceIssued);
+                (statusFilter === 'no_invoice' &&
+                    p.status === 'Active' &&
+                    !p.invoiceIssued);
 
             return (
                 matchesSearch && matchesClient && matchesSales && matchesStatus
@@ -928,11 +931,11 @@ export default function Projects({
     const countCancelled = baseClientSalesFiltered.filter(
         (p) => p.status === 'Cancelled',
     ).length;
-    const countPendingPO = baseClientSalesFiltered.filter((p) =>
-        p.locations.some((l) => !l.poIssued),
+    const countPendingPO = baseClientSalesFiltered.filter(
+        (p) => p.status === 'Active' && p.locations.some((l) => !l.poIssued),
     ).length;
     const countNoInvoice = baseClientSalesFiltered.filter(
-        (p) => !p.invoiceIssued,
+        (p) => p.status === 'Active' && !p.invoiceIssued,
     ).length;
 
     // Pagination

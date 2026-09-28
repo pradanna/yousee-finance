@@ -58,8 +58,6 @@ class UserController extends Controller
         $metrics = [
             'totalUsers' => User::count(),
             'pimpinanCount' => User::role(UserRole::PIMPINAN->value)->count(),
-            'akuntanCount' => User::role(UserRole::AKUNTAN->value)->count(),
-            'staffCount' => User::role(UserRole::STAFF->value)->count(),
             'adminCount' => User::role(UserRole::ADMIN->value)->count(),
             'activeUsers' => User::where('status', UserStatus::ACTIVE)->count(),
             'inactiveUsers' => User::where('status', '!=', UserStatus::ACTIVE)->count(),

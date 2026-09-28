@@ -16,11 +16,12 @@ class RoleAndPermissionSeeder extends Seeder
         // Reset cached roles and permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
+        // Delete obsolete roles if present
+        Role::whereIn('name', ['akuntan', 'staff'])->delete();
+
         // Create basic roles (idempotent)
         $rolePimpinan = Role::firstOrCreate(['name' => 'pimpinan', 'guard_name' => 'web']);
         $roleAdmin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        $roleAkuntan = Role::firstOrCreate(['name' => 'akuntan', 'guard_name' => 'web']);
-        $roleStaff = Role::firstOrCreate(['name' => 'staff', 'guard_name' => 'web']);
 
         // Create default permissions (idempotent)
         $permissions = [
@@ -35,8 +36,7 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // Assign permissions to roles
-        $rolePimpinan->syncPermissions(Permission::whereIn('name', ['unlock-closing-period', 'approve-po', 'manage-users'])->get());
-        $roleAdmin->syncPermissions(Permission::where('name', 'manage-users')->get());
-        $roleAkuntan->syncPermissions(Permission::where('name', 'create-invoice')->get());
+        $rolePimpinan->syncPermissions(Permission::whereIn('name', ['unlock-closing-period', 'approve-po', 'manage-users', 'create-invoice'])->get());
+        $roleAdmin->syncPermissions(Permission::whereIn('name', ['manage-users', 'create-invoice'])->get());
     }
 }

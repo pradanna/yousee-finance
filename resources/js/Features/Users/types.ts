@@ -32,8 +32,6 @@ export interface UserPaginationData {
 export interface UserMetrics {
     totalUsers: number;
     pimpinanCount: number;
-    akuntanCount: number;
-    staffCount: number;
     adminCount: number;
     activeUsers: number;
     inactiveUsers: number;

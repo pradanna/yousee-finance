@@ -65,11 +65,7 @@ export default function Header({
             case 'admin':
                 return 'Super Admin';
             case 'pimpinan':
-                return 'Pimpinan';
-            case 'akuntan':
-                return 'Akuntan';
-            case 'staff':
-                return 'Staff';
+                return 'Pimpinan / Owner';
             default:
                 return primaryRole.toUpperCase();
         }

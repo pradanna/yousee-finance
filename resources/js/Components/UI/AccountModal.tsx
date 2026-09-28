@@ -51,10 +51,6 @@ export default function AccountModal({
                 return 'Pimpinan / Owner';
             case 'admin':
                 return 'Administrator';
-            case 'akuntan':
-                return 'Akuntan / Finance';
-            case 'staff':
-                return 'Staff Operasional';
             default:
                 return role.toUpperCase();
         }

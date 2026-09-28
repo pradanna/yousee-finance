@@ -60,6 +60,7 @@ interface AppLayoutProps {
         | 'journal'
         | 'ppn'
         | 'cashflow'
+        | 'projection'
         | 'users';
     title?: string;
     breadcrumbs?: Array<{ label: string; href?: string }>;

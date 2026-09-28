@@ -20,10 +20,6 @@ class AuthController extends Controller
         $user = $action->execute($request);
 
         if ($request->header('X-Inertia') || ! $request->expectsJson()) {
-            if ($user->hasRole('staff')) {
-                return redirect()->intended(route('projects'));
-            }
-
             return redirect()->intended(route('overview'));
         }
 

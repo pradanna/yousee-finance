@@ -105,7 +105,7 @@ export default function AccountingSettingsIndex({
         <AppLayout
             title="Pengaturan Akuntansi"
             activePage="accounting-settings"
-            breadcrumbs={[{ label: 'Akuntansi' }, { label: 'Pengaturan Akun' }]}
+            breadcrumbs={[{ label: 'Akuntansi' }, { label: 'Pengaturan Akun COA' }]}
         >
             <div className="w-full max-w-3xl space-y-6 p-6">
                 {/* Header */}

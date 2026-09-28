@@ -30,21 +30,6 @@ class AuthenticationTest extends TestCase
         $response->assertRedirect(route('overview', absolute: false));
     }
 
-    public function test_staff_user_is_redirected_to_projects_dashboard(): void
-    {
-        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'staff']);
-        $user = User::factory()->create();
-        $user->assignRole('staff');
-
-        $response = $this->post('/login', [
-            'email' => $user->email,
-            'password' => 'password',
-        ]);
-
-        $this->assertAuthenticated();
-        $response->assertRedirect(route('projects', absolute: false));
-    }
-
     public function test_unauthenticated_user_cannot_access_dashboard_and_is_redirected_to_login(): void
     {
         $response = $this->get('/dashboard');

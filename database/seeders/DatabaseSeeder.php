@@ -1,8 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Domains\Identity\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -18,13 +19,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleAndPermissionSeeder::class,
             UserSeeder::class,
-            VendorSeeder::class,
-            ClientSeeder::class,
-            SalesSeeder::class,
             ChartOfAccountSeeder::class,
             ExpenseCategorySeeder::class,
-            ProjectTransactionSeeder::class,
-            OperationalExpenseSeeder::class,
         ]);
     }
 }

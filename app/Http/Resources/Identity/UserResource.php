@@ -17,7 +17,7 @@ class UserResource extends JsonResource
     public function toArray(Request $request): array
     {
         $roleNames = $this->roles->pluck('name')->toArray();
-        $primaryRole = $roleNames[0] ?? 'staff';
+        $primaryRole = $roleNames[0] ?? 'admin';
 
         return [
             'id' => (string) $this->id,
