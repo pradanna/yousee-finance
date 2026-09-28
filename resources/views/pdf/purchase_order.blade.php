@@ -409,23 +409,28 @@
             <div class="signature-title">Disetujui Oleh (Authorized)</div>
             <div class="signature-company">Yousee Indonesia</div>
             @php
-                $poSignee = $authorizedName ?? 'Yosua Eka S';
-                $isJosuaPo = stripos($poSignee, 'josua') !== false || stripos($poSignee, 'yosua') !== false;
-                $isSukmaPo = stripos($poSignee, 'sukma') !== false;
+                $poSignee = $authorizedName ?? ($isPPN ? 'Indung Sukma' : 'Yosua Eka S');
+                $isSukmaPo = ($isPPN ?? false) || stripos($poSignee, 'sukma') !== false;
+                $isJosuaPo = !$isSukmaPo && (stripos($poSignee, 'josua') !== false || stripos($poSignee, 'yosua') !== false);
             @endphp
-            @if($isJosuaPo)
-                <div style="height: 55px; margin-bottom: 5px;">
-                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 55px; width: auto; display: block;">
-                </div>
-                <div class="signature-name">{{ $poSignee }}</div>
-            @elseif($isSukmaPo)
+            @if($isSukmaPo)
                 <div style="height: 55px; margin-bottom: 5px;">
                     <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 55px; width: auto; display: block;">
                 </div>
                 <div class="signature-name">{{ $poSignee }}</div>
+                <div class="signature-role" style="font-size: 8.5pt; color: #475569; margin-top: 2px;">{{ $authorizedTitle ?? 'Director Finance' }}</div>
+            @elseif($isJosuaPo)
+                <div style="height: 55px; margin-bottom: 5px;">
+                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 55px; width: auto; display: block;">
+                </div>
+                <div class="signature-name">{{ $poSignee }}</div>
+                <div class="signature-role" style="font-size: 8.5pt; color: #475569; margin-top: 2px;">{{ $authorizedTitle ?? 'Direktur' }}</div>
             @else
                 <div style="height: 55px; margin-bottom: 5px;"></div>
                 <div class="signature-name">{{ $poSignee }}</div>
+                @if(!empty($authorizedTitle))
+                    <div class="signature-role" style="font-size: 8.5pt; color: #475569; margin-top: 2px;">{{ $authorizedTitle }}</div>
+                @endif
             @endif
         </div>
         <div class="clear"></div>

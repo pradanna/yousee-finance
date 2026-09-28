@@ -94,11 +94,15 @@ class ClientInvoicePdfController extends Controller
             $defaultBankName = 'Bank Mandiri';
             $defaultBankAccountNumber = '138-00-2010633-7';
             $defaultBankBranch = 'Cabang Solo Baru';
+            $defaultDirectorName = 'Indung Sukma';
+            $defaultDirectorTitle = 'Director Finance';
         } else {
             $defaultBankAccountName = 'Yosua Eka Setiawan';
             $defaultBankName = 'BCA';
             $defaultBankAccountNumber = '1530509423';
             $defaultBankBranch = 'BCA Cabang Singosaren Surakarta';
+            $defaultDirectorName = 'Yosua Eka S';
+            $defaultDirectorTitle = 'Direktur';
         }
 
         $bankAccountName = $request->filled('bankAccountName') ? $request->input('bankAccountName') : $defaultBankAccountName;
@@ -111,8 +115,8 @@ class ClientInvoicePdfController extends Controller
             'Berlampu',
             'Durasi Tayang Baliho Sesuai Periode Kontrak',
         ]);
-        $directorName = $request->input('directorName', 'Yosua Eka S');
-        $directorTitle = $request->input('directorTitle', 'Direktur');
+        $directorName = $request->filled('directorName') ? $request->input('directorName') : $defaultDirectorName;
+        $directorTitle = $request->filled('directorTitle') ? $request->input('directorTitle') : $defaultDirectorTitle;
 
         $termLabel = $request->input('termLabel', '');
         $contractTotalDpp = (float) $request->input('contractTotalDpp', $invoice?->subtotal ?? 0);

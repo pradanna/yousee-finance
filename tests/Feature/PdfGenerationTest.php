@@ -452,4 +452,108 @@ class PdfGenerationTest extends TestCase
         $this->assertStringContainsString('ttd-sukma.png', $poWithSukma);
         $this->assertStringNotContainsString('ttd-yosua.png', $poWithSukma);
     }
+
+    public function test_ppn_documents_signed_by_indung_sukma_director_finance(): void
+    {
+        // 1. Invoice PPN defaults to Indung Sukma, Director Finance, and ttd-sukma.png
+        $invoicePpn = view('pdf.client_invoice', [
+            'project' => [],
+            'clientName' => 'PT Klien PPN',
+            'clientAddress' => '-',
+            'clientPhone' => '-',
+            'clientSubName' => '',
+            'invoiceNumber' => 'INV-SSI-001',
+            'invoiceDate' => '25/09/2026',
+            'dueDate' => '02/10/2026',
+            'termLabel' => '',
+            'contractTotalDpp' => 10000000,
+            'contractTotalInvoice' => 11100000,
+            'locations' => [],
+            'isPPN' => true,
+            'subtotal' => 10000000,
+            'ppnAmount' => 1100000,
+            'dpAmount' => 0,
+            'grandTotal' => 11100000,
+            'bankAccountName' => 'PT Sukma Setiawan Indonesia',
+            'bankName' => 'Bank Mandiri',
+            'bankAccountNumber' => '138-00-2010633-7',
+            'bankBranch' => 'Cabang Solo Baru',
+            'notes' => [],
+            'directorName' => 'Indung Sukma',
+            'directorTitle' => 'Director Finance',
+        ])->render();
+        $this->assertStringContainsString('Indung Sukma', $invoicePpn);
+        $this->assertStringContainsString('Director Finance', $invoicePpn);
+        $this->assertStringContainsString('ttd-sukma.png', $invoicePpn);
+        $this->assertStringNotContainsString('ttd-yosua.png', $invoicePpn);
+
+        // 2. PO PPN defaults to Indung Sukma, Director Finance, and ttd-sukma.png
+        $poPpn = view('pdf.purchase_order', [
+            'project' => [],
+            'vendorName' => 'Vendor Test',
+            'vendorAddress' => '-',
+            'vendorPhone' => '-',
+            'locations' => [],
+            'isPPN' => true,
+            'poNumber' => 'PO-001',
+            'poDate' => '25/09/2026',
+            'totalDPP' => 10000000,
+            'totalPPN' => 1100000,
+            'grandTotal' => 11100000,
+            'lighting' => 'Berlampu',
+            'topNotes' => 'Lunas',
+            'qrCodeBase64' => '',
+            'authorizedName' => 'Indung Sukma',
+            'authorizedTitle' => 'Director Finance',
+        ])->render();
+        $this->assertStringContainsString('Indung Sukma', $poPpn);
+        $this->assertStringContainsString('Director Finance', $poPpn);
+        $this->assertStringContainsString('ttd-sukma.png', $poPpn);
+        $this->assertStringNotContainsString('ttd-yosua.png', $poPpn);
+
+        // 3. Kwitansi PPN defaults to Indung Sukma, Director Finance, and ttd-sukma.png
+        $kwitansiPpn = view('pdf.kwitansi', [
+            'receiptNumber' => 'KW-INV-SSI-001',
+            'receivedFrom' => 'PT Klien PPN',
+            'amount' => 11100000,
+            'terbilang' => 'SEBELAS JUTA SERATUS RIBU RUPIAH',
+            'forPaymentOf' => 'Pembayaran Sewa Media',
+            'city' => 'Sukoharjo',
+            'dateFormatted' => '25 September 2026',
+            'isPPN' => true,
+            'bankAccountName' => 'PT Sukma Setiawan Indonesia',
+            'bankName' => 'Bank Mandiri',
+            'bankShortName' => 'Mandiri',
+            'bankAccountNumber' => '138-00-2010633-7',
+            'directorName' => 'Indung Sukma',
+            'directorTitle' => 'Director Finance',
+            'companyName' => 'PT SUKMA SETIAWAN INDONESIA',
+            'brandName' => 'YOUSEE INDONESIA',
+            'companyAddress' => 'Sukoharjo',
+            'companyContact' => '-',
+            'logoBase64' => null,
+        ])->render();
+        $this->assertStringContainsString('Indung Sukma', $kwitansiPpn);
+        $this->assertStringContainsString('Director Finance', $kwitansiPpn);
+        $this->assertStringContainsString('ttd-sukma.png', $kwitansiPpn);
+        $this->assertStringNotContainsString('ttd-yosua.png', $kwitansiPpn);
+
+        // 4. PPN Report view has Indung Sukma, Director Finance, and ttd-sukma.png
+        $ppnReport = view('pdf.ppn_report', [
+            'period' => '09-2026',
+            'periodLabel' => 'Masa September 2026',
+            'taxSettlement' => null,
+            'ppnKeluaran' => [],
+            'ppnMasukan' => [],
+            'totalKeluaranDpp' => 0,
+            'totalKeluaranPpn' => 0,
+            'totalMasukanDpp' => 0,
+            'totalMasukanPpnCreditable' => 0,
+            'netPpnAmount' => 0,
+            'printedAt' => '25/09/2026 12:00',
+        ])->render();
+        $this->assertStringContainsString('Indung Sukma', $ppnReport);
+        $this->assertStringContainsString('Director Finance', $ppnReport);
+        $this->assertStringContainsString('ttd-sukma.png', $ppnReport);
+    }
 }

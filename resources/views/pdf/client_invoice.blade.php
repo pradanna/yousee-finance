@@ -441,22 +441,22 @@
         <div class="signature-box">
             <div class="signature-title">Approved By</div>
             @php
-                $isJosua = isset($directorName) && (stripos($directorName, 'josua') !== false || stripos($directorName, 'yosua') !== false);
-                $isSukma = isset($directorName) && stripos($directorName, 'sukma') !== false;
+                $isSukma = ($isPPN ?? false) || (isset($directorName) && stripos($directorName, 'sukma') !== false);
+                $isJosua = !$isSukma && isset($directorName) && (stripos($directorName, 'josua') !== false || stripos($directorName, 'yosua') !== false);
             @endphp
-            @if($isJosua)
-                <div style="height: 55px; margin-bottom: 5px;">
-                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 55px; width: auto; margin: 0 auto; display: block;">
-                </div>
-            @elseif($isSukma)
+            @if($isSukma)
                 <div style="height: 55px; margin-bottom: 5px;">
                     <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 55px; width: auto; margin: 0 auto; display: block;">
+                </div>
+            @elseif($isJosua)
+                <div style="height: 55px; margin-bottom: 5px;">
+                    <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 55px; width: auto; margin: 0 auto; display: block;">
                 </div>
             @else
                 <div style="height: 55px; margin-bottom: 5px;"></div>
             @endif
-            <div class="signature-name">{{ $directorName }}</div>
-            <div class="signature-role">{{ $directorTitle }}</div>
+            <div class="signature-name">{{ $directorName ?? ($isPPN ? 'Indung Sukma' : 'Yosua Eka S') }}</div>
+            <div class="signature-role">{{ $directorTitle ?? ($isPPN ? 'Director Finance' : 'Direktur') }}</div>
         </div>
         <div class="clear"></div>
     </div>

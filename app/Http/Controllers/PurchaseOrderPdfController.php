@@ -143,25 +143,28 @@ class PurchaseOrderPdfController extends Controller
             $scheme = $po->paymentPlan->scheme?->value ?? 'full';
             $topNotes = $po->paymentPlan->notes ?: ($scheme === 'full' ? 'Full Payment' : "Termin ({$termsCount} Tahap)");
         }
-        $topNotes = $topNotes ?: 'Lunas setelah visual terpasang';
-        $authorizedName = $request->input('authorizedName', $request->input('directorName', 'Yosua Eka S'));
+        $defaultAuthorizedName = $isPPN ? 'Indung Sukma' : 'Yosua Eka S';
+        $defaultAuthorizedTitle = $isPPN ? 'Director Finance' : 'Direktur';
+        $authorizedName = $request->filled('authorizedName') ? $request->input('authorizedName') : $request->input('directorName', $defaultAuthorizedName);
+        $authorizedTitle = $request->filled('authorizedTitle') ? $request->input('authorizedTitle') : $request->input('directorTitle', $defaultAuthorizedTitle);
 
         $pdf = Pdf::loadView('pdf.purchase_order', [
-            'project'        => $project,
-            'vendorName'     => $vendorName,
-            'vendorAddress'  => $vendorAddress,
-            'vendorPhone'    => $vendorPhone,
-            'locations'      => $locations,
-            'isPPN'          => $isPPN,
-            'poNumber'       => $poNumber, 
-            'poDate'         => $poDate,
-            'totalDPP'       => $totalDPP,
-            'totalPPN'       => $totalPPN,
-            'grandTotal'     => $grandTotal,
-            'lighting'       => $lighting,
-            'topNotes'       => $topNotes,
-            'qrCodeBase64'   => $qrCodeBase64,
-            'authorizedName' => $authorizedName,
+            'project'         => $project,
+            'vendorName'      => $vendorName,
+            'vendorAddress'   => $vendorAddress,
+            'vendorPhone'     => $vendorPhone,
+            'locations'       => $locations,
+            'isPPN'           => $isPPN,
+            'poNumber'        => $poNumber, 
+            'poDate'          => $poDate,
+            'totalDPP'        => $totalDPP,
+            'totalPPN'        => $totalPPN,
+            'grandTotal'      => $grandTotal,
+            'lighting'        => $lighting,
+            'topNotes'        => $topNotes,
+            'qrCodeBase64'    => $qrCodeBase64,
+            'authorizedName'  => $authorizedName,
+            'authorizedTitle' => $authorizedTitle,
         ]);
 
         $pdf->setPaper('a4', 'portrait');

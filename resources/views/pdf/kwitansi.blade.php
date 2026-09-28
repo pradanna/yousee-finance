@@ -315,22 +315,22 @@
                 <td style="width: 45%; text-align: center; vertical-align: bottom;">
                     <div class="signature-container" style="padding-top: 5px;">
                         @php
-                            $isJosuaKwitansi = isset($directorName) && (stripos($directorName, 'josua') !== false || stripos($directorName, 'yosua') !== false);
-                            $isSukmaKwitansi = isset($directorName) && stripos($directorName, 'sukma') !== false;
+                            $isSukmaKwitansi = ($isPPN ?? false) || (isset($directorName) && stripos($directorName, 'sukma') !== false);
+                            $isJosuaKwitansi = !$isSukmaKwitansi && isset($directorName) && (stripos($directorName, 'josua') !== false || stripos($directorName, 'yosua') !== false);
                         @endphp
-                        @if($isJosuaKwitansi)
-                            <div style="height: 50px; margin-bottom: 5px;">
-                                <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
-                            </div>
-                        @elseif($isSukmaKwitansi)
+                        @if($isSukmaKwitansi)
                             <div style="height: 50px; margin-bottom: 5px;">
                                 <img src="{{ public_path('images/ttd-sukma.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
+                            </div>
+                        @elseif($isJosuaKwitansi)
+                            <div style="height: 50px; margin-bottom: 5px;">
+                                <img src="{{ public_path('images/ttd-yosua.png') }}" alt="TTD" style="height: 50px; width: auto; margin: 0 auto; display: block;">
                             </div>
                         @else
                             <div style="height: 50px; margin-bottom: 5px;"></div>
                         @endif
-                        <div class="signature-name">{{ $directorName }}</div>
-                        <div class="signature-title">{{ $directorTitle }}</div>
+                        <div class="signature-name">{{ $directorName ?? ($isPPN ? 'Indung Sukma' : 'Yosua Eka S') }}</div>
+                        <div class="signature-title">{{ $directorTitle ?? ($isPPN ? 'Director Finance' : 'Direktur') }}</div>
                     </div>
                 </td>
             </tr>

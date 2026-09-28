@@ -247,7 +247,7 @@
             </td>
             <td class="summary-label">Tanggal Setor & Bank</td>
             <td class="summary-value">
-                {{ $taxSettlement['paidDate'] ? date('d/m/Y', strtotime($taxSettlement['paidDate'])) : '-' }} ({{ $taxSettlement['bankName'] ?? '-' }})
+                {{ !empty($taxSettlement['paidDate']) ? date('d/m/Y', strtotime($taxSettlement['paidDate'])) : '-' }} ({{ $taxSettlement['bankName'] ?? '-' }})
             </td>
         </tr>
     </table>
@@ -345,7 +345,7 @@
                     @endif
                 </div>
                 <div class="sig-name">{{ $officerName }}</div>
-                <div class="sig-title">Tax & Accounting Officer</div>
+                <div class="sig-title">{{ $officerTitle ?? 'Director Finance' }}</div>
             </td>
             <td>
                 <div>Disetujui oleh,</div>
