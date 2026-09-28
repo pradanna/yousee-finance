@@ -1,5 +1,6 @@
 import Header from '@/Components/Layout/Header';
 import Sidebar from '@/Components/Layout/Sidebar';
+import { Head } from '@inertiajs/react';
 import React, { createContext, useEffect, useState } from 'react';
 
 export const FiscalContext = createContext<{ fiscalMode: 'ppn' | 'non-ppn' }>({
@@ -130,6 +131,7 @@ export default function AppLayout({
 
     return (
         <FiscalContext.Provider value={{ fiscalMode }}>
+            {title && <Head title={title} />}
             <div className="flex min-h-screen bg-slate-100 font-sans">
                 {/* Left Sidebar */}
                 <Sidebar

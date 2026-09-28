@@ -6,17 +6,18 @@ import ProjectionTimelineTable from '@/Features/FinancialProjection/Components/P
 import { FinancialProjectionPageProps } from '@/Features/FinancialProjection/types';
 import AppLayout, { useFiscalMode } from '@/Layouts/AppLayout';
 import { Head, router } from '@inertiajs/react';
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export default function FinancialProjection({
     projection,
 }: FinancialProjectionPageProps) {
     const currentFiscalMode = useFiscalMode();
-    const [activeTab, setActiveTab] = useState<'timeline' | 'inflow' | 'outflow'>(
-        'timeline',
-    );
+    const [activeTab, setActiveTab] = useState<
+        'timeline' | 'inflow' | 'outflow'
+    >('timeline');
 
-    const { filters, summary, timeline, inflow_items, outflow_items } = projection;
+    const { filters, summary, timeline, inflow_items, outflow_items } =
+        projection;
     const currentDays = filters.days || 14;
 
     const handleDaysChange = (newDays: number) => {
@@ -37,12 +38,9 @@ export default function FinancialProjection({
         <AppLayout
             activePage="projection"
             title="Proyeksi Keuangan"
-            breadcrumbs={[
-                { label: 'Laporan' },
-                { label: 'Proyeksi Keuangan' },
-            ]}
+            breadcrumbs={[{ label: 'Laporan' }, { label: 'Proyeksi Keuangan' }]}
         >
-            <Head title="Proyeksi Keuangan - Yousee Finance" />
+            <Head title="Proyeksi Keuangan" />
 
             <div className="space-y-6">
                 {/* Header & Controls */}
@@ -52,7 +50,9 @@ export default function FinancialProjection({
                             Proyeksi Keuangan & Arus Kas
                         </h1>
                         <p className="mt-1 text-sm text-slate-500">
-                            Estimasi likuiditas kas berdasarkan piutang invoice jatuh tempo, hutang PO rekanan, dan kewajiban PPN akhir bulan.
+                            Estimasi likuiditas kas berdasarkan piutang invoice
+                            jatuh tempo, hutang PO rekanan, dan kewajiban PPN
+                            akhir bulan.
                         </p>
                     </div>
 
@@ -61,13 +61,13 @@ export default function FinancialProjection({
                         <span className="text-xs font-semibold text-slate-500">
                             Jangka Waktu:
                         </span>
-                        <div className="inline-flex rounded-xl border border-slate-200/80 bg-slate-100/80 p-1 shadow-xs">
+                        <div className="shadow-xs inline-flex rounded-xl border border-slate-200/80 bg-slate-100/80 p-1">
                             <button
                                 type="button"
                                 onClick={() => handleDaysChange(7)}
                                 className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all ${
                                     currentDays === 7
-                                        ? 'bg-white text-indigo-700 shadow-xs'
+                                        ? 'shadow-xs bg-white text-indigo-700'
                                         : 'text-slate-600 hover:text-slate-900'
                                 }`}
                             >
@@ -78,7 +78,7 @@ export default function FinancialProjection({
                                 onClick={() => handleDaysChange(14)}
                                 className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all ${
                                     currentDays === 14
-                                        ? 'bg-white text-indigo-700 shadow-xs'
+                                        ? 'shadow-xs bg-white text-indigo-700'
                                         : 'text-slate-600 hover:text-slate-900'
                                 }`}
                             >
@@ -89,7 +89,7 @@ export default function FinancialProjection({
                                 onClick={() => handleDaysChange(30)}
                                 className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all ${
                                     currentDays === 30
-                                        ? 'bg-white text-indigo-700 shadow-xs'
+                                        ? 'shadow-xs bg-white text-indigo-700'
                                         : 'text-slate-600 hover:text-slate-900'
                                 }`}
                             >

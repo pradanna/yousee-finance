@@ -1,0 +1,1 @@
+const n=e=>`Rp ${Math.round(e).toLocaleString("id-ID")}`,a=e=>{if(!e)return"-";const t=new Date(e);if(isNaN(t.getTime()))return e;const r=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];return`${t.getDate()} ${r[t.getMonth()]} ${t.getFullYear()}`};export{a,n as f};

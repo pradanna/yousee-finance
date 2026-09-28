@@ -5,10 +5,18 @@ import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Yousee Finance';
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => {
+        if (!title) return appName;
+        const cleanTitle = title
+            .replace(/\s*(-|\|\|)\s*Yousee Finance/gi, '')
+            .trim();
+        return cleanTitle
+            ? `${cleanTitle.toUpperCase()} || ${appName}`
+            : appName;
+    },
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.tsx`,

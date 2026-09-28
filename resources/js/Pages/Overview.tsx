@@ -152,11 +152,7 @@ export default function Overview({
         setReceivedAdjustment(0);
     }, [upcomingDebts, upcomingReceivables]);
 
-    const handleMonthChange = (
-        _val: string,
-        year: string,
-        month: string,
-    ) => {
+    const handleMonthChange = (_val: string, year: string, month: string) => {
         setSelectedYear(year);
         setSelectedMonth(month);
         router.get(
@@ -354,14 +350,12 @@ export default function Overview({
         }));
 
     const currentChartData =
-        fiscalMode === 'ppn'
-            ? chartData?.ppn || []
-            : chartData?.nonPpn || [];
+        fiscalMode === 'ppn' ? chartData?.ppn || [] : chartData?.nonPpn || [];
 
     return (
         <AppLayout
             activePage="overview"
-            title="Dashboard Overview"
+            title="Dashboard"
             breadcrumbs={[{ label: 'Yousee Indonesia' }, { label: 'Overview' }]}
         >
             <div className="space-y-8">

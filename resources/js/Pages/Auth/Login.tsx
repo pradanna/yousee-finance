@@ -6,10 +6,9 @@ import { FormEventHandler, useState } from 'react';
 
 export default function Login({
     status,
-    canResetPassword,
 }: {
     status?: string;
-    canResetPassword: boolean;
+    canResetPassword?: boolean;
 }) {
     const [showPassword, setShowPassword] = useState(false);
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -28,7 +27,7 @@ export default function Login({
 
     return (
         <GuestLayout>
-            <Head title="Masuk - Yousee Finance" />
+            <Head title="Masuk" />
 
             {/* Header Title */}
             <div className="mb-6 text-center">
