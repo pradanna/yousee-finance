@@ -1,4 +1,5 @@
 import ExcelButton from '@/Components/Button/ExcelButton';
+import Select2 from '@/Components/Form/Select2';
 import LocationImportModal from '@/Components/Modal/LocationImportModal';
 import React, { useMemo, useState } from 'react';
 import { BillboardLocation, fmt, PurchaseOrderWithPlan } from '../projectTypes';
@@ -685,49 +686,37 @@ export default function LocationsTab({
                                     1. Pilih Vendor Mitra{' '}
                                     <span className="text-rose-500">*</span>
                                 </label>
-                                <select
+                                <Select2
                                     value={selectedVendorId}
                                     onChange={(e) =>
                                         setSelectedVendorId(e.target.value)
                                     }
-                                    className="shadow-xs w-full rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 transition-all focus:border-blue-500 focus:outline-none"
-                                >
-                                    <option value="">
-                                        -- Pilih Vendor Mitra --
-                                    </option>
-                                    {vendors.map((v) => {
+                                    placeholder="-- Pilih Vendor Mitra --"
+                                    searchPlaceholder="Cari nama vendor..."
+                                    error={errors.vendorId}
+                                    options={vendors.map((v) => {
                                         const isPkp = isVendorPkp(v);
                                         const isDisabled = isPPN && !isPkp;
-                                        return (
-                                            <option
-                                                key={v.id}
-                                                value={v.id}
-                                                disabled={isDisabled}
-                                                className={
-                                                    isDisabled
-                                                        ? 'bg-slate-100 font-normal text-slate-400'
-                                                        : ''
-                                                }
-                                            >
-                                                {v.name}
-                                                {isPPN && !isPkp
-                                                    ? ' (Non-PKP - Dilarang di Mode PPN)'
-                                                    : ''}
-                                            </option>
-                                        );
+                                        return {
+                                            value: v.id,
+                                            label: v.name,
+                                            sublabel:
+                                                isPPN && !isPkp
+                                                    ? 'Non-PKP - Dilarang di Mode PPN'
+                                                    : v.npwp
+                                                      ? `NPWP: ${v.npwp}`
+                                                      : undefined,
+                                            disabled: isDisabled,
+                                            badge: isPkp ? 'PKP' : 'Non-PKP',
+                                        };
                                     })}
-                                </select>
+                                />
                                 {isPPN && (
                                     <p className="text-[11px] font-medium text-blue-700">
                                         ℹ️ <strong>Mode PPN:</strong> Hanya
                                         vendor berstatus PKP (memiliki NPWP)
                                         yang diizinkan.
                                     </p>
-                                )}
-                                {errors.vendorId && (
-                                    <span className="block text-[10px] font-bold text-rose-500">
-                                        {errors.vendorId}
-                                    </span>
                                 )}
                             </div>
 

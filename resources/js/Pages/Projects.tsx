@@ -1,5 +1,6 @@
 import MetricCard from '@/Components/Card/MetricCard';
 import MonthPicker from '@/Components/Form/MonthPicker';
+import Select2 from '@/Components/Form/Select2';
 import SelectInput from '@/Components/Form/SelectInput';
 import TextInput from '@/Components/Form/TextInput';
 import EmptyState from '@/Components/Table/EmptyState';
@@ -1171,12 +1172,14 @@ export default function Projects({
                             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                 Client
                             </label>
-                            <SelectInput
+                            <Select2
                                 value={clientFilter}
                                 onChange={(e) => {
                                     setClientFilter(e.target.value);
                                     setCurrentPage(1);
                                 }}
+                                placeholder="Semua Client"
+                                searchPlaceholder="Cari client..."
                                 options={[
                                     { value: 'all', label: 'Semua Client' },
                                     ...clients.map((c) => ({
@@ -1192,12 +1195,14 @@ export default function Projects({
                             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                 Sales PIC
                             </label>
-                            <SelectInput
+                            <Select2
                                 value={salesFilter}
                                 onChange={(e) => {
                                     setSalesFilter(e.target.value);
                                     setCurrentPage(1);
                                 }}
+                                placeholder="Semua Sales"
+                                searchPlaceholder="Cari sales..."
                                 options={[
                                     { value: 'all', label: 'Semua Sales' },
                                     ...sales.map((s) => ({
@@ -2557,21 +2562,18 @@ export default function Projects({
                                     control={control}
                                     name="clientId"
                                     render={({ field }) => (
-                                        <SelectInput
+                                        <Select2
                                             value={field.value}
                                             onChange={(e) =>
                                                 field.onChange(e.target.value)
                                             }
-                                        >
-                                            <option value="">
-                                                -- Pilih Client --
-                                            </option>
-                                            {clients.map((c) => (
-                                                <option key={c.id} value={c.id}>
-                                                    {c.name}
-                                                </option>
-                                            ))}
-                                        </SelectInput>
+                                            placeholder="-- Pilih Client --"
+                                            searchPlaceholder="Cari nama client..."
+                                            options={clients.map((c) => ({
+                                                value: c.id,
+                                                label: c.name,
+                                            }))}
+                                        />
                                     )}
                                 />
                                 {errors.clientId && (
@@ -2589,21 +2591,18 @@ export default function Projects({
                                     control={control}
                                     name="salesId"
                                     render={({ field }) => (
-                                        <SelectInput
+                                        <Select2
                                             value={field.value}
                                             onChange={(e) =>
                                                 field.onChange(e.target.value)
                                             }
-                                        >
-                                            <option value="">
-                                                -- Pilih Sales PIC --
-                                            </option>
-                                            {sales.map((s) => (
-                                                <option key={s.id} value={s.id}>
-                                                    {s.name}
-                                                </option>
-                                            ))}
-                                        </SelectInput>
+                                            placeholder="-- Pilih Sales PIC --"
+                                            searchPlaceholder="Cari nama sales PIC..."
+                                            options={sales.map((s) => ({
+                                                value: s.id,
+                                                label: s.name,
+                                            }))}
+                                        />
                                     )}
                                 />
                                 {errors.salesId && (
