@@ -22,6 +22,12 @@ use App\Http\Requests\Project\UpdateProjectLocationRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectLocationController extends Controller
@@ -62,22 +68,27 @@ class ProjectLocationController extends Controller
 
     /**
      * Unduh template file Excel/CSV untuk pengisian titik lokasi.
+     * Sheet 1: Template Titik Lokasi (Formulir Pengisian)
+     * Sheet 2: Data Master Vendor (Daftar Vendor & Kode yang bisa dicopy)
      */
     public function downloadTemplate(Project $project): StreamedResponse
     {
-        $filename = "Template_Titik_Lokasi_Project_{$project->code}.csv";
+        $filename = "Template_Titik_Lokasi_Project_{$project->code}.xlsx";
 
         $sampleVendor = Vendor::active()->first();
         $sampleVendorCode = $sampleVendor ? $sampleVendor->code : 'VND-0001';
+        $vendors = Vendor::active()->orderBy('name')->get();
 
-        return response()->streamDownload(function () use ($sampleVendorCode) {
-            $handle = fopen('php://output', 'w');
+        return response()->streamDownload(function () use ($sampleVendorCode, $vendors) {
+            $spreadsheet = new Spreadsheet();
 
-            // UTF-8 BOM untuk kompatibilitas sempurna dengan Microsoft Excel
-            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            // ─────────────────────────────────────────────────────────────────
+            // SHEET 1: TEMPLATE TITIK LOKASI
+            // ─────────────────────────────────────────────────────────────────
+            $sheet1 = $spreadsheet->getActiveSheet();
+            $sheet1->setTitle('Template Titik Lokasi');
 
-            // Header Kolom
-            fputcsv($handle, [
+            $headers1 = [
                 'Kode Vendor',
                 'Area',
                 'Keterangan Lokasi',
@@ -88,10 +99,33 @@ class ProjectLocationController extends Controller
                 'Qty',
                 'Biaya Vendor DPP (Rp)',
                 'Catatan TOP',
+            ];
+
+            foreach ($headers1 as $colIdx => $header) {
+                $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
+                $sheet1->setCellValue("{$colLetter}1", $header);
+            }
+
+            // Styling Header Sheet 1 (Biru Modern #2563EB)
+            $sheet1->getStyle('A1:J1')->applyFromArray([
+                'font' => [
+                    'bold' => true,
+                    'color' => ['argb' => 'FFFFFFFF'],
+                    'size' => 11,
+                ],
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['argb' => 'FF2563EB'],
+                ],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
             ]);
+            $sheet1->getRowDimension(1)->setRowHeight(26);
 
             // Baris Contoh 1
-            fputcsv($handle, [
+            $sheet1->fromArray([
                 $sampleVendorCode,
                 'Semarang',
                 'Billboard Simpang Lima Sudut Barat',
@@ -102,10 +136,10 @@ class ProjectLocationController extends Controller
                 1,
                 15000000,
                 'Termin 50:50',
-            ]);
+            ], null, 'A2');
 
             // Baris Contoh 2
-            fputcsv($handle, [
+            $sheet1->fromArray([
                 $sampleVendorCode,
                 'Solo',
                 'Videotron Jl. Slamet Riyadi KM 2',
@@ -116,11 +150,90 @@ class ProjectLocationController extends Controller
                 1,
                 25000000,
                 'Pelunasan 30 hari',
-            ]);
+            ], null, 'A3');
 
-            fclose($handle);
+            // Format angka untuk kolom Biaya & Qty
+            $sheet1->getStyle('H2:H100')->getNumberFormat()->setFormatCode('#,##0');
+            $sheet1->getStyle('I2:I100')->getNumberFormat()->setFormatCode('#,##0');
+
+            // Auto-size kolom Sheet 1
+            foreach (range(1, 10) as $colIdx) {
+                $colLetter = Coordinate::stringFromColumnIndex($colIdx);
+                $sheet1->getColumnDimension($colLetter)->setAutoSize(true);
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // SHEET 2: DATA MASTER VENDOR (Bisa dicopy kodenya)
+            // ─────────────────────────────────────────────────────────────────
+            $sheet2 = $spreadsheet->createSheet();
+            $sheet2->setTitle('Data Master Vendor');
+
+            $headers2 = [
+                'Kode Vendor (Copy Kolom Ini)',
+                'Nama Vendor',
+                'Status PKP',
+                'NPWP',
+                'Kontak / PIC',
+            ];
+
+            foreach ($headers2 as $colIdx => $header) {
+                $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
+                $sheet2->setCellValue("{$colLetter}1", $header);
+            }
+
+            // Styling Header Sheet 2 (Emerald Green #059669)
+            $sheet2->getStyle('A1:E1')->applyFromArray([
+                'font' => [
+                    'bold' => true,
+                    'color' => ['argb' => 'FFFFFFFF'],
+                    'size' => 11,
+                ],
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['argb' => 'FF059669'],
+                ],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
+            ]);
+            $sheet2->getRowDimension(1)->setRowHeight(26);
+
+            $vendorRow = 2;
+            foreach ($vendors as $v) {
+                $isPkp = $v->isPkp();
+                $sheet2->fromArray([
+                    $v->code ?? '-',
+                    $v->name,
+                    $isPkp ? 'PKP' : 'Non-PKP',
+                    $v->npwp ?: '-',
+                    $v->phone ?: ($v->pic_name ?: '-'),
+                ], null, "A{$vendorRow}");
+
+                // Highlight status PKP
+                if (! $isPkp) {
+                    $sheet2->getStyle("C{$vendorRow}")->getFont()->getColor()->setARGB('FFDC2626');
+                } else {
+                    $sheet2->getStyle("C{$vendorRow}")->getFont()->getColor()->setARGB('FF059669');
+                }
+
+                $sheet2->getStyle("A{$vendorRow}")->getFont()->setBold(true);
+                $vendorRow++;
+            }
+
+            // Auto-size kolom Sheet 2
+            foreach (range(1, 5) as $colIdx) {
+                $colLetter = Coordinate::stringFromColumnIndex($colIdx);
+                $sheet2->getColumnDimension($colLetter)->setAutoSize(true);
+            }
+
+            // Set tampilan aktif kembali ke Sheet 1
+            $spreadsheet->setActiveSheetIndex(0);
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
         }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
     }
@@ -131,7 +244,7 @@ class ProjectLocationController extends Controller
     public function previewImport(Request $request, Project $project): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'max:5120'],
+            'file' => ['required', 'file', 'max:10240'],
         ]);
 
         $file = $request->file('file');
@@ -139,30 +252,63 @@ class ProjectLocationController extends Controller
             return response()->json(['message' => 'File tidak ditemukan.'], 422);
         }
 
-        $handle = fopen($file->getRealPath(), 'r');
-        if (! $handle) {
-            return response()->json(['message' => 'Gagal membuka file.'], 422);
-        }
+        $extension = strtolower($file->getClientOriginalExtension());
+        $isExcel = in_array($extension, ['xlsx', 'xls'], true);
 
-        $firstLine = fgets($handle);
-        if ($firstLine === false) {
+        // Siapkan array baris dari file (Excel atau CSV)
+        $rawRows = [];
+
+        if ($isExcel) {
+            try {
+                $spreadsheet = IOFactory::load($file->getRealPath());
+                // Baca Sheet 1 (Template Titik Lokasi)
+                $sheet = $spreadsheet->getSheet(0);
+                $rawRows = $sheet->toArray();
+            } catch (\Throwable $e) {
+                return response()->json(['message' => 'Gagal membaca file Excel: ' . $e->getMessage()], 422);
+            }
+
+            if (empty($rawRows)) {
+                return response()->json(['message' => 'File Excel kosong.'], 422);
+            }
+
+            $headerCols = array_shift($rawRows);
+        } else {
+            // Format CSV / Text
+            $handle = fopen($file->getRealPath(), 'r');
+            if (! $handle) {
+                return response()->json(['message' => 'Gagal membuka file.'], 422);
+            }
+
+            $firstLine = fgets($handle);
+            if ($firstLine === false) {
+                fclose($handle);
+                return response()->json(['message' => 'File kosong.'], 422);
+            }
+
+            // Strip UTF-8 BOM
+            $firstLine = preg_replace('/^\xEF\xBB\xBF/', '', $firstLine);
+            $delimiter = str_contains($firstLine, ';') ? ';' : ',';
+            $headerCols = str_getcsv($firstLine, $delimiter);
+
+            // Jika baris pertama terbungkus tanda kutip luar (misal hasil ekspor kolom tunggal dari spreadsheet)
+            if (count($headerCols) === 1 && isset($headerCols[0]) && (str_contains($headerCols[0], ',') || str_contains($headerCols[0], ';'))) {
+                $innerDelimiter = str_contains($headerCols[0], ';') ? ';' : ',';
+                $headerCols = str_getcsv($headerCols[0], $innerDelimiter);
+                $delimiter = $innerDelimiter;
+            }
+
+            while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+                // Jika baris terbungkus tanda kutip luar
+                if (count($row) === 1 && isset($row[0]) && (str_contains($row[0], ',') || str_contains($row[0], ';'))) {
+                    $row = str_getcsv($row[0], $delimiter);
+                }
+                $rawRows[] = $row;
+            }
             fclose($handle);
-            return response()->json(['message' => 'File kosong.'], 422);
         }
 
-        // Strip UTF-8 BOM
-        $firstLine = preg_replace('/^\xEF\xBB\xBF/', '', $firstLine);
-        $delimiter = str_contains($firstLine, ';') ? ';' : ',';
-        $headerCols = str_getcsv($firstLine, $delimiter);
-
-        // Jika baris pertama terbungkus tanda kutip luar (misal hasil ekspor kolom tunggal dari spreadsheet)
-        if (count($headerCols) === 1 && isset($headerCols[0]) && (str_contains($headerCols[0], ',') || str_contains($headerCols[0], ';'))) {
-            $innerDelimiter = str_contains($headerCols[0], ';') ? ';' : ',';
-            $headerCols = str_getcsv($headerCols[0], $innerDelimiter);
-            $delimiter = $innerDelimiter;
-        }
-
-        $headers = array_map(fn ($h) => strtolower(trim((string) $h)), $headerCols);
+        $headers = array_map(fn ($h) => strtolower(trim((string) $h)), (array) $headerCols);
 
         // Petakan index kolom
         $colVendor = $this->findColumnIndex($headers, ['kode vendor', 'vendor', 'kode_vendor']);
@@ -191,17 +337,12 @@ class ProjectLocationController extends Controller
         $errors = [];
         $rowNum = 1;
 
-        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+        foreach ($rawRows as $row) {
             $rowNum++;
-
-            // Jika baris terbungkus tanda kutip luar
-            if (count($row) === 1 && isset($row[0]) && (str_contains($row[0], ',') || str_contains($row[0], ';'))) {
-                $row = str_getcsv($row[0], $delimiter);
-            }
 
             // Skip empty rows
             $hasData = false;
-            foreach ($row as $cell) {
+            foreach ((array) $row as $cell) {
                 if (trim((string) $cell) !== '') {
                     $hasData = true;
                     break;
@@ -299,8 +440,6 @@ class ProjectLocationController extends Controller
                 'top_notes' => $rawTop !== '' ? $rawTop : null,
             ];
         }
-
-        fclose($handle);
 
         return response()->json([
             'items' => $previewItems,

@@ -247,12 +247,14 @@ export default function LocationImportModal({
                         <div className="flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
                             <div className="space-y-0.5">
                                 <span className="block text-xs font-bold text-blue-950">
-                                    Format Template Excel Resmi
+                                    Format Template Excel Resmi (.XLSX)
                                 </span>
                                 <span className="block text-[11px] text-blue-700">
-                                    Gunakan template resmi kami yang telah
-                                    dilengkapi contoh pengisian Kode Vendor
-                                    (cth: VND-0001) dan ukuran titik.
+                                    Dilengkapi <strong>Sheet 1</strong> formulir
+                                    pengisian dan <strong>Sheet 2</strong>{' '}
+                                    berisi daftar seluruh master vendor &
+                                    kodenya yang bisa langsung Anda salin
+                                    (copy-paste).
                                 </span>
                             </div>
                             <a
@@ -275,7 +277,7 @@ export default function LocationImportModal({
                                         d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                                     />
                                 </svg>
-                                Unduh Template (.CSV)
+                                Unduh Template (.XLSX)
                             </a>
                         </div>
 
@@ -315,7 +317,7 @@ export default function LocationImportModal({
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept=".csv, .txt, text/csv, application/vnd.ms-excel"
+                                accept=".xlsx, .xls, .csv, .txt, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv"
                                 onChange={handleFileChange}
                                 className="hidden"
                             />
@@ -354,8 +356,8 @@ export default function LocationImportModal({
                                         </span>
                                     </p>
                                     <p className="text-[11px] text-slate-400">
-                                        Format didukung: CSV (BOM UTF-8) / Excel
-                                        Spreadsheet (Maks. 5MB)
+                                        Format didukung: Excel Spreadsheet
+                                        (.xlsx, .xls) / CSV (Maks. 10MB)
                                     </p>
                                 </div>
                             )}

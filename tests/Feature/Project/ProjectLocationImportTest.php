@@ -43,14 +43,9 @@ class ProjectLocationImportTest extends TestCase
         $response = $this->actingAs($this->user)->get(route('projects.locations.template', $this->project->id));
 
         $response->assertStatus(200);
-        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         $this->assertTrue(str_contains((string) $response->headers->get('Content-Disposition'), 'Template_Titik_Lokasi_Project_'));
-
-        $content = $response->streamedContent();
-        $this->assertStringContainsString('Kode Vendor', $content);
-        $this->assertStringContainsString('Area', $content);
-        $this->assertStringContainsString('Keterangan Lokasi', $content);
-        $this->assertStringContainsString('VND-0001', $content);
+        $this->assertTrue(str_contains((string) $response->headers->get('Content-Disposition'), '.xlsx'));
     }
 
     public function test_can_preview_and_validate_locations_csv_file(): void
@@ -82,6 +77,44 @@ class ProjectLocationImportTest extends TestCase
 
         $this->assertCount(1, $data['errors']);
         $this->assertStringContainsString('VND-UNKNOWN', $data['errors'][0]);
+    }
+
+    public function test_can_preview_and_validate_locations_xlsx_file(): void
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet1 = $spreadsheet->getActiveSheet();
+        $sheet1->setTitle('Template Titik Lokasi');
+        $sheet1->fromArray([
+            ['Kode Vendor', 'Area', 'Keterangan Lokasi', 'Jenis', 'Ukuran', 'Orientasi', 'Penerangan', 'Qty', 'Biaya Vendor DPP (Rp)', 'Catatan TOP'],
+            ['VND-0001', 'Surakarta', 'Baliho Manahan', 'Baliho', '4x6m', 'V', 'Berlampu', 1, '16.000.000', 'Termin 50:50'],
+        ]);
+
+        $sheet2 = $spreadsheet->createSheet();
+        $sheet2->setTitle('Data Master Vendor');
+        $sheet2->fromArray([
+            ['Kode Vendor', 'Nama Vendor'],
+            ['VND-0001', 'PT Megah Billboard'],
+        ]);
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_xlsx') . '.xlsx';
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($tempPath);
+
+        $file = new UploadedFile($tempPath, 'titik_lokasi.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $response = $this->actingAs($this->user)->post(route('projects.locations.preview', $this->project->id), [
+            'file' => $file,
+        ]);
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertEquals(1, $data['valid_rows']);
+        $this->assertCount(1, $data['items']);
+        $this->assertEquals('VND-0001', $data['items'][0]['vendor_code']);
+        $this->assertEquals('Baliho Manahan', $data['items'][0]['description']);
+        $this->assertEquals(16000000, $data['items'][0]['vendor_cost']);
+
+        @unlink($tempPath);
     }
 
     public function test_can_bulk_import_reviewed_locations(): void
