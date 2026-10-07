@@ -155,6 +155,13 @@ class ProjectLocationController extends Controller
         $delimiter = str_contains($firstLine, ';') ? ';' : ',';
         $headerCols = str_getcsv($firstLine, $delimiter);
 
+        // Jika baris pertama terbungkus tanda kutip luar (misal hasil ekspor kolom tunggal dari spreadsheet)
+        if (count($headerCols) === 1 && isset($headerCols[0]) && (str_contains($headerCols[0], ',') || str_contains($headerCols[0], ';'))) {
+            $innerDelimiter = str_contains($headerCols[0], ';') ? ';' : ',';
+            $headerCols = str_getcsv($headerCols[0], $innerDelimiter);
+            $delimiter = $innerDelimiter;
+        }
+
         $headers = array_map(fn ($h) => strtolower(trim((string) $h)), $headerCols);
 
         // Petakan index kolom
@@ -187,6 +194,11 @@ class ProjectLocationController extends Controller
         while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
             $rowNum++;
 
+            // Jika baris terbungkus tanda kutip luar
+            if (count($row) === 1 && isset($row[0]) && (str_contains($row[0], ',') || str_contains($row[0], ';'))) {
+                $row = str_getcsv($row[0], $delimiter);
+            }
+
             // Skip empty rows
             $hasData = false;
             foreach ($row as $cell) {
@@ -199,16 +211,16 @@ class ProjectLocationController extends Controller
                 continue;
             }
 
-            $rawVendor = trim((string) ($row[$colVendor] ?? ''));
-            $rawArea = trim((string) ($row[$colArea] ?? ''));
-            $rawDesc = trim((string) ($row[$colDesc] ?? ''));
-            $rawType = trim((string) ($row[$colType] ?? 'Billboard'));
-            $rawSize = trim((string) ($row[$colSize] ?? ''));
-            $rawOrientation = strtoupper(trim((string) ($row[$colOrientation] ?? 'V')));
-            $rawLighting = trim((string) ($row[$colLighting] ?? 'Berlampu'));
-            $rawQty = (int) ($row[$colQty] ?? 1);
-            $rawCostStr = trim((string) ($row[$colCost] ?? '0'));
-            $rawTop = trim((string) ($row[$colTop] ?? ''));
+            $rawVendor = $colVendor !== null ? trim((string) ($row[$colVendor] ?? '')) : '';
+            $rawArea = $colArea !== null ? trim((string) ($row[$colArea] ?? '')) : '';
+            $rawDesc = $colDesc !== null ? trim((string) ($row[$colDesc] ?? '')) : '';
+            $rawType = $colType !== null ? trim((string) ($row[$colType] ?? 'Billboard')) : 'Billboard';
+            $rawSize = $colSize !== null ? trim((string) ($row[$colSize] ?? '')) : '';
+            $rawOrientation = $colOrientation !== null ? strtoupper(trim((string) ($row[$colOrientation] ?? 'V'))) : 'V';
+            $rawLighting = $colLighting !== null ? trim((string) ($row[$colLighting] ?? 'Berlampu')) : 'Berlampu';
+            $rawQty = $colQty !== null ? (int) ($row[$colQty] ?? 1) : 1;
+            $rawCostStr = $colCost !== null ? trim((string) ($row[$colCost] ?? '0')) : '0';
+            $rawTop = $colTop !== null ? trim((string) ($row[$colTop] ?? '')) : '';
 
             // Match Vendor
             $vendor = $vendorsByCode[strtoupper($rawVendor)] ?? $vendorsByName[strtolower($rawVendor)] ?? null;
@@ -265,7 +277,7 @@ class ProjectLocationController extends Controller
             }
 
             // Validasi Biaya
-            $cleanCost = (float) preg_replace('/[^0-9.]/', '', $rawCostStr);
+            $cleanCost = $this->parseCurrencyNominal($rawCostStr);
             if ($cleanCost <= 0) {
                 $errors[] = "Baris {$rowNum}: Biaya vendor harus berupa angka nominal lebih dari 0.";
                 continue;
@@ -314,7 +326,7 @@ class ProjectLocationController extends Controller
      * @param array<int, string> $headers
      * @param array<int, string> $candidates
      */
-    private function findColumnIndex(array $headers, array $candidates): int
+    private function findColumnIndex(array $headers, array $candidates): ?int
     {
         foreach ($candidates as $cand) {
             foreach ($headers as $idx => $header) {
@@ -324,6 +336,30 @@ class ProjectLocationController extends Controller
             }
         }
 
-        return 0;
+        return null;
+    }
+
+    /**
+     * Parse string nominal uang (mendukung titik ribuan Indonesia misal 16.000.000,
+     * koma ribuan internasional 16,000,000, dan prefix Rp/IDR).
+     */
+    private function parseCurrencyNominal(string $rawCostStr): float
+    {
+        $val = trim($rawCostStr);
+        $val = preg_replace('/^(rp|idr)\.?\s*/i', '', $val);
+        $val = trim((string) $val);
+
+        if (preg_match('/\.\d{3}/', $val)) {
+            // Format titik ribuan Indonesia
+            $val = str_replace('.', '', $val);
+            $val = str_replace(',', '.', $val);
+        } elseif (preg_match('/,\d{3}/', $val)) {
+            // Format koma ribuan internasional
+            $val = str_replace(',', '', $val);
+        } else {
+            $val = str_replace(',', '.', $val);
+        }
+
+        return (float) preg_replace('/[^0-9.]/', '', $val);
     }
 }
