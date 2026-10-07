@@ -1,1 +1,0 @@
-import{j as o}from"./app-Dc_mIHmL.js";function a({value:t,className:e="",children:s,...n}){return o.jsx("label",{...n,className:`block text-xs font-bold tracking-tight text-slate-700 ${e}`,children:t||s})}export{a as I};

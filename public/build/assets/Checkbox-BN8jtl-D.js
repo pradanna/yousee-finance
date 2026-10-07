@@ -1,0 +1,1 @@
+import{j as s}from"./app-DpgCiqdN.js";function r({className:e="",...o}){return s.jsx("input",{...o,type:"checkbox",className:"shadow-2xs rounded border-slate-300 text-blue-600 focus:ring-blue-500 "+e})}export{r as C};
