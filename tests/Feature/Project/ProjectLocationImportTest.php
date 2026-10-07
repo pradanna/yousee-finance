@@ -46,6 +46,7 @@ class ProjectLocationImportTest extends TestCase
         $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         $this->assertTrue(str_contains((string) $response->headers->get('Content-Disposition'), 'Template_Titik_Lokasi_Project_'));
         $this->assertTrue(str_contains((string) $response->headers->get('Content-Disposition'), '.xlsx'));
+        $this->assertGreaterThan(0, $response->getFile()->getSize());
     }
 
     public function test_can_preview_and_validate_locations_csv_file(): void

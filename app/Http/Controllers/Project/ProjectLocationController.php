@@ -22,13 +22,14 @@ use App\Http\Requests\Project\UpdateProjectLocationRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class ProjectLocationController extends Controller
 {
@@ -71,24 +72,186 @@ class ProjectLocationController extends Controller
      * Sheet 1: Template Titik Lokasi (Formulir Pengisian)
      * Sheet 2: Data Master Vendor (Daftar Vendor & Kode yang bisa dicopy)
      */
-    public function downloadTemplate(Project $project): StreamedResponse
+    public function downloadTemplate(Project $project): Response
     {
-        $filename = "Template_Titik_Lokasi_Project_{$project->code}.xlsx";
-
         $sampleVendor = Vendor::active()->first();
         $sampleVendorCode = $sampleVendor ? $sampleVendor->code : 'VND-0001';
         $vendors = Vendor::active()->orderBy('name')->get();
 
-        return response()->streamDownload(function () use ($sampleVendorCode, $vendors) {
-            $spreadsheet = new Spreadsheet();
+        // 1. Coba generate file Excel (.xlsx) dengan Sheet 1 & Sheet 2
+        if (class_exists(Spreadsheet::class) && class_exists(\ZipArchive::class)) {
+            try {
+                $filename = "Template_Titik_Lokasi_Project_{$project->code}.xlsx";
+                $spreadsheet = new Spreadsheet();
 
-            // ─────────────────────────────────────────────────────────────────
-            // SHEET 1: TEMPLATE TITIK LOKASI
-            // ─────────────────────────────────────────────────────────────────
-            $sheet1 = $spreadsheet->getActiveSheet();
-            $sheet1->setTitle('Template Titik Lokasi');
+                // ─────────────────────────────────────────────────────────────
+                // SHEET 1: TEMPLATE TITIK LOKASI
+                // ─────────────────────────────────────────────────────────────
+                $sheet1 = $spreadsheet->getActiveSheet();
+                $sheet1->setTitle('Template Titik Lokasi');
 
-            $headers1 = [
+                $headers1 = [
+                    'Kode Vendor',
+                    'Area',
+                    'Keterangan Lokasi',
+                    'Jenis',
+                    'Ukuran',
+                    'Orientasi',
+                    'Penerangan',
+                    'Qty',
+                    'Biaya Vendor DPP (Rp)',
+                    'Catatan TOP',
+                ];
+
+                foreach ($headers1 as $colIdx => $header) {
+                    $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
+                    $sheet1->setCellValue("{$colLetter}1", $header);
+                }
+
+                // Styling Header Sheet 1 (Biru Modern #2563EB)
+                $sheet1->getStyle('A1:J1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['argb' => 'FFFFFFFF'],
+                        'size' => 11,
+                    ],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FF2563EB'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                    ],
+                ]);
+                $sheet1->getRowDimension(1)->setRowHeight(26);
+
+                // Baris Contoh 1
+                $sheet1->fromArray([
+                    $sampleVendorCode,
+                    'Semarang',
+                    'Billboard Simpang Lima Sudut Barat',
+                    'Billboard',
+                    '4x8m',
+                    'V',
+                    'Berlampu',
+                    1,
+                    15000000,
+                    'Termin 50:50',
+                ], null, 'A2');
+
+                // Baris Contoh 2
+                $sheet1->fromArray([
+                    $sampleVendorCode,
+                    'Solo',
+                    'Videotron Jl. Slamet Riyadi KM 2',
+                    'Videotron',
+                    '5x10m',
+                    'H',
+                    'Berlampu',
+                    1,
+                    25000000,
+                    'Pelunasan 30 hari',
+                ], null, 'A3');
+
+                // Format angka untuk kolom Biaya & Qty
+                $sheet1->getStyle('H2:H100')->getNumberFormat()->setFormatCode('#,##0');
+                $sheet1->getStyle('I2:I100')->getNumberFormat()->setFormatCode('#,##0');
+
+                // Auto-size kolom Sheet 1
+                foreach (range(1, 10) as $colIdx) {
+                    $colLetter = Coordinate::stringFromColumnIndex($colIdx);
+                    $sheet1->getColumnDimension($colLetter)->setAutoSize(true);
+                }
+
+                // ─────────────────────────────────────────────────────────────
+                // SHEET 2: DATA MASTER VENDOR (Bisa dicopy kodenya)
+                // ─────────────────────────────────────────────────────────────
+                $sheet2 = $spreadsheet->createSheet();
+                $sheet2->setTitle('Data Master Vendor');
+
+                $headers2 = [
+                    'Kode Vendor (Copy Kolom Ini)',
+                    'Nama Vendor',
+                    'Status PKP',
+                    'NPWP',
+                    'Kontak / PIC',
+                ];
+
+                foreach ($headers2 as $colIdx => $header) {
+                    $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
+                    $sheet2->setCellValue("{$colLetter}1", $header);
+                }
+
+                // Styling Header Sheet 2 (Emerald Green #059669)
+                $sheet2->getStyle('A1:E1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['argb' => 'FFFFFFFF'],
+                        'size' => 11,
+                    ],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FF059669'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                    ],
+                ]);
+                $sheet2->getRowDimension(1)->setRowHeight(26);
+
+                $vendorRow = 2;
+                foreach ($vendors as $v) {
+                    $isPkp = $v->isPkp();
+                    $sheet2->fromArray([
+                        $v->code ?? '-',
+                        $v->name,
+                        $isPkp ? 'PKP' : 'Non-PKP',
+                        $v->npwp ?: '-',
+                        $v->phone ?: ($v->pic_name ?: '-'),
+                    ], null, "A{$vendorRow}");
+
+                    // Highlight status PKP
+                    if (! $isPkp) {
+                        $sheet2->getStyle("C{$vendorRow}")->getFont()->getColor()->setARGB('FFDC2626');
+                    } else {
+                        $sheet2->getStyle("C{$vendorRow}")->getFont()->getColor()->setARGB('FF059669');
+                    }
+
+                    $sheet2->getStyle("A{$vendorRow}")->getFont()->setBold(true);
+                    $vendorRow++;
+                }
+
+                // Auto-size kolom Sheet 2
+                foreach (range(1, 5) as $colIdx) {
+                    $colLetter = Coordinate::stringFromColumnIndex($colIdx);
+                    $sheet2->getColumnDimension($colLetter)->setAutoSize(true);
+                }
+
+                // Set tampilan aktif kembali ke Sheet 1
+                $spreadsheet->setActiveSheetIndex(0);
+
+                $tempPath = tempnam(sys_get_temp_dir(), 'tmpl_loc_') . '.xlsx';
+                $writer = new Xlsx($spreadsheet);
+                $writer->save($tempPath);
+
+                return response()->download($tempPath, $filename, [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ])->deleteFileAfterSend(true);
+            } catch (\Throwable $e) {
+                Log::warning('Gagal generate template Excel (.xlsx), fallback ke CSV: ' . $e->getMessage());
+            }
+        }
+
+        // 2. Fallback aman ke CSV jika ekstensi ZipArchive / PhpSpreadsheet belum siap di server
+        $csvFilename = "Template_Titik_Lokasi_Project_{$project->code}.csv";
+
+        return response()->streamDownload(function () use ($sampleVendorCode) {
+            $handle = fopen('php://output', 'w');
+            // UTF-8 BOM
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fputcsv($handle, [
                 'Kode Vendor',
                 'Area',
                 'Keterangan Lokasi',
@@ -99,33 +262,8 @@ class ProjectLocationController extends Controller
                 'Qty',
                 'Biaya Vendor DPP (Rp)',
                 'Catatan TOP',
-            ];
-
-            foreach ($headers1 as $colIdx => $header) {
-                $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
-                $sheet1->setCellValue("{$colLetter}1", $header);
-            }
-
-            // Styling Header Sheet 1 (Biru Modern #2563EB)
-            $sheet1->getStyle('A1:J1')->applyFromArray([
-                'font' => [
-                    'bold' => true,
-                    'color' => ['argb' => 'FFFFFFFF'],
-                    'size' => 11,
-                ],
-                'fill' => [
-                    'fillType' => Fill::FILL_SOLID,
-                    'startColor' => ['argb' => 'FF2563EB'],
-                ],
-                'alignment' => [
-                    'horizontal' => Alignment::HORIZONTAL_CENTER,
-                    'vertical' => Alignment::VERTICAL_CENTER,
-                ],
             ]);
-            $sheet1->getRowDimension(1)->setRowHeight(26);
-
-            // Baris Contoh 1
-            $sheet1->fromArray([
+            fputcsv($handle, [
                 $sampleVendorCode,
                 'Semarang',
                 'Billboard Simpang Lima Sudut Barat',
@@ -133,108 +271,14 @@ class ProjectLocationController extends Controller
                 '4x8m',
                 'V',
                 'Berlampu',
-                1,
-                15000000,
+                '1',
+                '15000000',
                 'Termin 50:50',
-            ], null, 'A2');
-
-            // Baris Contoh 2
-            $sheet1->fromArray([
-                $sampleVendorCode,
-                'Solo',
-                'Videotron Jl. Slamet Riyadi KM 2',
-                'Videotron',
-                '5x10m',
-                'H',
-                'Berlampu',
-                1,
-                25000000,
-                'Pelunasan 30 hari',
-            ], null, 'A3');
-
-            // Format angka untuk kolom Biaya & Qty
-            $sheet1->getStyle('H2:H100')->getNumberFormat()->setFormatCode('#,##0');
-            $sheet1->getStyle('I2:I100')->getNumberFormat()->setFormatCode('#,##0');
-
-            // Auto-size kolom Sheet 1
-            foreach (range(1, 10) as $colIdx) {
-                $colLetter = Coordinate::stringFromColumnIndex($colIdx);
-                $sheet1->getColumnDimension($colLetter)->setAutoSize(true);
-            }
-
-            // ─────────────────────────────────────────────────────────────────
-            // SHEET 2: DATA MASTER VENDOR (Bisa dicopy kodenya)
-            // ─────────────────────────────────────────────────────────────────
-            $sheet2 = $spreadsheet->createSheet();
-            $sheet2->setTitle('Data Master Vendor');
-
-            $headers2 = [
-                'Kode Vendor (Copy Kolom Ini)',
-                'Nama Vendor',
-                'Status PKP',
-                'NPWP',
-                'Kontak / PIC',
-            ];
-
-            foreach ($headers2 as $colIdx => $header) {
-                $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
-                $sheet2->setCellValue("{$colLetter}1", $header);
-            }
-
-            // Styling Header Sheet 2 (Emerald Green #059669)
-            $sheet2->getStyle('A1:E1')->applyFromArray([
-                'font' => [
-                    'bold' => true,
-                    'color' => ['argb' => 'FFFFFFFF'],
-                    'size' => 11,
-                ],
-                'fill' => [
-                    'fillType' => Fill::FILL_SOLID,
-                    'startColor' => ['argb' => 'FF059669'],
-                ],
-                'alignment' => [
-                    'horizontal' => Alignment::HORIZONTAL_CENTER,
-                    'vertical' => Alignment::VERTICAL_CENTER,
-                ],
             ]);
-            $sheet2->getRowDimension(1)->setRowHeight(26);
-
-            $vendorRow = 2;
-            foreach ($vendors as $v) {
-                $isPkp = $v->isPkp();
-                $sheet2->fromArray([
-                    $v->code ?? '-',
-                    $v->name,
-                    $isPkp ? 'PKP' : 'Non-PKP',
-                    $v->npwp ?: '-',
-                    $v->phone ?: ($v->pic_name ?: '-'),
-                ], null, "A{$vendorRow}");
-
-                // Highlight status PKP
-                if (! $isPkp) {
-                    $sheet2->getStyle("C{$vendorRow}")->getFont()->getColor()->setARGB('FFDC2626');
-                } else {
-                    $sheet2->getStyle("C{$vendorRow}")->getFont()->getColor()->setARGB('FF059669');
-                }
-
-                $sheet2->getStyle("A{$vendorRow}")->getFont()->setBold(true);
-                $vendorRow++;
-            }
-
-            // Auto-size kolom Sheet 2
-            foreach (range(1, 5) as $colIdx) {
-                $colLetter = Coordinate::stringFromColumnIndex($colIdx);
-                $sheet2->getColumnDimension($colLetter)->setAutoSize(true);
-            }
-
-            // Set tampilan aktif kembali ke Sheet 1
-            $spreadsheet->setActiveSheetIndex(0);
-
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            fclose($handle);
+        }, $csvFilename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$csvFilename}\"",
         ]);
     }
 
@@ -259,6 +303,12 @@ class ProjectLocationController extends Controller
         $rawRows = [];
 
         if ($isExcel) {
+            if (! class_exists(IOFactory::class) || ! class_exists(\ZipArchive::class)) {
+                return response()->json([
+                    'message' => 'Format file Excel (.xlsx) memerlukan ekstensi PHP ZipArchive dan library PhpSpreadsheet di server. Silakan gunakan format CSV atau pastikan server sudah menjalankan composer install dan mengaktifkan ekstensi php-zip.',
+                ], 422);
+            }
+
             try {
                 $spreadsheet = IOFactory::load($file->getRealPath());
                 // Baca Sheet 1 (Template Titik Lokasi)
