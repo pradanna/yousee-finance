@@ -7,8 +7,6 @@ namespace App\Domains\Project\Actions;
 use App\Domains\Project\Models\Project;
 use App\Domains\Project\Models\ProjectLocation;
 use App\Domains\Shared\Enums\FiscalMode;
-use App\Domains\Vendor\Models\Vendor;
-use DomainException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -22,19 +20,6 @@ class ImportProjectLocations
      */
     public function execute(Project $project, array $items): Collection
     {
-        $isProjectPpn = $project->fiscal_mode instanceof FiscalMode
-            ? $project->fiscal_mode === FiscalMode::PPN
-            : $project->fiscal_mode === FiscalMode::PPN->value;
-
-        if ($isProjectPpn) {
-            $vendorIds = array_unique(array_filter(array_column($items, 'vendor_id')));
-            $nonPkpVendors = Vendor::whereIn('id', $vendorIds)->get()->filter(fn (Vendor $v) => ! $v->isPkp());
-            if ($nonPkpVendors->isNotEmpty()) {
-                $names = $nonPkpVendors->pluck('name')->implode(', ');
-                throw new DomainException("Vendor '{$names}' berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN.");
-            }
-        }
-
         return DB::transaction(function () use ($project, $items) {
             $createdLocations = new Collection();
 

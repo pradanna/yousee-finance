@@ -857,7 +857,7 @@ export default function VendorPOTab({
                         const isVendorPkp = group.items.some(
                             (l) => l.vendorIsPkp,
                         );
-                        const isNonPkpInPpn = isPPN && !isVendorPkp;
+                        const isNonPkpInPpn = false;
 
                         return (
                             <div
@@ -3948,8 +3948,7 @@ export default function VendorPOTab({
                                     vendorTermPercents.reduce(
                                         (a, b) => a + (Number(b) || 0),
                                         0,
-                                    ) !== 100 ||
-                                    (isPPN && !confirmingLoc.vendorIsPkp)
+                                    ) !== 100
                                 }
                                 className="flex-1 cursor-pointer rounded-xl bg-primary py-2.5 text-xs font-bold text-white shadow-neon-primary transition-all hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
@@ -4421,11 +4420,7 @@ export default function VendorPOTab({
                                     vendorTermPercents.reduce(
                                         (a, b) => a + (Number(b) || 0),
                                         0,
-                                    ) !== 100 ||
-                                    (isPPN &&
-                                        !confirmingVendorGroup.unissuedItems.some(
-                                            (it) => it.vendorIsPkp,
-                                        ))
+                                    ) !== 100
                                 }
                                 className="flex-1 cursor-pointer rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >

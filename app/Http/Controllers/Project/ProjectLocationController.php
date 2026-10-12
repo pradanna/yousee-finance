@@ -420,15 +420,6 @@ class ProjectLocationController extends Controller
                 continue;
             }
 
-            $isProjectPpn = $project->fiscal_mode instanceof FiscalMode
-                ? $project->fiscal_mode === FiscalMode::PPN
-                : $project->fiscal_mode === FiscalMode::PPN->value;
-
-            if ($isProjectPpn && ! $vendor->isPkp()) {
-                $errors[] = "Baris {$rowNum}: Vendor '{$vendor->name}' berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN. Silakan lengkapi NPWP vendor di menu Master Vendor atau gunakan vendor PKP.";
-                continue;
-            }
-
             // Validasi Area & Deskripsi
             if ($rawArea === '') {
                 $errors[] = "Baris {$rowNum}: Kolom 'Area' tidak boleh kosong.";

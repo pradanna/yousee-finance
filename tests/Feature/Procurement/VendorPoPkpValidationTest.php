@@ -33,7 +33,7 @@ class VendorPoPkpValidationTest extends TestCase
         $this->sales = Sales::create(['name' => 'Sales Utama', 'email' => 'sales@yousee.com']);
     }
 
-    public function test_cannot_issue_po_to_non_pkp_vendor_in_ppn_mode_via_action(): void
+    public function test_can_issue_po_to_non_pkp_vendor_in_ppn_mode_via_action(): void
     {
         $nonPkpVendor = Vendor::create([
             'name' => 'Bengkel Las Mandiri (Non-PKP)',
@@ -63,18 +63,18 @@ class VendorPoPkpValidationTest extends TestCase
             'qty' => 1,
         ]);
 
-        $this->expectException(DomainException::class);
-        $this->expectExceptionMessage("Vendor 'Bengkel Las Mandiri (Non-PKP)' berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN.");
-
-        (new IssueVendorPurchaseOrder())->execute(
+        $po = (new IssueVendorPurchaseOrder())->execute(
             $projectPpn,
             $nonPkpVendor,
             [$location->id],
             '2026-09-22',
         );
+
+        $this->assertNotNull($po);
+        $this->assertEquals($nonPkpVendor->id, $po->vendor_id);
     }
 
-    public function test_cannot_issue_po_to_non_pkp_vendor_in_ppn_mode_via_http_request(): void
+    public function test_can_issue_po_to_non_pkp_vendor_in_ppn_mode_via_http_request(): void
     {
         $nonPkpVendor = Vendor::create([
             'name' => 'Vendor Bambang Non-PKP',
@@ -113,8 +113,8 @@ class VendorPoPkpValidationTest extends TestCase
             ],
         );
 
-        $response->assertSessionHasErrors(['vendor_id']);
-        $this->assertDatabaseMissing('purchase_orders', [
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('purchase_orders', [
             'project_id' => $projectPpn->id,
             'vendor_id' => $nonPkpVendor->id,
         ]);

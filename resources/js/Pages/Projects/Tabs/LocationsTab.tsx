@@ -162,15 +162,6 @@ export default function LocationsTab({
         if (!form.size.trim()) errs.size = 'Ukuran wajib diisi.';
         if (!form.vendorCost) errs.vendorCost = 'Biaya titik wajib diisi.';
 
-        if (isPPN && selectedVendorId) {
-            const selectedVendor = vendors.find(
-                (v) => v.id === selectedVendorId,
-            );
-            if (selectedVendor && !isVendorPkp(selectedVendor)) {
-                errs.vendorId = `Vendor "${selectedVendor.name}" berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN.`;
-            }
-        }
-
         if (Object.keys(errs).length > 0) {
             setErrors(errs);
             return;
@@ -696,28 +687,16 @@ export default function LocationsTab({
                                     error={errors.vendorId}
                                     options={vendors.map((v) => {
                                         const isPkp = isVendorPkp(v);
-                                        const isDisabled = isPPN && !isPkp;
                                         return {
                                             value: v.id,
                                             label: v.name,
-                                            sublabel:
-                                                isPPN && !isPkp
-                                                    ? 'Non-PKP - Dilarang di Mode PPN'
-                                                    : v.npwp
-                                                      ? `NPWP: ${v.npwp}`
-                                                      : undefined,
-                                            disabled: isDisabled,
+                                            sublabel: v.npwp
+                                                ? `NPWP: ${v.npwp}`
+                                                : 'Non-PKP',
                                             badge: isPkp ? 'PKP' : 'Non-PKP',
                                         };
                                     })}
                                 />
-                                {isPPN && (
-                                    <p className="text-[11px] font-medium text-blue-700">
-                                        ℹ️ <strong>Mode PPN:</strong> Hanya
-                                        vendor berstatus PKP (memiliki NPWP)
-                                        yang diizinkan.
-                                    </p>
-                                )}
                             </div>
 
                             {/* Langkah 2: Detail Titik */}

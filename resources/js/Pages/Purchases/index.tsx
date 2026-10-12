@@ -127,7 +127,9 @@ export default function Purchases({
                 const normalizeRoundingNoise = (val: number): number => {
                     const raw = Math.round(val);
                     const nearThousand = Math.round(raw / 1000) * 1000;
-                    return Math.abs(nearThousand - raw) <= 1 ? nearThousand : raw;
+                    return Math.abs(nearThousand - raw) <= 1
+                        ? nearThousand
+                        : raw;
                 };
 
                 if (plan?.scheme === 'dp') {
@@ -136,7 +138,9 @@ export default function Purchases({
                         notes: plan.notes || undefined,
                         dpPercent: termsList[0]?.percent || 50,
                         dpAmount: termsList[0]?.amount
-                            ? normalizeRoundingNoise(Number(termsList[0].amount))
+                            ? normalizeRoundingNoise(
+                                  Number(termsList[0].amount),
+                              )
                             : undefined,
                         dpDueDate: termsList[0]?.due_date,
                         pelunasanDueDate: termsList[1]?.due_date,
@@ -465,23 +469,6 @@ export default function Purchases({
 
     const handleConfirmIssuePO = (data: IssuePOModalSubmitData) => {
         if (!poFormVendor || !activeProject) return;
-
-        if (isPPN) {
-            const vendorObj = vendors.find(
-                (v) => String(v.id) === String(poFormVendor.id),
-            );
-            const isPkp = Boolean(
-                vendorObj?.npwp && vendorObj.npwp.trim().length > 0,
-            );
-            if (!isPkp) {
-                triggerToast(
-                    `Vendor "${poFormVendor.name}" berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN. Silakan pilih vendor PKP atau gunakan proyek Mode Non-PPN.`,
-                    'error',
-                    'Penerbitan PO Ditolak',
-                );
-                return;
-            }
-        }
 
         const locationIds = poFormVendor.locs.map((l) => l.id);
 

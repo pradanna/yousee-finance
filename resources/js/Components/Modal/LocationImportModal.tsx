@@ -281,32 +281,6 @@ export default function LocationImportModal({
                             </a>
                         </div>
 
-                        {/* PPN Mode Constraint Banner */}
-                        {isPPN && (
-                            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-900">
-                                <span className="text-base leading-none">
-                                    ⚠️
-                                </span>
-                                <div className="space-y-0.5">
-                                    <strong className="block font-bold text-amber-950">
-                                        Perhatian: Mode PPN Aktif
-                                    </strong>
-                                    <p className="text-[11px] leading-relaxed text-amber-800">
-                                        Proyek ini menggunakan{' '}
-                                        <strong>Mode PPN</strong>. Sesuai aturan
-                                        perpajakan, seluruh vendor mitra wajib
-                                        berstatus{' '}
-                                        <strong>
-                                            PKP (memiliki NPWP di Master Vendor)
-                                        </strong>
-                                        . Baris data yang mencantumkan vendor
-                                        Non-PKP akan otomatis ditolak dan
-                                        dilarang diimpor ke sistem.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-
                         {/* Dropzone File Upload Area */}
                         <div
                             onDragOver={(e) => e.preventDefault()}

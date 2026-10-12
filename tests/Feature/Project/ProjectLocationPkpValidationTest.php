@@ -76,7 +76,7 @@ class ProjectLocationPkpValidationTest extends TestCase
         ]);
     }
 
-    public function test_cannot_add_location_with_non_pkp_vendor_in_ppn_mode_via_http(): void
+    public function test_can_add_location_with_non_pkp_vendor_in_ppn_mode_via_http(): void
     {
         $payload = [
             'vendor_id' => $this->nonPkpVendor->id,
@@ -96,8 +96,9 @@ class ProjectLocationPkpValidationTest extends TestCase
             $payload
         );
 
-        $response->assertSessionHasErrors(['vendor_id']);
-        $this->assertEquals(0, ProjectLocation::where('project_id', $this->ppnProject->id)->count());
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect();
+        $this->assertEquals(1, ProjectLocation::where('project_id', $this->ppnProject->id)->count());
     }
 
     public function test_can_add_location_with_pkp_vendor_in_ppn_mode_via_http(): void
@@ -150,7 +151,7 @@ class ProjectLocationPkpValidationTest extends TestCase
         $this->assertEquals(1, ProjectLocation::where('project_id', $this->nonPpnProject->id)->count());
     }
 
-    public function test_cannot_update_location_to_non_pkp_vendor_in_ppn_mode_via_http(): void
+    public function test_can_update_location_to_non_pkp_vendor_in_ppn_mode_via_http(): void
     {
         $location = ProjectLocation::create([
             'project_id' => $this->ppnProject->id,
@@ -175,17 +176,19 @@ class ProjectLocationPkpValidationTest extends TestCase
             ]
         );
 
-        $response->assertSessionHasErrors(['vendor_id']);
-        $this->assertEquals($this->pkpVendor->id, $location->fresh()->vendor_id);
+        $response->assertSessionHasNoErrors();
+        $this->assertEquals($this->nonPkpVendor->id, $location->fresh()->vendor_id);
     }
 
-    public function test_preview_import_rejects_non_pkp_vendor_in_ppn_mode(): void
+    public function test_preview_import_accepts_non_pkp_vendor_in_ppn_mode(): void
     {
         $csvContent = "\xEF\xBB\xBFKode Vendor,Area,Keterangan Lokasi,Jenis,Ukuran,Orientasi,Penerangan,Qty,Biaya Vendor DPP (Rp),Catatan TOP\n";
         $csvContent .= "VND-PKP,Semarang,Billboard PKP Valid,Billboard,4x8m,V,Berlampu,1,15000000,Termin 50:50\n";
-        $csvContent .= "VND-NONPKP,Solo,Videotron Non-PKP Ditolak,Videotron,5x10m,H,Berlampu,1,20000000,Pelunasan 30 hari\n";
+        $csvContent .= "VND-NONPKP,Solo,Videotron Non-PKP Diterima,Videotron,5x10m,H,Berlampu,1,20000000,Pelunasan 30 hari\n";
 
-        $file = UploadedFile::fake()->createWithContent('titik_lokasi.csv', $csvContent);
+        $tempPath = tempnam(sys_get_temp_dir(), 'csv_') . '.csv';
+        file_put_contents($tempPath, $csvContent);
+        $file = new UploadedFile($tempPath, 'titik_lokasi.csv', 'text/csv', null, true);
 
         $response = $this->actingAs($this->user)->post(
             route('projects.locations.preview', $this->ppnProject->id),
@@ -195,15 +198,12 @@ class ProjectLocationPkpValidationTest extends TestCase
         $response->assertStatus(200);
         $data = $response->json();
 
-        $this->assertEquals(1, $data['valid_rows']);
-        $this->assertCount(1, $data['items']);
-        $this->assertEquals('VND-PKP', $data['items'][0]['vendor_code']);
-
-        $this->assertCount(1, $data['errors']);
-        $this->assertStringContainsString('berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN', $data['errors'][0]);
+        $this->assertEquals(2, $data['valid_rows']);
+        $this->assertCount(2, $data['items']);
+        $this->assertCount(0, $data['errors']);
     }
 
-    public function test_import_request_rejects_non_pkp_vendor_in_ppn_mode(): void
+    public function test_import_request_accepts_non_pkp_vendor_in_ppn_mode(): void
     {
         $payload = [
             'items' => [
@@ -231,64 +231,44 @@ class ProjectLocationPkpValidationTest extends TestCase
             $payload
         );
 
-        $response->assertSessionHasErrors(['items']);
-        $this->assertEquals(0, ProjectLocation::where('project_id', $this->ppnProject->id)->count());
+        $response->assertSessionHasNoErrors();
+        $this->assertEquals(2, ProjectLocation::where('project_id', $this->ppnProject->id)->count());
     }
 
-    public function test_actions_throw_domain_exception_for_non_pkp_vendor_in_ppn_mode(): void
+    public function test_actions_allow_non_pkp_vendor_in_ppn_mode(): void
     {
         // 1. Create action
         $createAction = app(CreateProjectLocation::class);
-        $this->expectException(DomainException::class);
-        $this->expectExceptionMessage("berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN");
-
-        $createAction->execute($this->ppnProject, [
+        $loc1 = $createAction->execute($this->ppnProject, [
             'vendor_id' => $this->nonPkpVendor->id,
             'area' => 'Semarang',
-            'description' => 'Lokasi Invariant Test',
+            'description' => 'Lokasi Non-PKP Test',
             'type' => 'Billboard',
             'size' => '4x8m',
             'vendor_cost' => 15000000,
         ]);
-    }
+        $this->assertNotNull($loc1);
+        $this->assertEquals($this->nonPkpVendor->id, $loc1->vendor_id);
 
-    public function test_update_action_throws_domain_exception_for_non_pkp_vendor_in_ppn_mode(): void
-    {
-        $location = ProjectLocation::create([
-            'project_id' => $this->ppnProject->id,
-            'vendor_id' => $this->pkpVendor->id,
-            'code' => 'LOC-001',
-            'type' => 'Billboard',
-            'area' => 'Semarang',
-            'description' => 'Billboard Simpang Lima',
-            'size' => '4x8m',
-            'vendor_cost' => 15000000,
-        ]);
-
+        // 2. Update action
         $updateAction = app(UpdateProjectLocation::class);
-        $this->expectException(DomainException::class);
-        $this->expectExceptionMessage("berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN");
-
-        $updateAction->execute($location, [
-            'vendor_id' => $this->nonPkpVendor->id,
+        $locUpdated = $updateAction->execute($loc1, [
+            'description' => 'Lokasi Diubah',
         ]);
-    }
+        $this->assertEquals('Lokasi Diubah', $locUpdated->description);
 
-    public function test_import_action_throws_domain_exception_for_non_pkp_vendor_in_ppn_mode(): void
-    {
+        // 3. Import action
         $importAction = app(ImportProjectLocations::class);
-        $this->expectException(DomainException::class);
-        $this->expectExceptionMessage("berstatus Non-PKP dan dilarang digunakan pada proyek Mode PPN");
-
-        $importAction->execute($this->ppnProject, [
+        $imported = $importAction->execute($this->ppnProject, [
             [
                 'vendor_id' => $this->nonPkpVendor->id,
                 'area' => 'Solo',
-                'description' => 'Titik Invariant Test',
+                'description' => 'Titik Non-PKP Import Test',
                 'type' => 'Videotron',
                 'size' => '5x10m',
                 'vendor_cost' => 20000000,
             ],
         ]);
+        $this->assertCount(1, $imported);
     }
 }
